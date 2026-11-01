@@ -2,10 +2,11 @@
 // <short>" commit. Each record is refreshed by the script that already owns it; this file only
 // moves the literal pin fields, writes the source-only build-input comparison and reports what
 // still needs a person. Run by .github/workflows/eliza-pin-sync.yml (docs/ci-cost-policy.md,
-// "Eliza develop pin sync"), whose publish job runs none of this: it checks the repin with git.
+// "Eliza develop pin sync"), whose publish job runs none of this: it checks the repin with git,
+// sed and jq against RECORD_RULES.
 //
-//   node scripts/eliza-pin-sync.mjs status [--event <name>] [--bot-branch <branch>] [--main <sha>]
-//                                                                                     read-only (gh api)
+//   node scripts/eliza-pin-sync.mjs status [--event <name>] [--bot-branch <branch>]
+//        [--base-branch <branch>] [--main <sha>]                                     read-only (gh api)
 //   node scripts/eliza-pin-sync.mjs guard --status <file> [--work <dir>]               read-only (git fetch)
 //   node scripts/eliza-pin-sync.mjs apply --to <sha> [--status <file>] [--report <file>]
 //        [--vendor <git dir>] [--skip-scripts]                                      edits this checkout
@@ -45,18 +46,37 @@ export const RECORDS = {
   noticesText: 'apps/app/public/licenses/THIRD_PARTY_NOTICES.txt',
 };
 /**
- * Every path a repin may change, and what may change in it: `ids`, only 40- or 64-character hex
- * IDs (the code and pin files); `data`, generated record content a person reviews in the PR. A
- * repin also adds one build-input evidence file for the new pin (buildInputEvidencePath) and
- * moves the vendor/eliza gitlink. The publish job of .github/workflows/eliza-pin-sync.yml
- * enforces the same list (RECORD_PATHS) with git alone; test/eliza-pin-sync-workflow.test.mjs
- * keeps the two equal.
+ * Every path a repin may change, one allowed change per entry, and how the publish job of
+ * .github/workflows/eliza-pin-sync.yml checks it with git, sed and jq (RECORD_PATHS there;
+ * test/eliza-pin-sync-workflow.test.mjs keeps the two equal and runs those checks):
+ * - pin: main's file, byte for byte, with the old pin replaced by the new one.
+ * - status: main's file with only the edits statusPinText makes.
+ * - json: main's JSON except the fields listed for that path. `<field>:pin` keeps its value or
+ *   moves from the old pin to the new one; `:append` adds one entry to an array or text to the end
+ *   of a string, `:prepend` text to the start of a string; a bare field is derived content of the
+ *   same JSON type. Integrity digests (native library, model, patch target, builder and package
+ *   file SHA-256s) are never listed.
+ * - data: generated content, taken as written.
+ * The PR lists every field and file taken as written for review. A repin also adds one
+ * build-input evidence file for the new pin (buildInputEvidencePath) and moves the vendor/eliza
+ * gitlink. scripts/combined-agent-source.mjs is not listed: apply edits it only when the engine
+ * gitlink moves, and the guard holds every such move for a person.
  */
+const json = (file, ...fields) => fields.map(field => [file, 'json', field]);
+const under = (prefix, ...keys) => keys.map(key => `${prefix}.${key}`);
 export const RECORD_RULES = [
-  [RECORDS.lock, 'ids'], [RECORDS.inventory, 'ids'], [RECORDS.calendarBridge, 'ids'], [RECORDS.combinedSource, 'ids'],
-  [RECORDS.nativePatches, 'ids'], [RECORDS.clientPatches, 'ids'], [RECORDS.mobileUuid, 'ids'],
-  [RECORDS.voiceHost, 'data'], [RECORDS.embeddingHost, 'data'], [RECORDS.requirements, 'data'], [RECORDS.status, 'data'],
-  [RECORDS.snapshot, 'data'], [RECORDS.dispositions, 'data'], [RECORDS.reachability, 'data'], [RECORDS.notices, 'data'], [RECORDS.noticesText, 'data'],
+  [RECORDS.lock, 'pin'], [RECORDS.inventory, 'pin'], [RECORDS.calendarBridge, 'pin'], [RECORDS.nativePatches, 'pin'], [RECORDS.clientPatches, 'pin'],
+  [RECORDS.status, 'status'],
+  // scripts/mobile-uuid-adapter.mjs refuses a build unless vendor/eliza/bun.lock, at the gitlink
+  // the publish job checks, has exactly lockSha256: a wrong value fails the build, admitting nothing.
+  ...json(RECORDS.mobileUuid, '.baseCommit:pin', '.lockSha256'),
+  ...json(RECORDS.voiceHost, '.pin:pin', ...under('.sourceAdmission.currentSourceComparison', 'comparedAt:pin', 'comparisonBase', 'unchangedPaths', 'changedPaths', 'evidence', 'note'), '.sourceAdmission.sourceComparisonHistory:append'),
+  ...json(RECORDS.embeddingHost, '.requalification.atPin:pin', '.requalification.reason:append'),
+  ...json(RECORDS.requirements, '.note:prepend'),
+  ...json(RECORDS.snapshot, '.resident.upstreamCommit:pin', ...under('.resident', 'auditedOn', 'inputSha256', 'packages', 'counts', 'findings')),
+  ...json(RECORDS.dispositions, '.resident.upstreamCommit:pin', ...under('.resident.sourceBinding', 'priorUpstreamCommit', 'note'), '.resident.sourceBindingHistory:append'),
+  ...json(RECORDS.reachability, '.head:pin', ...under('', 'baseCommit', 'recordedAt', 'command', 'status', 'aheadBy', 'behindBy', 'mergeBase', 'pinOnlyCommits', 'pullRequests')),
+  [RECORDS.notices, 'data'], [RECORDS.noticesText, 'data'],
 ];
 /**
  * Incident ancestry clearance per upstream repository: the complete set of forged commits from
@@ -241,12 +261,15 @@ export function assessDrift({behind, staleDays}, {commits, days}) {
 /**
  * none: nothing to do; close: main is current and a bot PR is left; refresh: rebuild the PR (after
  * the incident guard); wait: refresh later; hold: more than one open pin PR, so none is touched.
+ * declined: a pin PR for this develop head was closed unmerged.
  */
-export function decide({pin, develop, main, bot, prs, event, now, refreshHours}) {
+export function decide({pin, develop, main, bot, prs, declined, event, now, refreshHours}) {
   if (prs.length > 1) return 'hold';
   const pr = prs[0];
   if (pin === develop) return pr ? 'close' : 'none';
   if (bot && bot.pin === develop && bot.parent === main) return 'none';
+  // Closing the PR declines this develop head until develop moves; a manual dispatch rebuilds it.
+  if (!pr && declined && event !== 'workflow_dispatch') return 'none';
   // Only a person dispatching the workflow skips the refresh interval; each refresh can dispatch full CI.
   if (!pr || !bot || event === 'workflow_dispatch') return 'refresh';
   return (now - Date.parse(bot.date)) / 3600000 >= refreshHours ? 'refresh' : 'wait';
@@ -267,7 +290,7 @@ const ghJson = (route, jq, options) => {
 const git = (root, ...args) => execFileSync('git', ['-C', root, ...args], {encoding: 'utf8'}).trim();
 const positive = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
 
-function status({root, repository, botBranch, event, main = git(root, 'rev-parse', 'HEAD'), env, now = Date.now()}) {
+function status({root, repository, botBranch, baseBranch, event, main = git(root, 'rev-parse', 'HEAD'), env, now = Date.now()}) {
   const lock = readJson(root, RECORDS.lock);
   const upstream = upstreamRepository(lock.url);
   const pin = lock.commit;
@@ -292,9 +315,13 @@ function status({root, repository, botBranch, event, main = git(root, 'rev-parse
     branch.pin = JSON.parse(Buffer.from(content, 'base64').toString('utf8')).commit;
   }
   result.bot = branch;
-  const owner = repository.split('/')[0];
-  result.prs = ghJson(`repos/${repository}/pulls?state=open&head=${owner}:${botBranch}`, '[.[].number]');
+  // Pin PRs are the bot branch's PRs into the base branch; one into any other branch is not one.
+  const pulls = state => `repos/${repository}/pulls?state=${state}&head=${repository.split('/')[0]}:${botBranch}&base=${baseBranch}`;
+  const into = `.base.ref == ${JSON.stringify(baseBranch)}`;
+  result.prs = ghJson(pulls('open'), `[.[] | select(${into}) | .number]`);
   result.pr = result.prs[0] ?? null;
+  result.declined = ghJson(`${pulls('closed')}&sort=updated&direction=desc&per_page=50`, `[.[] | select(${into} and .merged_at == null) | .title]`)
+    .includes(`Pin Eliza develop ${short(develop)}`);
   result.action = decide({...result, event, now, refreshHours: thresholds.refreshHours});
   if (result.action === 'hold') Object.assign(result, {hold: 'multiple-prs', reason: `${HOLDS['multiple-prs']}: #${result.prs.join(', #')} all come from ${botBranch}; close all but one.`});
   return result;
@@ -305,6 +332,7 @@ function statusSummary(s) {
     `- main pin \`${short(s.pin)}\`, develop \`${short(s.develop)}\`: ${plural(s.behind, 'commit')} behind${s.staleSince ? ` since ${s.staleSince}` : ''} (${s.compareUrl})`,
     `- pin-only commits that a develop pin drops: ${s.pinOnly}`,
     `- bot PR: ${s.pr ? `#${s.pr}` : 'none'}; bot branch ${s.bot ? `pins \`${short(s.bot.pin)}\` on main \`${short(s.bot.parent)}\`` : 'absent'}`];
+  if (s.declined && !s.pr) lines.push(`- a pin PR for develop \`${short(s.develop)}\` was closed unmerged: declined until develop moves; a manual dispatch rebuilds it`);
   if (s.drift) lines.push('', `**Drift:** the main pin is over ${s.thresholds.commits} commits or ${s.thresholds.days} days behind develop.`);
   if (s.hold) lines.push('', `**${s.reason}**`);
   return `${lines.join('\n')}\n`;
@@ -452,7 +480,7 @@ export function renderReceipt(s, guard) {
     `- Thresholds: ${s.thresholds.commits} commits or ${s.thresholds.days} days; drift is ${s.drift ? 'over' : 'within'} them.`,
     `- Read ${s.observedAt}${s.run ? ` by ${s.run}` : ''}.`,
     '', '---',
-    `Rebuilt from \`main\` by \`.github/workflows/eliza-pin-sync.yml\` when develop has moved and this PR is ${s.thresholds.refreshHours} hours old, or at once on a manual dispatch; commits pushed to \`${s.botBranch}\` are replaced. Pause with the repository variable \`ELIZA_PIN_SYNC=off\` (docs/ci-cost-policy.md, "Eliza develop pin sync").`);
+    `Rebuilt from \`main\` by \`.github/workflows/eliza-pin-sync.yml\` when develop has moved and this PR is ${s.thresholds.refreshHours} hours old, or at once on a manual dispatch; commits pushed to \`${s.botBranch}\` are replaced. Closing this PR unmerged declines this develop head until develop moves. Pause with the repository variable \`ELIZA_PIN_SYNC=off\` (docs/ci-cost-policy.md, "Eliza develop pin sync").`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -658,7 +686,7 @@ async function main(argv) {
   const summary = text => { if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, text); };
   if (command === 'status') {
     if (!repository) throw new Error('status needs --repo or GITHUB_REPOSITORY');
-    const s = status({root: ROOT, repository, botBranch: option(argv, '--bot-branch') ?? 'bot/eliza-pin-sync', event: option(argv, '--event') ?? 'workflow_dispatch', main: option(argv, '--main'), env});
+    const s = status({root: ROOT, repository, botBranch: option(argv, '--bot-branch') ?? 'bot/eliza-pin-sync', baseBranch: option(argv, '--base-branch') ?? 'main', event: option(argv, '--event') ?? 'workflow_dispatch', main: option(argv, '--main'), env});
     console.log(JSON.stringify(s, null, 2));
     for (const key of ['action', 'develop', 'drift', 'hold', 'main', 'pr', 'reason']) output(key, s[key] ?? '');
     output('bot_head', s.bot?.head ?? '');

@@ -142,14 +142,14 @@ never networks for it. The default warns; `--upstream-reachability=fail` or
 
 `.github/workflows/eliza-pin-sync.yml` keeps the shared SDK pin on elizaOS/eliza `develop`,
 so the pin cannot drift onto a branch only Alpha uses. It is a source-only draft that becomes
-active when this file reaches `main`. Every hour (minute 41), on a manual dispatch and on a
-`repository_dispatch` of type `eliza-develop-updated`, it runs these jobs:
+active when this file reaches `main`. Every hour (minute 41) and on a manual dispatch, it runs
+these jobs:
 
 | Job | Grants | Runs |
 | --- | --- | --- |
 | Develop pin status and incident guard | `contents: read`, `pull-requests: read` | `node scripts/eliza-pin-sync.mjs status` (`gh api` reads) and, when develop has moved, `guard`, from `main`'s checkout |
-| Repin (read-only) | `contents: read` | `npm ci`, `vendor/eliza` at the develop head, `apply`, the owning scripts and the pin-bound tests; uploads a bundle |
-| Publish the pin PR | `contents`, `pull-requests` and `actions`: `write` | git and gh in shell only: checks the bundle, pushes the bot branch, opens or updates the PR, dispatches its checks |
+| Repin (read-only, sandboxed) | `contents: read` | in its sandbox: `npm ci`, `vendor/eliza` at the develop head, `apply`, the owning scripts and the pin-bound tests; uploads a bundle |
+| Publish the pin PR | `contents`, `pull-requests` and `actions`: `write` | git, jq and gh in shell only: checks the bundle, pushes the bot branch, opens or updates the PR, dispatches its checks |
 | Close the superseded pin PR | `pull-requests: write` | gh only, when `main` already pins develop |
 | Drift report | `contents: read`, `issues: write` | `node scripts/eliza-pin-sync.mjs drift-report` from `main`, only with `ELIZA_PIN_SYNC_DRIFT_ISSUE` set |
 
@@ -171,12 +171,12 @@ run stays green so a lasting hold sends no failure mail, and the next run checks
 - `nested-repository`: the move changes a gitlink inside elizaOS (the llama.cpp engine, as #777
   did). The guard does not clear another repository's ancestry, so a person repins that move;
   `node scripts/eliza-pin-sync.mjs apply` still moves the engine identity
-  `scripts/combined-agent-source.mjs` admits.
+  `scripts/combined-agent-source.mjs` admits, and the publish job refuses any change to that file.
 - `payload-marker`, `payload-unavailable`: a path, `package.json` script or added line in the
   move matches the incident's payload markers (the patterns `scripts/owner/forged-branch-scan.mjs`
   uses), or the change could not be read.
-- `multiple-prs`, `guard-error`: more than one open PR comes from the bot branch, or the guard
-  itself failed.
+- `multiple-prs`, `guard-error`: more than one open PR comes from the bot branch into `main`, or
+  the guard itself failed.
 
 The guard reads upstream git objects only, never into a checkout: a commit graph without trees
 (`--filter=tree:0`) and the two pinned trees without blobs, plus the blobs of the changed files
@@ -205,31 +205,66 @@ move drops, a patch whose target changed upstream, a changed mobile UUID builder
 audit with new findings, a native input change under an admitted host, or a failed check. It
 commits only tracked records and the new evidence file, and uploads a git bundle of that one
 commit, the report, a ready flag and a manifest of every changed path with the SHA-256 of its
-new content. Because `verify-upstream` and those tests import `vendor/eliza` code at the develop
-head, this job holds no write grant, restores and saves no cache, and its token can only read.
+new content.
+
+Because `verify-upstream` and those tests import `vendor/eliza` code at the develop head, this
+job holds no write grant, its token can only read, and no step restores or saves a cache (every
+`setup-node` in the workflow sets `package-manager-cache: false`). Every step from `npm ci` to the
+commit also runs in a sandbox: the runner hands only `main`'s commit (as a bundle) and the status
+to the user `eliza-pin-sync`, and each such step runs its own script again through `systemd-run`
+as that user, with no new privileges (so no `sudo`), every path read-only except
+`/srv/eliza-pin-sync/work`, `/home` hidden (the runner, its actions, temp and checkout) and its own
+`/tmp`, and every process it started stopped when it ends. The runner then copies out the four
+output files, reading them as that user, and runs nothing the sandbox wrote. So develop code
+cannot reach the job's Actions runtime token, which could otherwise write cache entries in
+`main`'s scope that other workflows on `main`, and the checks dispatched on the bot branch,
+restore; nor can it edit a later action or the runner's checkout.
 
 **Publish.** The publish job never checks out this repository and runs no npm, node or vendor
-code. With git alone it fetches `main` and accepts the bundle only when it is one commit whose
-parent is `main`'s current head (a `main` that moved during the repin publishes nothing; the
-next run rebuilds), every changed path is on the record allowlist (`RECORD_PATHS` in the
-workflow, `RECORD_RULES` in the script) and keeps to its rule, `vendor/eliza` moves to exactly the
-develop head the status job read, at most one build-input evidence file is added, every path is
-a regular file, and the manifest matches. Files with the `ids` rule (the lock, the patch
-manifests, the inventory, `scripts/ci/calendar-bridge.py` and
-`scripts/combined-agent-source.mjs`) may differ from `main` only in 40- or 64-character hex IDs;
-the `data` records are generated content a person reviews in the PR. The workflows, the
-clearance record, the IOC file and every other path are refused, and a refusal fails the run.
+code. With git it fetches `main` and accepts the bundle only when it is one commit whose parent
+is `main`'s current head (a `main` that moved during the repin publishes nothing; the next run
+rebuilds), every changed path is on the record allowlist (`RECORD_PATHS` in the workflow,
+`RECORD_RULES` in the script, one allowed change per line) and keeps to its rule, `vendor/eliza`
+moves to exactly the develop head the status job read, at most one build-input evidence file is
+added, every path is a regular file, and the manifest matches. It checks content, not only paths:
+
+- `pin` (the lock, the remaining-work inventory, `scripts/ci/calendar-bridge.py` and the two
+  patch manifests): byte for byte `main`'s file with the old pin replaced by the new one, so the
+  bridge's host digest and every patch target digest stay as they are.
+- `status` (`docs/mvp-current-status.md`): `main`'s page with only the two sentence edits
+  `apply` makes.
+- `json` (the mobile UUID, voice host, embedding host, requirements, resident audit and
+  disposition and reachability records): `main`'s record except the listed fields. A `:pin`
+  field keeps its value or moves from the old pin to the new one; an `:append` or `:prepend`
+  field only grows at that end (a history entry, the embedding reason, the requirements note);
+  any other listed field is derived content of the same JSON type. No native library, model,
+  builder, package file or patch target digest is listed. The two digests a repin may rewrite
+  are reviewed exceptions: the mobile UUID `lockSha256`, which `scripts/mobile-uuid-adapter.mjs`
+  checks against `vendor/eliza/bun.lock` at the checked gitlink before every build, so a wrong
+  value fails the build and admits nothing, and the resident audit's `inputSha256`. jq from the
+  runner image does the comparison, with no repository code; the job first checks that this jq
+  keeps number literals exact and only the last of duplicate keys, and refuses a record that is
+  not in jq's own form, so no duplicate key or second value reads differently elsewhere.
+- `data` (the third-party notices) and the added evidence file: generated content.
+
+The PR body lists every field and file it took as written. The workflows, the clearance record,
+the IOC file, `scripts/combined-agent-source.mjs` and every other path are refused, as is any
+change beyond a rule; a refusal fails the run and publishes nothing, so a person repins by hand.
 The job then commits the checked tree itself as `github-actions[bot]`, so the commit message and
 identity on the bot branch are its own.
 
 Its one push is a `--force-with-lease` to `bot/eliza-pin-sync`, which
 `test/ci-emulator-evidence.test.mjs` pins; nothing pushes `main`. Before pushing it looks up the
-one open PR from the bot branch: two are refused, and so is a PR with auto-merge on. It then
+one open PR from the bot branch into `main` (a PR from it into any other branch is not a pin
+PR): two are refused, and so is a PR with auto-merge on. It then
 opens or updates **Pin Eliza develop <short>**, whose body starts with the status job's
 receipts: the develop head read and when, the old and new pins and `main` as full commit IDs,
 the compare, the guard's clearance, the included and dropped commit lists with the SHA-256 of
 each (`git rev-list --reverse <a>..<b> | sha256sum`), and the drift numbers and thresholds. The
-repin report follows as text, since the job that wrote it ran develop code. Only when that report
+repin report follows as text, since the job that wrote it ran develop code: without control
+characters (a lone carriage return also ends a Markdown line) or Unicode line separators, inside a
+code fence longer than any backtick run in it, so it can add no mention, closing keyword or
+section. Only when that report
 needs nobody does it dispatch Browser MVP and Android foundation on the bot branch (a
 `GITHUB_TOKEN` push starts no `pull_request` run); both build and test with `contents: read`,
 and their workflow files on the bot branch are `main`'s, because the allowlist refuses
@@ -237,10 +272,13 @@ and their workflow files on the bot branch are `main`'s, because the allowlist r
 
 The sync never merges a PR: no step, variable or input can turn on auto-merge or merge, and a
 person reviews and merges each pin PR. It updates no running app: it deploys nothing and
-dispatches only those two checks. `test/eliza-pin-sync-workflow.test.mjs` pins the grants per
-job, that the publish job runs no node or npm, the allowlist (by running the publish job's own
-checks against throwaway repositories with only git and shell tools on `PATH`), and the absence
-of any merge or deploy path.
+dispatches only those two checks. A person declines a develop head by closing its PR unmerged:
+scheduled runs then open nothing for that head until develop moves, and a manual dispatch
+rebuilds it. `test/eliza-pin-sync-workflow.test.mjs` pins the grants per job, the sandbox, that
+the publish job runs no node or npm, the allowlist (by running the publish job's own checks, on a
+repin of the committed records and on hostile changes to them, against throwaway repositories
+with only git, jq and shell tools on `PATH`), the report's code block, and the absence of any
+merge or deploy path.
 
 **Drift report.** Every run writes drift (the pin on `main` more than
 `ELIZA_PIN_SYNC_DRIFT_COMMITS` commits or `ELIZA_PIN_SYNC_DRIFT_DAYS` days behind develop) and
@@ -257,7 +295,7 @@ a cache, the 1 GB vendor fetch and the scripts above).
 
 | Repository variable | Default | Effect |
 | --- | --- | --- |
-| `ELIZA_PIN_SYNC` | unset | `off` pauses the schedule and repository dispatches; a manual dispatch still runs |
+| `ELIZA_PIN_SYNC` | unset | `off` pauses the schedule; a manual dispatch still runs |
 | `ELIZA_PIN_SYNC_DISPATCH_CHECKS` | unset (on) | `false` stops dispatching Browser MVP and Android foundation |
 | `ELIZA_PIN_SYNC_REFRESH_HOURS` | 6 | Minimum PR age before a scheduled rebuild |
 | `ELIZA_PIN_SYNC_DRIFT_COMMITS`, `ELIZA_PIN_SYNC_DRIFT_DAYS` | 50, 2 | Drift: the pin on `main` is more than this far behind `develop` |
@@ -274,11 +312,16 @@ gh workflow run eliza-pin-sync.yml -R eliza-research/alphaphone -f dry_run=true
 ```
 
 Limits. GitHub cannot limit `contents: write` to one branch; the publish job's single push line,
-its checks and the absence of node there are what keep `main` out of reach, since `main` has no
-required reviews or checks. Develop code in the repin job could still use that job's read-only
-token and could write workflow cache entries in `main`'s scope, which other workflows restore;
-none of those holds a write grant, and no job of this workflow restores a cache. A pin move is
-source metadata only: it admits no native bytes and transfers no APK or device qualification.
+its checks and the absence of node there are what keep `main` out of reach. `main` has no branch
+protection (no required reviews or checks); adding it is an owner action, and nothing here
+depends on a token held outside this repository (the sync has no `repository_dispatch` trigger,
+and the hourly schedule notices a develop move). Develop code in the sandbox can still use the
+repin job's read-only token. The dispatched Browser MVP and Android foundation runs build develop
+code as runner jobs; their cache writes stay in the bot branch's scope, which only later runs on
+that branch restore. The sandbox relies on `systemd-run` and passwordless `sudo` on the hosted
+Ubuntu runner and has not yet run there; a first manual dispatch with `dry_run=true` after the
+clearance record gains an entry exercises it before any PR is published. A pin move is source
+metadata only: it admits no native bytes and transfers no APK or device qualification.
 
 ## Integration and end-to-end coverage
 

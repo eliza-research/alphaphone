@@ -1,10 +1,11 @@
 name: Eliza develop pin sync
 # Keeps upstream.lock.json on elizaOS/eliza develop through one reviewable PR, "Pin Eliza develop
 # <short>", on the bot/eliza-pin-sync branch. The status job reads and runs the incident guard; the
-# repin job runs develop code with a read grant only; the publish job holds the write grants, runs
-# git and gh only, and pushes nothing it has not checked against main and the record allowlist.
-# It never pushes main, never merges a PR and updates no running app. Pause: set the repository
-# variable ELIZA_PIN_SYNC to off. docs/ci-cost-policy.md, "Eliza develop pin sync".
+# repin job runs develop code with a read grant only, in a sandbox as a user that cannot reach the
+# runner; the publish job holds the write grants, runs git, jq and gh only, and pushes nothing it
+# has not checked against main and the record allowlist. It never pushes main, never merges a PR
+# and updates no running app. Pause: set the repository variable ELIZA_PIN_SYNC to off.
+# docs/ci-cost-policy.md, "Eliza develop pin sync".
 on:
   schedule:
     - cron: '41 * * * *'
@@ -14,9 +15,6 @@ on:
         description: Repin and check in the runner; push nothing and open no PR
         type: boolean
         default: false
-  # Sent by elizaOS (or anyone with a token for this repository) when develop moves.
-  repository_dispatch:
-    types: [eliza-develop-updated]
 permissions: {}
 concurrency:
   group: eliza-pin-sync
@@ -27,7 +25,7 @@ env:
 jobs:
   status:
     name: Develop pin status and incident guard
-    # ELIZA_PIN_SYNC=off pauses the schedule and repository dispatches; a manual dispatch still runs.
+    # ELIZA_PIN_SYNC=off pauses the schedule; a manual dispatch still runs.
     if: vars.ELIZA_PIN_SYNC != 'off' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -54,13 +52,14 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - id: status
         env:
           GH_TOKEN: ${{ github.token }}
           ELIZA_PIN_SYNC_DRIFT_COMMITS: ${{ vars.ELIZA_PIN_SYNC_DRIFT_COMMITS }}
           ELIZA_PIN_SYNC_DRIFT_DAYS: ${{ vars.ELIZA_PIN_SYNC_DRIFT_DAYS }}
           ELIZA_PIN_SYNC_REFRESH_HOURS: ${{ vars.ELIZA_PIN_SYNC_REFRESH_HOURS }}
-        run: node scripts/eliza-pin-sync.mjs status --event "$GITHUB_EVENT_NAME" --bot-branch "$BOT_BRANCH"
+        run: node scripts/eliza-pin-sync.mjs status --event "$GITHUB_EVENT_NAME" --bot-branch "$BOT_BRANCH" --base-branch "$BASE_BRANCH"
       - id: guard
         name: Incident ancestry and payload guard
         # Before anything from develop is fetched into a checkout or run. Without ancestry clearance
@@ -74,14 +73,18 @@ jobs:
           node scripts/eliza-pin-sync.mjs guard --status "$RUNNER_TEMP/status.json" --work "$RUNNER_TEMP/guard"
 
   repin:
-    name: Repin (read-only)
+    name: Repin (read-only, sandboxed)
     needs: status
     if: needs.status.outputs.action == 'refresh' && needs.status.outputs.cleared == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     # vendor/eliza is at the develop head here, and verify-upstream and the pin-bound tests import
-    # its code, so this job can only read, restores and saves no cache, and hands its result to the
-    # publish job as an artifact that job checks.
+    # its code. So every step from npm ci to the commit runs in a sandbox (Set up the sandbox): as
+    # PIN_USER, with no sudo or new privileges, every path read-only except PIN_DIR, no /home (the
+    # runner, its actions, temp and checkout) and its own /tmp, and every process stopped when its
+    # step ends. Develop code there cannot reach this job's Actions runtime token, which can write
+    # cache entries in main's scope that other workflows restore. The job holds a read grant,
+    # restores and saves no cache, and hands its result to the publish job as an artifact.
     permissions:
       contents: read
     outputs:
@@ -90,6 +93,10 @@ jobs:
       MAIN: ${{ needs.status.outputs.main }}
       NEW_PIN: ${{ needs.status.outputs.develop }}
       STATUS_JSON: ${{ needs.status.outputs.json }}
+      PIN_USER: eliza-pin-sync
+      # Root's: the sandbox launcher and the script of the step it runs. PIN_DIR is PIN_USER's.
+      SANDBOX: /srv/eliza-pin-sync
+      PIN_DIR: /srv/eliza-pin-sync/work
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,32 +105,59 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-      - run: npm ci
+          package-manager-cache: false
+      - name: Set up the sandbox
+        # Only main's commit, as a bundle, and the status cross into PIN_DIR. A step whose first line
+        # calls $SANDBOX/run runs its own script again there, through systemd-run as PIN_USER.
+        run: |
+          sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin "$PIN_USER"
+          sudo install -d -m 0755 "$SANDBOX"
+          sudo install -d -o "$PIN_USER" -g "$PIN_USER" -m 0700 "$PIN_DIR" "$PIN_DIR/home" "$PIN_DIR/out"
+          git bundle create "$RUNNER_TEMP/main.bundle" HEAD
+          printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
+          sudo install -o "$PIN_USER" -m 0400 "$RUNNER_TEMP/main.bundle" "$RUNNER_TEMP/status.json" "$PIN_DIR/"
+          cat > "$RUNNER_TEMP/sandbox" <<'EOF'
+          #!/bin/bash
+          set -eo pipefail
+          sudo install -m 0644 "$1" "$SANDBOX/step.sh"
+          exec sudo --preserve-env=GH_TOKEN systemd-run --quiet --wait --pipe --collect \
+            --uid="$PIN_USER" --gid="$PIN_USER" --working-directory="$PIN_DIR" \
+            -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p ReadWritePaths="$PIN_DIR" \
+            -E SANDBOXED=1 -E PIN_DIR="$PIN_DIR" -E MAIN="$MAIN" -E NEW_PIN="$NEW_PIN" -E HOME="$PIN_DIR/home" -E PATH="$PATH" ${GH_TOKEN:+-E GH_TOKEN} \
+            /bin/bash --noprofile --norc -eo pipefail "$SANDBOX/step.sh"
+          EOF
+          sudo install -m 0755 "$RUNNER_TEMP/sandbox" "$SANDBOX/run"
       - name: Fetch the current and new pins
         # apply checks main at the current pin first, then moves vendor/eliza to the new one.
         run: |
+          [ "${SANDBOXED:-}" = 1 ] || exec "$SANDBOX/run" "$0"
+          git init -q "$PIN_DIR/repo"
+          cd "$PIN_DIR/repo"
+          git fetch -q --no-tags ../main.bundle HEAD
+          git checkout -q --detach FETCH_HEAD
+          [ "$(git rev-parse HEAD)" = "$MAIN" ]
+          npm ci
           old=$(node -p "require('./upstream.lock.json').commit")
           url=$(node -p "require('./upstream.lock.json').url")
           git -C vendor/eliza init -q
           git -C vendor/eliza fetch -q --depth=1 --no-tags "$url" "$NEW_PIN" "$old"
           git -C vendor/eliza checkout -q --detach "$old"
       - name: Repin with the owning scripts
-        id: apply
         env:
           # verify-upstream --record-reachability reads the develop compare with gh api; this job's
           # token can only read.
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "$RUNNER_TEMP/out"
-          printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
-          node scripts/eliza-pin-sync.mjs apply --to "$NEW_PIN" --status "$RUNNER_TEMP/status.json" --report "$RUNNER_TEMP/report.json"
-          node scripts/eliza-pin-sync.mjs report --report "$RUNNER_TEMP/report.json" > "$RUNNER_TEMP/out/body.md"
-          cat "$RUNNER_TEMP/out/body.md" >> "$GITHUB_STEP_SUMMARY"
+          [ "${SANDBOXED:-}" = 1 ] || exec "$SANDBOX/run" "$0"
+          cd "$PIN_DIR/repo"
+          node scripts/eliza-pin-sync.mjs apply --to "$NEW_PIN" --status ../status.json --report ../report.json
+          node scripts/eliza-pin-sync.mjs report --report ../report.json > ../out/body.md
+          node -p "require('../report.json').ready" > ../out/ready
       - name: Commit and bundle
-        env:
-          READY: ${{ steps.apply.outputs.ready }}
         run: |
-          out="$RUNNER_TEMP/out" tab=$(printf '\t')
+          [ "${SANDBOXED:-}" = 1 ] || exec "$SANDBOX/run" "$0"
+          cd "$PIN_DIR/repo"
+          out="$PIN_DIR/out" tab=$(printf '\t')
           # Tracked records and the new evidence file only, never a file a script left untracked.
           git add -u -- . ':(exclude)vendor/eliza'
           git add -- "docs/evidence/sdk-${NEW_PIN:0:10}-build-input-admission-"*.json
@@ -131,7 +165,6 @@ jobs:
           git -c user.name='github-actions[bot]' -c user.email='41898333+github-actions[bot]@users.noreply.github.com' commit -q -m "Pin Eliza develop ${NEW_PIN:0:10}"
           git update-ref refs/heads/eliza-pin-sync HEAD
           git bundle create "$out/repin.bundle" refs/heads/eliza-pin-sync "^$MAIN"
-          printf '%s\n' "$READY" > "$out/ready"
           # Every changed path with the SHA-256 of its new content (the gitlink: its commit).
           {
             printf 'parent %s\ncommit %s\n' "$MAIN" "$(git rev-parse HEAD)"
@@ -142,6 +175,13 @@ jobs:
             done
           } > "$out/manifest.txt"
           git show --stat --format='%H %s' HEAD
+      - name: Collect the repin
+        # As the runner again, which reads the sandbox's output as PIN_USER and runs nothing it wrote.
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          # shellcheck disable=SC2024 # PIN_USER reads each file; the runner writes its own copy.
+          for file in repin.bundle manifest.txt ready body.md; do sudo -u "$PIN_USER" cat -- "$PIN_DIR/out/$file" > "$RUNNER_TEMP/out/$file"; done
+          cat "$RUNNER_TEMP/out/body.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: upload
         with:
@@ -157,7 +197,7 @@ jobs:
     if: needs.status.outputs.cleared == 'true' && needs.repin.result == 'success' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Shell with git and gh only: no checkout of this repository, no npm, no node and nothing from
+    # Shell with git, jq and gh only: no checkout of this repository, no npm, no node and nothing from
     # vendor/eliza runs while these grants are held. Nothing here merges a PR.
     permissions:
       # The one push below targets the bot branch; main changes only when a person merges the PR.
@@ -171,27 +211,65 @@ jobs:
       OLD_PIN: ${{ fromJSON(needs.status.outputs.json).pin }}
       COMMITS: ${{ fromJSON(needs.status.outputs.json).behind }}
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
-      # The record allowlist (scripts/eliza-pin-sync.mjs RECORD_RULES): the only paths a repin may
-      # change, each with what may change in it. ids: only 40- or 64-character hex IDs; data:
-      # generated record content, reviewed in the PR. Besides these, only the vendor/eliza gitlink
-      # (moved to the new pin) and one added docs/evidence build-input file for the new pin.
+      # The record allowlist, one allowed change per line (RECORD_RULES in scripts/eliza-pin-sync.mjs,
+      # which says what each rule means). Besides these, only the vendor/eliza gitlink (moved to the
+      # new pin) and one added docs/evidence build-input file for the new pin.
       RECORD_PATHS: |
-        upstream.lock.json ids
-        docs/mvp-remaining-work-2026-10-09.json ids
-        scripts/ci/calendar-bridge.py ids
-        scripts/combined-agent-source.mjs ids
-        patches/eliza/native-manifest.json ids
-        patches/eliza/cloud-speech-client-manifest.json ids
-        patches/eliza/mobile-uuid-build.json ids
-        android/voice-host/qualified-voice-host.json data
-        android/embedding-host/qualified-host.json data
-        docs/requirements.json data
-        docs/mvp-current-status.md data
-        docs/dependency-audit.snapshot.json data
-        docs/dependency-audit.dispositions.json data
-        scripts/ci/upstream-reachability.json data
+        upstream.lock.json pin
+        docs/mvp-remaining-work-2026-10-09.json pin
+        scripts/ci/calendar-bridge.py pin
+        patches/eliza/native-manifest.json pin
+        patches/eliza/cloud-speech-client-manifest.json pin
+        docs/mvp-current-status.md status
+        patches/eliza/mobile-uuid-build.json json .baseCommit:pin
+        patches/eliza/mobile-uuid-build.json json .lockSha256
+        android/voice-host/qualified-voice-host.json json .pin:pin
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.comparedAt:pin
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.comparisonBase
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.unchangedPaths
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.changedPaths
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.evidence
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.currentSourceComparison.note
+        android/voice-host/qualified-voice-host.json json .sourceAdmission.sourceComparisonHistory:append
+        android/embedding-host/qualified-host.json json .requalification.atPin:pin
+        android/embedding-host/qualified-host.json json .requalification.reason:append
+        docs/requirements.json json .note:prepend
+        docs/dependency-audit.snapshot.json json .resident.upstreamCommit:pin
+        docs/dependency-audit.snapshot.json json .resident.auditedOn
+        docs/dependency-audit.snapshot.json json .resident.inputSha256
+        docs/dependency-audit.snapshot.json json .resident.packages
+        docs/dependency-audit.snapshot.json json .resident.counts
+        docs/dependency-audit.snapshot.json json .resident.findings
+        docs/dependency-audit.dispositions.json json .resident.upstreamCommit:pin
+        docs/dependency-audit.dispositions.json json .resident.sourceBinding.priorUpstreamCommit
+        docs/dependency-audit.dispositions.json json .resident.sourceBinding.note
+        docs/dependency-audit.dispositions.json json .resident.sourceBindingHistory:append
+        scripts/ci/upstream-reachability.json json .head:pin
+        scripts/ci/upstream-reachability.json json .baseCommit
+        scripts/ci/upstream-reachability.json json .recordedAt
+        scripts/ci/upstream-reachability.json json .command
+        scripts/ci/upstream-reachability.json json .status
+        scripts/ci/upstream-reachability.json json .aheadBy
+        scripts/ci/upstream-reachability.json json .behindBy
+        scripts/ci/upstream-reachability.json json .mergeBase
+        scripts/ci/upstream-reachability.json json .pinOnlyCommits
+        scripts/ci/upstream-reachability.json json .pullRequests
         apps/app/public/licenses/third-party-notices.json data
         apps/app/public/licenses/THIRD_PARTY_NOTICES.txt data
+      # The json rule in jq: $m and $n hold main's and the repin's record, $fields the fields
+      # RECORD_PATHS allows in it, $old and $new the two pins.
+      JSON_RULE: |
+        def at: split(":")[0] | ltrimstr(".") | split(".");
+        ($m | length) == 1 and ($n | length) == 1
+        and ($m[0] as $m | $n[0] as $n
+          | [$fields | split(" ") | .[] | select(. != "") | {at: at, kind: (split(":")[1] // "")}] as $f
+          | ($m | delpaths([$f[].at])) == ($n | delpaths([$f[].at]))
+          and all($f[]; .kind as $kind | .at as $at | ($m | getpath($at)) as $a | ($n | getpath($at)) as $b | ($a | type) as $type
+            | if $kind == "pin" then $b == $a or ($a == $old and $b == $new)
+              elif ($b | type) != $type then false
+              elif $kind == "append" then if $type == "array" then ($b | length) == ($a | length) + 1 and $b[:-1] == $a else $type == "string" and ($b | startswith($a)) end
+              elif $kind == "prepend" then $type == "string" and ($b | endswith($a))
+              else true end))
     steps:
       # Exactly the artifact the repin job's upload step reported, by ID.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -204,9 +282,12 @@ jobs:
         env:
           RECEIPT: ${{ needs.status.outputs.receipt }}
         run: |
-          repin="$RUNNER_TEMP/repin" work="$RUNNER_TEMP/publish" tab=$(printf '\t')
+          repin="$RUNNER_TEMP/repin" work="$RUNNER_TEMP/publish" tab=$(printf '\t') q='`'
           fail() { echo "::error::Repin rejected: $*"; exit 1; }
-          mask() { sed -E 's/[0-9a-f]{64}|[0-9a-f]{40}/<id>/g'; }
+          [[ $OLD_PIN =~ ^[0-9a-f]{40}$ && $NEW_PIN =~ ^[0-9a-f]{40}$ ]] || fail "the old and new pins must be full commit IDs"
+          # jq from the runner image reads the JSON records, so no repository code runs here. It must keep
+          # number literals exact and only the last of duplicate keys (test/eliza-pin-sync-workflow.test.mjs).
+          [ "$(printf '{"k": 1, "k": 2, "n": 9007199254740993}' | jq -c '[., .n == 9007199254740992]')" = '[{"k":2,"n":9007199254740993},false]' ] || fail "jq here rounds number literals or keeps an earlier duplicate key"
           git init -q "$work"
           git -C "$work" fetch -q --no-tags --depth=1 "$REPO_URL" "refs/heads/$BASE_BRANCH"
           main=$(git -C "$work" rev-parse FETCH_HEAD)
@@ -219,35 +300,50 @@ jobs:
           git -C "$work" fetch -q --no-tags "$repin/repin.bundle" refs/heads/eliza-pin-sync:refs/repin
           commit=$(git -C "$work" rev-parse refs/repin)
           [ "$(git -C "$work" rev-parse "$commit^@")" = "$main" ] || fail "$commit is not one commit on $BASE_BRANCH $main"
-          # Every changed path must be on the allowlist and keep to its rule.
+          # Every changed path must be on the allowlist and keep to its rule (RECORD_RULES).
           printf '%s\n' "$RECORD_PATHS" > "$RUNNER_TEMP/rules"
           printf 'parent %s\ncommit %s\n' "$main" "$commit" > "$RUNNER_TEMP/manifest"
+          : > "$RUNNER_TEMP/review"
           git -C "$work" diff-tree -r --no-renames --raw --no-abbrev "$main" "$commit" > "$RUNNER_TEMP/changes"
-          gitlink=0 evidence=0 changed=0
+          gitlink=0 evidence=0 changed=0 before="$RUNNER_TEMP/before" after="$RUNNER_TEMP/after" old=${OLD_PIN:0:10} new=${NEW_PIN:0:10}
           while IFS="$tab" read -r meta path; do
-            read -r before mode _ object status <<< "${meta#:}"
+            read -r before_mode mode _ object status <<< "${meta#:}"
             changed=$((changed + 1))
             if [ "$path" = vendor/eliza ]; then
-              [ "$before $mode $status $object" = "160000 160000 M $NEW_PIN" ] || fail "vendor/eliza must move to the new pin $NEW_PIN"
+              [ "$before_mode $mode $status $object" = "160000 160000 M $NEW_PIN" ] || fail "vendor/eliza must move to the new pin $NEW_PIN"
               gitlink=1
               printf '%s  %s\n' "$object" "$path" >> "$RUNNER_TEMP/manifest"
               continue
             fi
             [ "$mode" = 100644 ] || fail "$path has mode $mode; a repin changes regular files only"
-            rule=''
-            while read -r allowed what; do if [ "$allowed" = "$path" ]; then rule=$what; fi; done < "$RUNNER_TEMP/rules"
+            rule='' fields=''
+            while read -r allowed what field; do if [ "$allowed" = "$path" ]; then rule=$what fields="$fields $field"; fi; done < "$RUNNER_TEMP/rules"
             case "$path" in
-              "docs/evidence/sdk-${NEW_PIN:0:10}-build-input-admission-"[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].json)
+              "docs/evidence/sdk-$new-build-input-admission-"[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].json)
                 [ "$status" = A ] || fail "$path: build-input evidence is only ever added"
                 evidence=$((evidence + 1)) rule=added ;;
-              *) [ "$status" = M ] || fail "$path: a repin only modifies its records" ;;
+              *)
+                [ "$status" = M ] || fail "$path: a repin only modifies its records"
+                git -C "$work" cat-file blob "$main:$path" > "$before" ;;
             esac
+            git -C "$work" cat-file blob "$object" > "$after"
             case "$rule" in
-              ids) cmp -s <(git -C "$work" cat-file blob "$main:$path" | mask) <(git -C "$work" cat-file blob "$object" | mask) || fail "$path changed beyond its commit IDs" ;;
-              data|added) ;;
+              pin) sed "s/$OLD_PIN/$NEW_PIN/g" "$before" | cmp -s - "$after" || fail "$path changed beyond its pin" ;;
+              status)
+                # The two edits statusPinText makes, and nothing else.
+                sed -E -e "s/The current upstream source pin is ${q}$old${q}; the preceding pins? (was|were) ${q}([0-9a-f]{10})${q}[^.]*\./The current upstream source pin is ${q}$new${q}; the preceding pins were ${q}$old${q} and ${q}\2${q}./" \
+                  -e "s/Current source projection: SDK ${q}$old${q} is the recorded/Source projection last reviewed at SDK ${q}$old${q}, then the recorded/" "$before" | cmp -s - "$after" || fail "$path changed beyond its pin sentences" ;;
+              json)
+                # jq's own form of both records leaves no duplicate key or second value for jq and another reader to see differently.
+                for record in "$before" "$after"; do jq . "$record" | cmp -s - "$record" || fail "$path is not in jq's form of its JSON"; done
+                jq -en --slurpfile m "$before" --slurpfile n "$after" --arg fields "$fields" --arg old "$OLD_PIN" --arg new "$NEW_PIN" "$JSON_RULE" > /dev/null || fail "$path changed beyond$fields"
+                list=''
+                for field in $fields; do [[ $field == *:pin ]] || list="$list, $q$field$q"; done
+                [ -z "$list" ] || printf -- '- %s: %s\n' "$q$path$q" "${list#, }" >> "$RUNNER_TEMP/review" ;;
+              data|added) printf -- '- %s: the whole file\n' "$q$path$q" >> "$RUNNER_TEMP/review" ;;
               *) fail "$path is not on the record allowlist" ;;
             esac
-            printf '%s  %s\n' "$(git -C "$work" cat-file blob "$object" | sha256sum | cut -d' ' -f1)" "$path" >> "$RUNNER_TEMP/manifest"
+            printf '%s  %s\n' "$(sha256sum < "$after" | cut -d' ' -f1)" "$path" >> "$RUNNER_TEMP/manifest"
           done < "$RUNNER_TEMP/changes"
           [ "$gitlink" = 1 ] || fail "vendor/eliza does not move"
           [ "$evidence" -le 1 ] || fail "more than one build-input evidence file"
@@ -257,19 +353,28 @@ jobs:
           case "$ready" in true|false) ;; *) fail "the ready flag is neither true nor false" ;; esac
           # The verified tree is committed here, so the message and identity on the bot branch are this job's.
           printf 'Pin Eliza develop %s\n\nAdvances the SDK from %s to the elizaOS/eliza develop head %s\n(%s upstream commits). Published by .github/workflows/eliza-pin-sync.yml from the\nchecked repin tree; the pin PR records the source identities, the inclusion and\ndrift receipts and what still needs a person.\n' \
-            "${NEW_PIN:0:10}" "${OLD_PIN:0:10}" "$NEW_PIN" "$COMMITS" > "$RUNNER_TEMP/message"
+            "$new" "$old" "$NEW_PIN" "$COMMITS" > "$RUNNER_TEMP/message"
           export GIT_AUTHOR_NAME='github-actions[bot]' GIT_AUTHOR_EMAIL='41898333+github-actions[bot]@users.noreply.github.com'
           export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
           published=$(git -C "$work" commit-tree "$commit^{tree}" -p "$main" -F "$RUNNER_TEMP/message")
-          # The PR body: the status job's receipt, then the repin report as text (that job ran develop code).
+          # The repin job's report, which develop code could write, as text: without control characters
+          # (a lone CR also ends a Markdown line) or Unicode line separators, and fenced by more
+          # backticks than any run inside it.
+          lsep=$(printf '\342\200\250') psep=$(printf '\342\200\251') nel=$(printf '\302\205')
+          head -c 20000 "$repin/body.md" | LC_ALL=C tr -d '\000-\010\013-\037\177' | LC_ALL=C sed -e "s/$lsep//g" -e "s/$psep//g" -e "s/$nel//g" > "$RUNNER_TEMP/report"
+          fence="$q$q$q$(LC_ALL=C grep -aoE "${q}{3,}" "$RUNNER_TEMP/report" | LC_ALL=C sort | tail -n 1 || true)"
+          # The PR body: the status job's receipt, what was checked and what was taken as written, then the report.
           {
             printf '%s\n' "$RECEIPT"
             printf '\n### Published commit\n\n'
-            # shellcheck disable=SC2016 # Markdown code spans, not command substitutions.
-            printf -- '- `%s`: the tree of the repin commit `%s`, committed here on `%s` `%s` after every one of its %s changed paths passed the record allowlist and matched the manifest.\n' \
-              "$published" "$commit" "$BASE_BRANCH" "$main" "$changed"
+            printf -- '- %s: the tree of the repin commit %s, committed here on %s %s after every one of its %s changed paths kept to its rule in the record allowlist and matched the manifest.\n' \
+              "$q$published$q" "$q$commit$q" "$q$BASE_BRANCH$q" "$q$main$q" "$changed"
+            if [ -s "$RUNNER_TEMP/review" ]; then
+              printf '\nTaken from the repin as written, for review. Everything else in these records matches main, and an append or prepend field only grows at that end:\n\n'
+              cat "$RUNNER_TEMP/review"
+            fi
             printf '\n### Repin report\n\nWritten by the read-only repin job, which ran develop code, so it is shown as text and is not part of the checked receipt above.\n\n'
-            head -c 20000 "$repin/body.md" | sed 's/^/    /'
+            printf '%s\n' "${fence}text" "$(cat "$RUNNER_TEMP/report")" "$fence"
           } > "$RUNNER_TEMP/body.md"
           { echo "commit=$published"; echo "ready=$ready"; echo "verified=true"; } >> "$GITHUB_OUTPUT"
           echo "Verified $changed changed paths; publishing $published (tree of $commit) on $main."
@@ -279,7 +384,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          open=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:$BOT_BRANCH" --jq '.[] | "\(.number) \(.auto_merge != null)"')
+          # Only the bot branch's PRs into the base branch are pin PRs.
+          open=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:$BOT_BRANCH&base=$BASE_BRANCH" --jq '.[] | select(.base.ref == env.BASE_BRANCH) | "\(.number) \(.auto_merge != null)"')
           count=$(printf '%s' "$open" | grep -c . || true)
           if [ "$count" -gt 1 ]; then echo "::error::More than one open pin PR from $BOT_BRANCH; close all but one."; exit 1; fi
           read -r number auto <<< "$open" || true
@@ -358,6 +464,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ vars.ELIZA_PIN_SYNC_DRIFT_ISSUE }}

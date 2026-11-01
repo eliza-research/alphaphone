@@ -108,8 +108,15 @@ test('the sync refreshes a stale or missing PR, waits on a young one, closes a s
   assert.equal(decide({...base, bot, prs: []}), 'refresh');
   for (const event of ['schedule', 'workflow_dispatch']) assert.equal(decide({...base, bot, event, prs: [7, 8]}), 'hold', 'two open pin PRs: touch neither');
   assert.equal(decide({...base, bot}), 'wait');
-  assert.equal(decide({...base, bot, event: 'repository_dispatch'}), 'wait', 'upstream pushes do not bypass the refresh interval');
   assert.equal(decide({...base, bot, event: 'workflow_dispatch'}), 'refresh');
+  // A pin PR closed unmerged declines that develop head: nothing reopens it until develop moves,
+  // even after main moves, unless a person dispatches the workflow.
+  const closed = {...base, prs: [], declined: true, bot: {...bot, pin: B}, main: D1};
+  assert.equal(decide(closed), 'none');
+  assert.equal(decide({...closed, bot: undefined}), 'none', 'the bot branch was deleted with the PR');
+  assert.equal(decide({...closed, event: 'workflow_dispatch'}), 'refresh');
+  assert.equal(decide({...closed, declined: false}), 'refresh');
+  assert.equal(decide({...closed, prs: [9]}), 'wait', 'an open pin PR keeps its refresh interval');
   assert.equal(decide({...base, bot: {...bot, date: '2026-11-01T05:00:00Z'}}), 'refresh');
   assert.equal(assessDrift({behind: 51, staleDays: 0}, {commits: 50, days: 2}), true);
   assert.equal(assessDrift({behind: 5, staleDays: 2.1}, {commits: 50, days: 2}), true);
