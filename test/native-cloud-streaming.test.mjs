@@ -86,3 +86,20 @@ test('unconfirmed native cancellation preserves its safe cleanup failure',async(
  const controller=new AbortController(),pending=f.speech.speak('Finalized reply.',controller.signal,()=>{});controller.abort();
  await assert.rejects(pending,error=>error.code==='speech-cleanup-unconfirmed'&&!error.message.includes('private'));await f.speech.stop();
 });
+
+test('a closed capture still hears the socket end once, never its speech; a later listen takes it over',async()=>{
+ for(const fault of ['connection-lost','expired','protocol','owner']){
+  const f=fixture(),capture=await f.speech.listen(f.handlers);await capture.close();assert.deepEqual(f.mutes,[false,true]);
+  f.emit({type:'speech-start'});f.emit({type:'speech-end',text:'not after close',final:true});f.emit({type:'level',peak:.5});
+  assert.deepEqual(f.events,[],'speech and levels stop at close');
+  if(fault==='owner'){f.change();f.emit({type:'level',peak:.2});}else f.emit({type:'error',code:fault});
+  f.emit({type:'error',code:'closed'});await Promise.resolve();
+  assert.deepEqual(f.events,['failed'],fault+' reaches the closed capture once');assert.equal(f.stops,1);
+ }
+ const f=fixture(),capture=await f.speech.listen(f.handlers);await capture.close();
+ const later=[],reopened={...f.handlers,onEnd:()=>later.push('failed')};await f.speech.listen(reopened);
+ f.emit({type:'error',code:'expired'});await Promise.resolve();
+ assert.deepEqual(f.events,[],'the earlier capture is no longer told');assert.deepEqual(later,['failed']);
+ const g=fixture(),cancelled=await g.speech.listen(g.handlers);await cancelled.cancel();
+ g.emit({type:'error',code:'expired'});await Promise.resolve();assert.deepEqual(g.events,[],'a cancelled capture hears nothing');
+});
