@@ -7,9 +7,10 @@ import test from 'node:test';
 // Source Extensions event order: a failed append fires error, then updateend; detaching the element
 // removes each SourceBuffer (abort, then updateend, while it appends) and then fires sourceclose.
 // The clip body is held open by the test and records its cancellation; zero network, media or audio.
-// The streamed clip is the self-contained last section of the browser voice module.
-const voice=readFileSync('apps/app/src/browser/voice.ts','utf8'),section=voice.indexOf('/** Cloud read-aloud arrives as audio/mpeg chunks');assert.ok(section>0,'streamed speech section found');
-const code=stripTypeScriptTypes(voice.slice(section).replace(/^export /gm,''),{mode:'transform'})+';return {StreamedSpeech,streamedSpeechSource};';
+// The whole browser voice module is compiled, as browser-voice-cancellation does, so the harness does not
+// depend on where the streamed clip sits in it. Its imports are stripped; only WebPlugin, which BrowserVoice
+// extends, is read while the module loads, and nothing else in it runs here.
+const code=stripTypeScriptTypes(readFileSync('apps/app/src/browser/voice.ts','utf8').replace(/^import .*;\n/gm,'').replace(/^export /gm,'').replaceAll('import.meta.env.DEV','false'),{mode:'transform'})+';return {StreamedSpeech,streamedSpeechSource};';
 const idle=async()=>{for(let i=0;i<5;i++)await new Promise(resolve=>setTimeout(resolve,0));};
 function harness(){
  const medias=[],revoked=[],cancelled=[];let upstream;
@@ -27,7 +28,7 @@ function harness(){
   /** The element let the media go, as when its source is reset. */
   detach(){this.readyState='closed';for(const buffer of this.buffers){buffer.removed=true;if(buffer.updating){buffer.updating=false;buffer.dispatchEvent(new Event('abort'));buffer.dispatchEvent(new Event('updateend'));}}this.dispatchEvent(new Event('sourceclose'));}
  }
- const {StreamedSpeech,streamedSpeechSource}=new Function('MediaSource','URL',code)(MediaSource,{createObjectURL:()=>'blob:speech',revokeObjectURL:url=>revoked.push(url)});
+ const {StreamedSpeech,streamedSpeechSource}=new Function('MediaSource','URL','WebPlugin',code)(MediaSource,{createObjectURL:()=>'blob:speech',revokeObjectURL:url=>revoked.push(url)},class WebPlugin{});
  const body=new ReadableStream({start(controller){upstream=controller;},cancel(reason){cancelled.push(reason);}});
  const playback=new AbortController(),{url,fed}=streamedSpeechSource(new StreamedSpeech(body),playback.signal);
  let outcome='pending';fed.then(()=>{outcome='fed';},error=>{outcome='failed: '+error.message;});
