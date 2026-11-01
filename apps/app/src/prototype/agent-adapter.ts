@@ -171,15 +171,36 @@ function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:strin
  * fails too, its "Draft was not saved" notice and explicit retry stay.
  * A write refused while the composer sends is reviewed, never kept: another window's send leaves
  * the same empty row, so it may be the only sign that this text was already sent from there.
+ * A refused write names the receipt it expected: the copy this window last saved or read. When
+ * that copy held words, the row moved on from words this window showed, and another window may
+ * have sent them. Keeping the editor's text does not make those words fresh: they are noted for
+ * the binding, and the composer's Send reviews them before sending them again, also after an edit
+ * that comes back to them. Other words typed over the empty copy are kept and sent as before.
  */
 function keepOverEmptySavedDraft(shell:Shell):boolean{
   const draft=shell.composerDraft,state=draft.state,kept=draft.binding+'\u0000'+String(shell.S().draft||'');
   if(!state.conflict){if(shell.emptyDraftKept!==kept)shell.emptyDraftKept=undefined;return false;}
   if(state.unsettled||state.savedText.trim())return false;
-  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){if(shell.draftSendPending||shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;}
+  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){
+    if(shell.draftSendPending||shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;
+    const stale=shell.unsavedDraftReceipts?.get(draft.binding)?.text.trim();
+    if(stale){const texts:Map<string,Set<string>>=shell.staleDraftTexts??=new Map();texts.set(draft.binding,(texts.get(draft.binding)??new Set()).add(stale));}
+  }
   draft.keepCurrent();
   if(shell.firstSendReview)shell.refreshDraftBinding();
   return true;
+}
+/**
+ * The composer's draft store for one binding: every read and write goes to assistantDraftStore
+ * unchanged. A write that does not save leaves the receipt it named for keepOverEmptySavedDraft,
+ * until a write for the binding saves again.
+ */
+async function composerDraftStore(shell:Shell,binding:string){
+  const store=await assistantDraftStore(binding),unsaved:Map<string,unknown>=shell.unsavedDraftReceipts??=new Map();
+  return {...store,save:async(...write:Parameters<typeof store.save>)=>{
+    try{const saved=await store.save(...write);unsaved.delete(binding);return saved;}
+    catch(error){unsaved.set(binding,write[0]);throw error;}
+  }};
 }
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
@@ -602,7 +623,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.stopTileWatch = watchReturnToApp(() => { if (this.live && this.S().shade) this.refreshTileFacts(); });
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
-    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live&&!keepOverEmptySavedDraft(this))this.setState({});});
+    this.composerDraft=new AssistantDraftController((binding:string)=>composerDraftStore(this,binding),()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live&&!keepOverEmptySavedDraft(this))this.setState({});});
     this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
@@ -1394,8 +1415,10 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const heldText=String(s.draft||'');let heldKey:string|undefined;
     if(fromComposer){
       this.draftSendPending=true;
-      // The durable draft keeps this text until the message is known to have been dispatched.
-      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+      // The durable draft keeps this text until the message is known to have been dispatched. Words
+      // this window showed after another window moved its saved copy on, kept without a review
+      // (keepOverEmptySavedDraft), may have been sent from there: sending them again is reviewed.
+      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;const stale=this.staleDraftTexts?.get(heldKey);if(stale?.has(heldText.trim())){if(!await messageReviews.confirm('stale-draft-'+heldKey,'Review message before sending','Another window changed this draft after this window last saved it. '+DEFAULT_DURABLE_DRAFT_MESSAGES.unsettled+'\n\nMessage: '+heldText,'Send'))return;if(this.composerDraft.binding!==heldKey)throw Error(DEFAULT_DURABLE_DRAFT_MESSAGES.changed);stale.delete(heldText.trim());}await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     }
     const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
