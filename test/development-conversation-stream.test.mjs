@@ -22,8 +22,9 @@ async function fixture(mode){
   if(path==='/api/auth/me')return Response.json({identity:{id:owner},access:{role:'OWNER'},session:{id:paired,expiresAt:Date.now()+600000}});
   assert.equal(path,'/api/conversations/thread/messages/stream');assert.equal(input.headers.Accept,'text/event-stream');
   // Like fetch, an aborted request errors its body in stream mode. A stalled body ignores the request
-  // signal, so only the bridge's own cancel (recorded) releases it.
-  signal=input.signal;
+  // signal, so only the bridge's own cancel (recorded) releases it. A late request answers with a stalled body
+  // only after its signal has aborted, as a custom request may.
+  signal=input.signal;if(mode==='late')await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));
   return new Response(new ReadableStream({start(controller){upstream=controller;if(mode==='stream')signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});},cancel(reason){cancels.push(reason);}}),{headers:{'content-type':'text/event-stream'}});
  };
  const handler=createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile,request});
@@ -93,6 +94,24 @@ for(const [stall,page] of [['idle','whose upstream goes quiet'],['drain','whose 
   // The page still reads nothing, so no drain can release a stuck wait: the bridge must return and close the response itself.
   assert.equal(await settled(f.handled(),2000),true,'deadline releases the handler');
   assert.equal(connection.destroyed,true,'response destroyed while the page reads nothing');
+  const outcome=await Promise.race([(async()=>{try{for(;;)if((await chunks.next()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
+  assert.equal(outcome,'truncated');assert.equal(f.signal().reason.name,'TimeoutError');assert.deepEqual(f.cancels.map(reason=>reason?.name),['TimeoutError']);
+  assert.equal(f.streams(),1,'no retry');
+ }finally{AbortSignal.timeout=timeout;await f.close();}
+});
+
+test('the request deadline still ends a conversation stream whose response arrives after it',async()=>{
+ // Every bridge deadline is held here. The request answers only after the test expires the 120 s one, so the bridge's
+ // abort listener comes after the only abort, and the stalled body never answers a read.
+ const timeout=AbortSignal.timeout,deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
+ const f=await fixture('late');try{
+  const opened=f.open();opened.catch(()=>{});
+  while(!f.signal())await tick();
+  assert.equal(await settled(f.handled(),50),false,'bridge is waiting');
+  deadlines.findLast(deadline=>deadline.ms===120000).expire();
+  assert.equal(await settled(f.handled(),2000),true,'deadline releases the handler');
+  const {response,chunks,connection}=await opened;
+  assert.equal(response.statusCode,200);assert.equal(connection.destroyed,true,'response destroyed');
   const outcome=await Promise.race([(async()=>{try{for(;;)if((await chunks.next()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
   assert.equal(outcome,'truncated');assert.equal(f.signal().reason.name,'TimeoutError');assert.deepEqual(f.cancels.map(reason=>reason?.name),['TimeoutError']);
   assert.equal(f.streams(),1,'no retry');
