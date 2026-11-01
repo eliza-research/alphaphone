@@ -2326,10 +2326,12 @@ export const connectionController = {
       try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}
     });
   },
-  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { await work('Checking the key with Cerebras…',async signal=>{try{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}
+  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { let cancelled=false; try { await work('Checking the key with Cerebras…',async signal=>{signal.addEventListener('abort',()=>{cancelled=true;},{once:true});try{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}
     // A provider or native failure never carries an entered key into the visible error: not the
     // key, not the key without surrounding spaces, and not any 12 characters of it in a row.
-    catch(error){if(error instanceof Error&&[apiKey,cartesiaKey].some(key=>{const value=key?.trim()??'',run=Math.min(12,value.length);for(let at=0;run&&at+run<=value.length;at++)if(error.message.includes(value.slice(at,at+run)))return true;return false;}))throw Error(OWN_KEYS_NOT_SET_UP);throw error;}}); },
+    catch(error){if(error instanceof Error&&[apiKey,cartesiaKey].some(key=>{const value=key?.trim()??'',run=Math.min(12,value.length);for(let at=0;run&&at+run<=value.length;at++)if(error.message.includes(value.slice(at,at+run)))return true;return false;}))throw Error(OWN_KEYS_NOT_SET_UP);throw error;}}); }
+    // A cancel can land after native already saved the key; show what is actually selected.
+    finally { if(cancelled){ await this.refreshProviderStatus(); if(ownProviderSelected())update({message:'The key was saved before Cancel. Own API keys are selected; switch back in Settings.'}); } } },
   /** Leaving the welcome own-key view after a key check drops that check's outcome, so the Cloud
    * view never shows a key rejection as its own. */
   clearOutcome(){if(!operation)update({message:'',error:''});},
