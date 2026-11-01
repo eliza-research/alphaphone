@@ -11,7 +11,7 @@ const {createLocalAgentDevHandler}=await import('../scripts/local-agent-dev-brid
 const owner=randomUUID(),root='1'.repeat(64),paired='fixture-private-owner';
 async function fixture(enabled=true,moderation,direct=false){
  const directory=await mkdtemp(join(tmpdir(),'alpha-cloud-speech-')),tokenFile=join(directory,'token');await writeFile(tokenFile,root,{mode:0o600});
- let mode='ok',signal,upstream;const calls=[];
+ let mode='ok',signal,upstream,cancelled;const calls=[];
  const request=async(url,input)=>{const path=new URL(url).pathname;calls.push({path,input});
   if(path==='/api/auth/status')return Response.json({instanceId:'fixture'});
   if(path==='/api/auth/pair-code')return Response.json({code:'fixture'});
@@ -27,15 +27,16 @@ async function fixture(enabled=true,moderation,direct=false){
   const receipt=response=>{if(moderation!==undefined){const get=response.headers.get.bind(response.headers);response.headers.get=name=>name.toLowerCase()==='x-eliza-tts-moderation'?moderation:get(name);}return response;};
   if(path==='/api/asr/cloud'){assert.equal(input.headers['X-Eliza-STT-Provider'],'cartesia');return receipt(Response.json({text:'Heard exactly once',secret:'never-project-transcript-metadata'},{headers}));}
   assert.equal(input.headers['X-Eliza-STT-Provider'],undefined);assert.deepEqual(JSON.parse(input.body),{text:'Hello'});
-  headers['content-type']=mode==='type'?(direct?'audio/mpeg':'audio/wav'):direct?'audio/wav':'audio/mpeg';if(direct)headers['x-request-id']=input.headers['X-Request-Id'];const wav=Buffer.alloc(48);wav.write('RIFF',0);wav.writeUInt32LE(40,4);wav.write('WAVE',8);// Like fetch, an aborted request errors its body. Stream mode hands the body to the test.
-  const streamed=mode==='stream'?new ReadableStream({start(controller){upstream=controller;signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});}}):undefined;
+  headers['content-type']=mode==='type'?(direct?'audio/mpeg':'audio/wav'):direct?'audio/wav':'audio/mpeg';if(direct)headers['x-request-id']=input.headers['X-Request-Id'];const wav=Buffer.alloc(48);wav.write('RIFF',0);wav.writeUInt32LE(40,4);wav.write('WAVE',8);// Like fetch, an aborted request errors its body. Stream mode hands the body to the test; a stalled
+  // body ignores the request signal, so only the bridge's own cancel (recorded) releases it.
+  const streamed=mode==='stream'||mode==='stall'?new ReadableStream({start(controller){upstream=controller;if(mode==='stream')signal.addEventListener('abort',()=>controller.error(signal.reason),{once:true});},cancel(reason){cancelled=reason;}}):undefined;
   return receipt(new Response(streamed??(mode==='large'?new Uint8Array(8*1024*1024+1):direct?wav:new Uint8Array([73,68,51,1])),{headers}));
  };
  const handler=createLocalAgentDevHandler({origin:'http://127.0.0.1:9',tokenFile,request,cloudVoiceEnabled:enabled&&!direct,cartesiaEnabled:enabled&&direct}),server=createServer(handler);await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
  const open=(input,signal)=>fetch(origin,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-Alpha-Local-Agent':'1'},body:JSON.stringify({ownerId:owner,headers:{},...input}),signal});
  // Cloud TTS answers binary audio/mpeg; every refusal and every other route answers JSON.
  const call=async(input,signal)=>{const response=await open(input,signal);return {status:response.status,headers:Object.fromEntries(response.headers),...(response.headers.get('content-type')==='audio/mpeg'?{audio:Buffer.from(await response.arrayBuffer())}:{data:await response.json()})};};
- return {call,open,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
+ return {call,open,calls,mode:value=>mode=value,signal:()=>signal,upstream:()=>upstream,cancelled:()=>cancelled,rotate:()=>writeFile(tokenFile,'2'.repeat(64),{mode:0o600}),close:async()=>{handler.closeVoice();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}};
 }
 const tts=()=>({path:'/api/tts/cloud',method:'POST',requestId:randomUUID(),body:JSON.stringify({text:'Hello'})});
 const asr=()=>({path:'/api/asr/cloud',method:'POST',requestId:randomUUID(),audioBase64:Buffer.from('RIFF fixture WAV').toString('base64')});
@@ -102,6 +103,24 @@ test('Stop after audio started aborts the upstream Cloud TTS body without retry'
  f.mode('stream');const controller=new AbortController();await firstChunk(f,controller.signal);controller.abort();
  for(let i=0;i<100&&!f.signal().aborted;i++)await tick();assert.equal(f.signal().aborted,true);assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
 }finally{await f.close();}});
+test('the Cloud TTS deadline still ends a clip whose upstream goes quiet or whose connected page stops reading',async()=>{
+ // Every bridge deadline is held here, so the test expires the speech request's 120 s one itself.
+ const timeout=AbortSignal.timeout;
+ for(const stall of ['idle','drain']){const deadlines=[];AbortSignal.timeout=ms=>{const controller=new AbortController();deadlines.push({ms,expire:()=>controller.abort(new DOMException('The operation timed out.','TimeoutError'))});return controller.signal;};
+  const f=await fixture();try{
+   f.mode('stall');const {reader}=await firstChunk(f);
+   if(stall==='drain'){
+    // The page holds the response open but reads nothing more: the bridge takes a chunk larger than
+    // the socket buffers, waits for drain, and leaves the next upstream chunk unread.
+    f.upstream().enqueue(new Uint8Array(4*1024*1024));for(let i=0;i<200&&f.upstream().desiredSize<1;i++)await tick();assert.equal(f.upstream().desiredSize,1);
+    f.upstream().enqueue(new Uint8Array([7]));await new Promise(resolve=>setTimeout(resolve,100));assert.equal(f.upstream().desiredSize,0,'bridge waits for drain');
+   }
+   deadlines.findLast(deadline=>deadline.ms===120000).expire();
+   const outcome=await Promise.race([(async()=>{try{for(;;)if((await reader.read()).done)return 'ended';}catch{return 'truncated';}})(),new Promise(resolve=>setTimeout(resolve,2000,'hung'))]);
+   assert.equal(outcome,'truncated',stall);assert.equal(f.signal().reason.name,'TimeoutError',stall);assert.equal(f.cancelled()?.name,'TimeoutError',stall);
+   assert.equal(f.calls.filter(x=>x.path==='/api/tts/cloud').length,1);
+  }finally{AbortSignal.timeout=timeout;await f.close();}}
+});
 const directTts=()=>({...tts(),path:'/api/v1/voice/session/read-aloud'});
 test('direct DEV read-aloud uses exact owner-authenticated runtime endpoint and verified Cartesia WAV',async()=>{const f=await fixture(true,undefined,true);try{const result=await f.call(directTts());assert.equal(result.status,200);assert.equal(result.data.status,200);const value=JSON.parse(result.data.body);assert.equal(value.provider,'cartesia');assert.equal(value.route,'direct');assert.equal(value.contentType,'audio/wav');assert.equal(Buffer.from(value.audioBase64,'base64').toString('ascii',0,4),'RIFF');assert.equal(f.calls.filter(x=>x.path==='/api/v1/voice/session/read-aloud').length,1);assert.equal((await f.call(tts())).status,400);assert(!JSON.stringify(result).includes(paired));}finally{await f.close();}});
 test('direct DEV route rejects disabled mode, wrong owner, provider, route and MIME without Cloud fallback',async()=>{

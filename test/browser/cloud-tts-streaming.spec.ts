@@ -11,7 +11,7 @@ const owner='11111111-1111-4111-8111-111111111111',paired='closed-owner-session'
 // MPEG-1 Layer III, 32 kbit/s, 32 kHz, mono: 144-byte frames, each 36 ms of silence.
 function mp3(frames:number){const out=new Uint8Array(frames*144);for(let i=0;i<frames;i++)out.set([0xff,0xfb,0x18,0xc0],i*144);return out;}
 type Host={requests:number;refuse:boolean;upstream?:ReadableStreamDefaultController<Uint8Array>;signal?:AbortSignal};
-type Proof={outcome:string|null;events:string[];firstAudioMs?:number;speak():void;stop():void;state():Promise<{playing:boolean;positionMs:number}>;gate():boolean};
+type Proof={outcome:string|null;events:string[];firstAudioMs?:number;speak():void;stop():void;prepare():Promise<string>;play(playbackId:string):Promise<string>;hide(hidden:boolean):void;state():Promise<{playing:boolean;positionMs:number}>;gate():boolean};
 
 async function start(page:Page,options:{mediaSource:boolean}={mediaSource:true}){
  const directory=await mkdtemp(join(tmpdir(),'alpha-tts-stream-')),tokenFile=join(directory,'owner-token'),host:Host={requests:0,refuse:false};
@@ -44,7 +44,12 @@ async function start(page:Page,options:{mediaSource:boolean}={mediaSource:true})
    const proof:Proof=(window as any).ttsStream={outcome:null,events:[],
     // The voice conversation's speaker: no onStarted, so it marks half-duplex playback itself.
     speak(){controller=new AbortController();proof.outcome=null;proof.events=[];proof.firstAudioMs=undefined;speakAt=performance.now();createCloudVoice().speak('Streaming speech test.',controller.signal).then(()=>{proof.outcome='finished';},(error:Error)=>{proof.outcome=error.name==='AbortError'?'stopped':'failed: '+error.message;});},
-    stop(){controller?.abort();},state:()=>voice.state(),gate:()=>markers.isTtsEchoGateActive(performance.now(),-1)};
+    stop(){controller?.abort();},
+    // A clip prepared for later and played by id, as the read-aloud queue does.
+    prepare:()=>voice.synthesizeDevelopmentCloud({text:'Prepared speech test.',requestId:crypto.randomUUID()}).then(({playbackId}:{playbackId:string})=>playbackId),
+    play:playbackId=>voice.play({playbackId}).then(()=>'played',(error:Error)=>error.message),
+    hide(hidden){Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});if(hidden)document.dispatchEvent(new Event('visibilitychange'));},
+    state:()=>voice.state(),gate:()=>markers.isTtsEchoGateActive(performance.now(),-1)};
    const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){this.addEventListener('playing',()=>{proof.firstAudioMs??=Math.round(performance.now()-speakAt);},{once:true});return play.call(this);};
    for(const event of ['playbackEnded','playbackFailed','playbackStopped'])await voice.addListener(event,()=>proof.events.push(event));
   },'/@fs'+resolve('.eliza/client-features/packages/ui/src/voice/tts-playback-activity.ts'));
@@ -130,5 +135,42 @@ test('a clip cut off after playback started fails instead of finishing, and refu
   await expect.poll(()=>f.proof(value=>value.outcome)).toBe('failed: Cloud speech unavailable (HTTP 402).');
   expect(await f.proof(value=>value.events)).toEqual([]);
   expect(JSON.stringify(await f.proof(value=>value))).not.toContain('never-project');
+ }finally{await f.cleanup();}
+});
+
+test('a clip prepared before play stops downloading when the page is hidden, and never plays',async({page})=>{
+ const f=await start(page);
+ try{
+  // Headers, and so the playback id, arrive with the first chunk; the rest of the body stays open.
+  const prepared=f.proof(value=>value.prepare());
+  await expect.poll(()=>f.host.upstream!==undefined).toBe(true);
+  f.host.upstream!.enqueue(mp3(28));const playbackId=await prepared;
+  expect(f.host.signal?.aborted).toBe(false);
+  await f.proof(value=>value.hide(true));
+  await expect.poll(()=>f.host.signal?.aborted,{timeout:5000}).toBe(true);
+  await f.proof(value=>value.hide(false));
+  expect(await page.evaluate(id=>(window as any).ttsStream.play(id),playbackId)).toBe('Prepare speech first.');
+  expect(await f.proof(async value=>(await value.state()).playing)).toBe(false);
+  expect(f.host.requests).toBe(1);expect(f.foreign).toEqual([]);
+ }finally{await f.cleanup();}
+});
+
+test('an element that lets its MediaSource go stops the streamed download and releases its URL',async({page})=>{
+ const f=await start(page);
+ try{
+  const result=await page.evaluate(async frames=>{
+   const {StreamedSpeech,streamedSpeechSource}=await import('/src/browser/streamed-speech.ts');
+   let cancelled:unknown;const body=new ReadableStream<Uint8Array<ArrayBuffer>>({start(controller){controller.enqueue(new Uint8Array(frames));},cancel(reason){cancelled=reason;}});
+   const revoked:string[]=[],revoke=URL.revokeObjectURL;URL.revokeObjectURL=url=>{revoked.push(url);revoke(url);};
+   try{
+    const {url,fed}=streamedSpeechSource(new StreamedSpeech(body),new AbortController().signal),audio=new Audio(url);
+    // Attached and fed its first chunk while the rest of the clip downloads, then the source is reset.
+    await new Promise(resolve=>audio.addEventListener('loadedmetadata',resolve,{once:true}));
+    audio.removeAttribute('src');audio.load();
+    const outcome=await Promise.race([fed.then(()=>'fed',(error:Error)=>'failed: '+error.message),new Promise(resolve=>setTimeout(resolve,3000,'pending'))]);
+    return {outcome,cancelled:cancelled instanceof Error?cancelled.message:String(cancelled),revoked:revoked.includes(url)};
+   }finally{URL.revokeObjectURL=revoke;}
+  },[...mp3(28)]);
+  expect(result).toEqual({outcome:'failed: Speech audio could not be played.',cancelled:'Speech audio could not be played.',revoked:true});
  }finally{await f.cleanup();}
 });

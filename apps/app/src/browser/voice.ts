@@ -232,6 +232,9 @@ export class BrowserVoice extends WebPlugin {
    return;
   }
   for(const kind of [...this.speechRequests.keys()])this.abortSpeech(kind,reason);this.capture.cancel();await this.stopPlayback();
+  // A streamed clip, played or not, leaves with its download, so none outlives a global cancel.
+  // A Blob clip stays playable, as before streaming.
+  for(const [id,audio] of this.agentAudio)if(audio.stream)this.agentAudio.delete(id);
  }
  async releaseLocalSpeech(){await this.cancel(undefined,'released');this.speech.clear();this.agentAudio.clear();this.capture.clear();}
 }

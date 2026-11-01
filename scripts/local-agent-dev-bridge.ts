@@ -181,8 +181,10 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
       if(cloudAsr)headers['X-Eliza-STT-Provider']='cartesia';
       if(audio){headers['Content-Type']='audio/wav';headers['X-Request-Id']=input.requestId;}
       if(ttsAudio){headers['X-Request-Id']=input.requestId;headers.Accept=cloudTts?'audio/mpeg':'audio/wav';}
-      const result=await request(origin.origin+input.path,{method:input.method,headers,body:audio??input.body,redirect:'error',
-        signal:AbortSignal.any([abort.signal,AbortSignal.timeout(voice?10000:120000)])});
+      // Ends the upstream request when the page goes away or the deadline passes. A streamed body
+      // stays under it until its last chunk is sent.
+      const upstream=AbortSignal.any([abort.signal,AbortSignal.timeout(voice?10000:120000)]);
+      const result=await request(origin.origin+input.path,{method:input.method,headers,body:audio??input.body,redirect:'error',signal:upstream});
       if(directAsr&&!result.ok){await result.body?.cancel();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:result.status,body:JSON.stringify({code:'direct_transcription_unavailable'})}));return;}
       if(cloudSpeech&&!result.ok){await result.body?.cancel();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({status:result.status,body:JSON.stringify({code:'cloud_voice_unavailable'})}));return;}
       if(cloudSpeech&&(result.headers.get('x-eliza-speech-provider')!=='cartesia'||result.headers.get('x-eliza-speech-route')!=='cloud'||(cloudTts&&result.headers.get('content-type')?.split(';')[0]!=='audio/mpeg'))){await result.body?.cancel();fail(502,'Cloud speech provider was not verified');return;}
@@ -206,17 +208,19 @@ export function createLocalAgentDevHandler(options:{origin:string;tokenFile:stri
         // rest arrives. Every chunk passes the owner check before it is sent. Headers go out with the
         // first chunk, so an empty or re-owned clip still gets its JSON failure. A failure after that
         // destroys the response (outer catch): the page sees a truncated clip, never a cleanly ended one.
+        // The deadline covers idle reads and drain waits on a page that stops reading, and cancels the upstream.
         const reader=result.body?.getReader(),moderation=result.headers.get('x-eliza-tts-moderation');let received=0,committed=false;
+        const cancel=()=>{void reader?.cancel(upstream.reason).catch(()=>{});};upstream.addEventListener('abort',cancel,{once:true});
         try{
           while(reader){
-            const part=await reader.read();if(part.done)break;if(!part.value.byteLength)continue;
+            const part=await reader.read();upstream.throwIfAborted();if(part.done)break;if(!part.value.byteLength)continue;
             received+=part.value.byteLength;if(received>8*1024*1024)throw Error('Response too large');
             if(!owned()){if(committed)throw Error('Cloud voice owner changed');fail(409,'Cloud voice owner changed');return;}
             if(!committed){committed=true;res.writeHead(200,{'Content-Type':'audio/mpeg','Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff','X-Request-Id':input.requestId,'X-Eliza-Speech-Provider':'cartesia','X-Eliza-Speech-Route':'cloud',
               ...(timings.length?{'Server-Timing':timings.map(value=>`${value.name};dur=${value.durationMs}`).join(', ')}:{}),...(moderation==='reviewed'||moderation==='approved-hit'?{'X-Eliza-TTS-Moderation':moderation}:{})});}
-            if(!res.write(part.value))await once(res,'drain',{signal:abort.signal});
+            if(!res.write(part.value))await once(res,'drain',{signal:upstream});
           }
-        }finally{await reader?.cancel().catch(()=>{});}
+        }finally{upstream.removeEventListener('abort',cancel);await reader?.cancel().catch(()=>{});}
         if(abort.signal.aborted)return;
         if(!committed){if(!owned())fail(409,'Cloud voice owner changed');else fail(502,'Empty Cloud speech audio');return;}
         res.end();return;
