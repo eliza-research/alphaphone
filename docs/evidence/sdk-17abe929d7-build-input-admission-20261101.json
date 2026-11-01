@@ -1,6 +1,6 @@
 {
-  "from": "d5f0e2aea48a7ce578cdb16f9808f4d26f006ba2",
-  "to": "6cd75d68202db3322dbec9d36d200902f08849c4",
+  "from": "6cd75d68202db3322dbec9d36d200902f08849c4",
+  "to": "17abe929d7572a082a4d0eda170728d2fea9335d",
   "inputs": [
     {
       "path": "plugins/plugin-local-inference/native/llama.cpp",
@@ -78,15 +78,10 @@
       "path": "plugins/plugin-native-agent/android",
       "entries": 91,
       "gitModeTypeBlobPathInventorySha256": "816c7044e1b625deecf8a921e9c015dd1032f5a9afc4711441d9421dbb93c02a",
-      "unchanged": false
+      "unchanged": true
     }
   ],
-  "changedPaths": [
-    "plugins/plugin-local-inference/native/android/speech-bridge/src/main/java/ai/eliza/voice/CartesiaSpeech.java",
-    "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/CredentialRequestFence.java",
-    "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderAdmission.java",
-    "plugins/plugin-native-agent/android/src/main/java/ai/eliza/plugins/agent/runtime/NativeProviderSlot.java"
-  ],
+  "changedPaths": [],
   "forkPins": {
     "from": "d960f633ddb034d0dd828a55216cfc17d012acbd",
     "to": "d960f633ddb034d0dd828a55216cfc17d012acbd"
@@ -104,10 +99,9 @@
     ]
   },
   "consumerAndroidModules": {
-    "changedPaths": [
-      "plugins/plugin-native-agent/android"
-    ],
+    "changedPaths": [],
     "unchangedPaths": [
+      "plugins/plugin-native-agent/android",
       "plugins/plugin-native-system/android",
       "plugins/plugin-native-camera/android",
       "plugins/plugin-native-location/android",
@@ -130,5 +124,5 @@
   "qualificationTransferred": false,
   "admitted": false,
   "requalificationRequired": true,
-  "note": "Reviewed repair separates Google service credentials from own inference, makes Cloud sign-out retain direct startup, and projects direct routing before boot. Native-agent admission changed; compilation and native requalification remain required. No historic qualification transfers."
+  "note": "V4-only source comparison preserves all incoming Google/direct native sources byte-for-byte. No native changes relative6cd75; normal compile and existing requalification remain required. No historic qualification transfers."
 }
