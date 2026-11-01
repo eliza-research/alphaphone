@@ -142,9 +142,13 @@ privileged permission whitelist is fabricated for a thin launcher.
 
 **Build gate.** A default build declares no https `autoVerify` filter. With the Gradle property
 `ELIZAOS_APP_LINK_HOST` set, `android/app/product.gradle` overlays verified filters on that host for
-`/alphaphone/cloud-delegation` (prefix) and `/alphaphone/auth/callback` (exact path, the in-app
-Eliza Cloud sign-in return). Steward returns sign-in only to `eliza.app`, so the sign-in return
-works with `ELIZAOS_APP_LINK_HOST=eliza.app`. Test-mocks builds always add
+`/alphaphone/cloud-delegation` (prefix), `/alphaphone/auth/callback` (exact path, the in-app
+Eliza Cloud sign-in return) and `/alphaphone/gmail/callback` (exact path, the Google Workspace
+consent return). Steward returns sign-in only to `eliza.app`, so the sign-in return
+works with `ELIZAOS_APP_LINK_HOST=eliza.app`. The Workspace return is
+`https://<ELIZAOS_APP_LINK_HOST>/alphaphone/gmail/callback`; a build without the property reports
+it unsupported and Google consent keeps the manual return. Cloud returns there only when its
+`APP_OAUTH_RETURN_URLS` lists `https://eliza.app/alphaphone/gmail/callback`. Test-mocks builds always add
 `https://staging.eliza.app/alphaphone/auth/callback` from `src/testMocks/AndroidManifest.xml`.
 The release fingerprint must be listed at `/.well-known/assetlinks.json` on the host before a
 release build sets the property (never a debug or placeholder fingerprint). On `eliza.app` Cloud
