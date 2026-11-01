@@ -102,9 +102,9 @@ new file mode 100644
 +        fullDuplex:echoCancelled,
 +        async close(){
 +          check();const final=speechActive?new Promise<void>(resolve=>ended=resolve):Promise.resolve();
-+          await port.setCloudSpeechMuted({sessionId,muted:true});
++          // One 2.5 s bound covers the native mute and the final it releases: an unanswered mute rejects too.
 +          let timer:ReturnType<typeof setTimeout>|undefined;
-+          try{await Promise.race([final,new Promise<void>((_,reject)=>{timer=setTimeout(()=>reject(Error('Cloud transcription did not finish after mute.')),2500);})]);}
++          try{await Promise.race([port.setCloudSpeechMuted({sessionId,muted:true}).then(()=>final),new Promise<void>((_,reject)=>{timer=setTimeout(()=>reject(Error('Cloud speech did not confirm the mute in time.')),2500);})]);}
 +          finally{if(timer)clearTimeout(timer);ended=()=>{};if(listening===handlers)listening=undefined;}
 +        },
 +        async cancel(){if(listening===handlers)listening=undefined;if(lifecycle===handlers)lifecycle=undefined;await stop();},

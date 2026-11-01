@@ -103,3 +103,32 @@ test('a closed capture still hears the socket end once, never its speech; a late
  const g=fixture(),cancelled=await g.speech.listen(g.handlers);await cancelled.cancel();
  g.emit({type:'error',code:'expired'});await Promise.resolve();assert.deepEqual(g.events,[],'a cancelled capture hears nothing');
 });
+
+test('one 2.5 s bound covers the native mute and the final it releases: an unanswered mute rejects the close',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const settle=async()=>{for(let i=0;i<10;i++)await Promise.resolve();};
+ const closeWith=async({answerAt,finalAt})=>{
+  const f=fixture(),capture=await f.speech.listen(f.handlers);let answer;
+  f.port.setCloudSpeechMuted=input=>{f.mutes.push(input.muted);return new Promise(resolve=>answer=resolve);};
+  f.emit({type:'speech-start'});let settled;
+  void capture.close().then(()=>settled='closed',error=>settled=error.message);
+  for(let at=1;at<=2500;at++){
+   t.mock.timers.tick(1);
+   if(at===answerAt)answer();
+   if(at===finalAt)f.emit({type:'speech-end',text:'turn off the alarm',final:true});
+   await settle();if(settled)return {f,at,settled};
+  }
+  return {f,settled};
+ };
+ const quick=await closeWith({answerAt:300,finalAt:1800});
+ assert.deepEqual([quick.at,quick.settled],[1800,'closed'],'a mute and final in time fulfil the close');
+ assert.deepEqual(quick.f.events,['start','end','turn off the alarm']);
+ const unanswered=await closeWith({});
+ assert.deepEqual([unanswered.at,unanswered.settled],[2500,'Cloud speech did not confirm the mute in time.']);
+ assert.deepEqual(unanswered.f.mutes,[false,true]);
+ unanswered.f.emit({type:'speech-end',text:'after the failed close',final:true});
+ unanswered.f.emit({type:'error',code:'expired'});await settle();
+ assert.deepEqual(unanswered.f.events,['start','failed'],'no speech after the failed close; the socket end still arrives');
+ const noFinal=await closeWith({answerAt:300});
+ assert.deepEqual([noFinal.at,noFinal.settled],[2500,'Cloud speech did not confirm the mute in time.'],'the bound runs from the close, not from the mute answer');
+});
