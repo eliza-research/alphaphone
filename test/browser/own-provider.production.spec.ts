@@ -46,8 +46,8 @@ async function openProvider(page:Page){
  await expect(dialog(page)).toBeVisible();
  await expect(dialog(page).getByRole('button',{name:'Cloud',exact:true})).toHaveAttribute('aria-pressed','true');
 }
-async function enterKeys(page:Page,container=dialog(page)){
- await container.getByRole('button',{name:'Own API keys',exact:true}).click();
+async function enterKeys(page:Page,container=dialog(page),open='Own API keys'){
+ await container.getByRole('button',{name:open,exact:true}).click();
  await expect(container.getByLabel('Cerebras API key',{exact:true})).toHaveAttribute('type','password');
  await expect(container.getByLabel('Cartesia API key (optional)',{exact:true})).toHaveAttribute('autocomplete','off');
  await container.getByLabel('Cerebras API key',{exact:true}).fill(AI_KEY);
@@ -122,7 +122,7 @@ test('Back cancels an in-flight native lease before the key can be saved',async(
 test('signed-out onboarding can explicitly select own keys without starting a Cloud sign-in',async({page})=>{
  const observed=await fixture(page,true);await page.goto('/');
  const welcome=page.getByRole('main',{name:'Welcome to Alpha.',exact:true});await expect(welcome).toBeVisible();
- await enterKeys(page,welcome);await welcome.getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect(welcome.getByText('AI provider')).toHaveCount(0);await enterKeys(page,welcome,'Use your own API keys');await welcome.getByRole('button',{name:'Save and use own keys',exact:true}).click();
  await expect(welcome).toHaveCount(0);await completeAccessSetup(page);
  await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeVisible();
  expect(await page.evaluate(()=>(window as any).ownProvider.saved)).toBe(1);

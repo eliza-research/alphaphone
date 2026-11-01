@@ -64,8 +64,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
     <div hidden={legal !== null}>
     {view.step === 'choose' && <>
       {!google && !phone && !emailEnabled && <p role="status">This service offers no sign-in method supported by this app. Contact the service administrator.</p>}
-      <p className="alpha-auth-intro">Use your {service?.name || cloudServiceName(view.environment)} account to sign in. Your agent runs on this device.</p>
-      <p role="note">Sign in to verify your account. You’ll review access before authorizing Alpha Phone.</p>
+      <p className="alpha-auth-intro">Sign in with your {service?.name || cloudServiceName(view.environment)} account. Your agent runs on this device.</p>
       {ready && !google && <p id="alpha-google-unavailable" role="status">Google sign-in is unavailable. Use another sign-in method below.</p>}
       <div className="alpha-connection-actions alpha-auth-google"><button ref={googleButton} disabled={busy || !ready || !google} onClick={actions.google}><span aria-hidden="true" className="alpha-google-icon"/>Continue with Google</button></div>
       {emailEnabled && <form className="alpha-cloud-sign-in-email" aria-label="Sign in with email" onSubmit={event => { event.preventDefault(); actions.email(email.current?.value || ''); }}>
@@ -90,7 +89,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
     {message && !inlineStatus && <p role="status">{message}</p>}
     {error && <p role={errorIsNotice ? 'status' : 'alert'} className={errorIsNotice ? 'alpha-auth-notice' : 'alpha-connection-error'}>{error}</p>}
     <div className="alpha-connection-actions">
-      {(dismissible || view.step !== 'choose' || busy) && <button type="button" className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>}
+      {(dismissible || view.step !== 'choose') && <button type="button" className="alpha-connection-cancel" onClick={actions.cancel}>{view.step === 'choose' && !busy ? 'Back' : 'Cancel sign-in'}</button>}
       {view.step === 'choose' && extra}
     </div>
     {service && <p><button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('terms');}}>Terms of Service</button> and <button type="button" disabled={busy} onClick={event=>{legalTrigger.current=event.currentTarget;setLegal('privacy');}}>Privacy Policy</button>.</p>}
