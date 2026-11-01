@@ -43,8 +43,6 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
  // UI projection only: processing ends at a matching terminal receipt, while
  // playback ends at its own matching completion. Neither changes manual mute.
  let callerBusyTrace:string|undefined,playbackTrace:string|undefined,playbackEndTrace:string|undefined;
- // A Cloud relay refusal (sign-in, credits, rate limit) ends the session with one terminal server code.
- let relayRefusal:string|undefined;
  const microphoneBusy=()=>callerBusyTrace!==undefined||playbackTrace!==undefined;
  const retiredBusyTraces=new Set<string>();
  const retireBusyTrace=(trace:string|undefined)=>{if(!trace)return;if(retiredBusyTraces.size>=64)retiredBusyTraces.delete(retiredBusyTraces.values().next().value!);retiredBusyTraces.add(trace);};
@@ -69,7 +67,9 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
    navigate({viewId:frame.viewId,viewPath:frame.viewPath,subview:frame.subview,traceId:currentTurn,...(prepared?{navigationPrepared:frame.navigationPrepared,navigationBinding:frame.navigationBinding,completedActionHandoffId:id}:{})});
   }catch(error){if(!stopped)input.onError(error instanceof Error?error:Error('Voice navigation could not be verified.'));}
  };
- const client=createVoiceSessionClient({agentId:input.binding.session.agentId,conversationId:input.binding.conversationId,preLiveMaxReconnects:0,preLiveMaxAttempts:1,...(cloud?{maxReconnects:0}:{}),getUiContext:()=>{current();const uiClientId=connectionController.voiceRendererClientId();if(!uiClientId)throw Error('The voice renderer is not bound.');return {...input.getUiContext?.(),uiClientId,...(directActions?{agentActionMode:'direct-request-v1' as const}:{})};},
+ // Cloud keeps one renewal, refilled after 30 s live, so a turn still busy when its 60 s relay ticket
+ // expires reconnects through the SDK, as idle rotation does. A refusal never re-mints (onServerEvent).
+ const client=createVoiceSessionClient({agentId:input.binding.session.agentId,conversationId:input.binding.conversationId,preLiveMaxReconnects:0,preLiveMaxAttempts:1,...(cloud?{maxReconnects:1}:{}),getUiContext:()=>{current();const uiClientId=connectionController.voiceRendererClientId();if(!uiClientId)throw Error('The voice renderer is not bound.');return {...input.getUiContext?.(),uiClientId,...(directActions?{agentActionMode:'direct-request-v1' as const}:{})};},
   getConsentNonce:async()=>{const result=await request('/api/v1/voice/session/consent',{});return typeof result.consentNonce==='string'?result.consentNonce:null;},
   fetch:async(path,init={})=>{if(path!=='/api/v1/voice/session'||init.method!=='POST'||typeof init.body!=='string')throw Error('Unsupported developer voice request');const body=JSON.parse(init.body);if(body.agentId!==input.binding.session.agentId||body.conversationId!==input.binding.conversationId||body.transport!=='websocket')throw Error('Developer voice binding changed');return Response.json(await request(path,body,init.signal??lifecycle.signal));},
   onMinted:result=>{minted.add(result.sessionId);try{current();}catch{void stop().catch(error=>input.onError(error instanceof Error?error:Error('Developer voice retirement was not confirmed.')));}},
@@ -105,11 +105,13 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
    if(event.t==='usage'&&callerBusyTrace===event.traceId){callerBusyTrace=undefined;if(playbackTrace!==event.traceId)retireBusyTrace(event.traceId);}
    // Retryable transport recovery does not finish the server's active turn.
    if(event.t==='interrupted'||event.t==='error'&&!event.retryable){
-    if(cloud&&event.t==='error')relayRefusal=event.code;
     const trace=event.traceId;
     if(trace===undefined||trace===callerBusyTrace){retireBusyTrace(callerBusyTrace);callerBusyTrace=undefined;}
     if(trace===undefined||trace===playbackTrace){retireBusyTrace(playbackTrace);playbackTrace=undefined;playbackEndTrace=undefined;}
    }
+   // A Cloud refusal (sign-in, credits, limits) ends voice before the SDK could re-mint a paid session.
+   // Only the relay ticket's planned expiry is left to the SDK's renewal.
+   if(cloud&&event.t==='error'&&!event.retryable&&event.code!=='expired'){void stop().catch(error=>input.onError(error));input.onError(Object.assign(Error('Cloud voice ended: '+event.code),{code:'voice-relay-'+event.code}));return;}
    if(wasBusy!==microphoneBusy())input.onState(phase,progressText);
    if(['ready','stt_final','speaking_start','reply_complete','usage'].includes(event.t))reconcile();
    if(event.t==='navigate_view')navigate(event);
@@ -124,7 +126,7 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
 
   },
   onPlaybackUnlockChange:()=>{if(!stopped)input.onPlaybackUnlockChange?.();},
-  onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(relayRefusal?Object.assign(Error(error.message,{cause:error}),{code:'voice-relay-'+relayRefusal}):error);},
+  onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(error);},
  });
  const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();stopPromise=(async()=>{await client.stop();for(const id of minted){if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}})();return stopPromise;};
  // Renderer authority is independent of the canonical audio socket. Renew its

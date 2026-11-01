@@ -9,29 +9,31 @@ import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 function residentFixture({inference='cloud',...options}={}){
  const h=cloudVoiceViewFixture({cloudProfile:true,browserCloudResident:true,native:false,platform:'web',...options});
  const snapshot=h.box.connectionController.getSnapshot,agent={session:{ownerId:'synthetic-owner'}};
- h.inference=inference;h.batchLoops=0;h.progressCues=0;h.realtimeSessions=0;h.realtimeStops=0;
+ h.inference=inference;h.batchLoops=0;h.realtimeSessions=0;h.realtimeStops=0;h.batchDrivers=0;
  h.box.connectionController.getSnapshot=()=>({...snapshot(),residentInference:h.inference,providerStatus:{voiceConfigured:h.inference==='direct'}});
  h.box.connectionController.getBrowserSpeechAgent=()=>agent;
  h.box.connectionController.voiceRendererMetadata=()=>({viewDelivery:'completed-action'});
  h.box.HTMLElement=class {};h.box.React={createElement:()=>null};h.box.VoiceActivity=()=>null;
  h.box.BatchVoiceConversation=class {constructor(){h.batchLoops++;}async start(){}async stop(){}recheck(){}};
- const cue=h.box.createBatchProgressAcknowledgment;h.box.createBatchProgressAcknowledgment=(...input)=>{h.progressCues++;return cue(...input);};
+ const createCloudVoice=h.box.createCloudVoice;h.box.createCloudVoice=(...input)=>{h.batchDrivers++;return createCloudVoice(...input);};
+ h.driver.synthesizeDevelopmentCloud=async input=>{(h.spoken??=[]).push(input.text);return {playbackId:'spoken-'+input.requestId};};
  h.box.developmentCartesiaConversation=async options=>{h.realtime=options;h.realtimeSessions++;let muted=false;
   return {async start(){options.assertCurrent();options.onState('listening');},async stop(){h.realtimeStops++;},recheck(){},resume:()=>false,
    get microphoneAutomaticallyMuted(){return false;},get microphoneMuted(){return muted;},setMicrophoneMuted(value){muted=value;},needsPlaybackUnlock:false,async unlockPlayback(){}};};
  return h;
 }
 
-test('Cloud mode conversation is the realtime session: no batch loop, recording upload or spoken progress cue',async()=>{
+test('Cloud mode conversation is the realtime session: no batch loop or driver, recording upload or spoken progress cue',async()=>{
  const h=residentFixture();
  try{
   await h.shell.startVoice();
   assert.equal(h.realtimeSessions,1);assert.equal(h.realtime.binding.conversationId,h.conversation);
-  assert.equal(h.batchLoops,0,'the batch Cloud conversation loop is retired for the Cloud resident');
-  assert.equal(h.progressCues,0,'no extra spoken progress request');
+  assert.equal(h.batchLoops,0,'the batch Cloud conversation loop is retired for the Cloud resident');assert.equal(h.batchDrivers,0,'no unused batch Cloud driver');
+  h.realtime.onState('thinking','Checking your calendar');assert.equal(h.renderChat().state,'thinking');assert.equal(h.shell.renderVals().turnStatus,'Checking your calendar','the planning label is shown, not spoken');
+  assert.equal(h.spoken,undefined,'no spoken progress cue');assert.equal(h.cloudSpeech,0);h.realtime.onState('listening');
   assert.equal(h.starts,0);assert.equal(h.uploads,0);assert.equal(h.cloudSpeech,0);assert.equal(h.sends,0);assert.equal(h.localFactories,0);
   const view=h.renderChat();assert.equal(view.state,'listening');assert.equal(view.canMute,true);assert.equal(view.muteLabel,'Mute microphone');
-  assert.match(view.cloudDisclosureText,/streams what you say.*Eliza Cloud account while voice is open.*plan allowance.*Cartesia/);
+  assert.match(view.cloudDisclosureText,/streams what you say.*Eliza Cloud account while voice is open, including silence while muted.*plan allowance.*Cartesia/);
   h.realtime.onTranscript('live words');assert.equal(h.shell.renderVals().voiceInterim,'live words','words appear while the user talks');
   await h.shell.stopVoiceConversation();assert.equal(h.realtimeStops,1);
   await h.shell.startVoice();assert.equal(h.realtimeSessions,2,'a stopped session releases media for the next start');assert.deepEqual(h.shell.messages,[]);
@@ -117,4 +119,38 @@ test('own keys in the Cloud resident keep the direct realtime route, and native 
   assert.match(native.renderChat().cloudDisclosureText,/uploads recordings.*plan allowance/);
   await native.shell.stopVoiceConversation();
  }finally{native.close();await native.tick();}
+});
+
+test('a Cloud resident with no bound Cloud account shows the sign-in path, not a realtime or batch session',async()=>{
+ for(const inference of ['unavailable','unknown',null]){
+  const h=residentFixture({inference});
+  try{
+   await h.shell.startVoice();
+   const view=h.renderChat();assert.equal(view.state,'error');assert.equal(view.lines[0].t,'Sign in to Eliza Cloud to use voice.');
+   assert.equal(h.realtimeSessions,0);assert.equal(h.batchLoops,0);assert.equal(h.batchDrivers,0);assert.equal(h.starts,0);
+   h.inference='cloud';await h.shell.stopVoiceConversation();await h.shell.startVoice();assert.equal(h.realtimeSessions,1,'a bound account talks again');await h.shell.stopVoiceConversation();
+  }finally{h.close();await h.tick();}
+ }
+});
+test('a Cloud resident whose local agent is missing gets the calm realtime start line, not batch driver text',async()=>{
+ const h=residentFixture();
+ try{
+  h.box.connectionController.getBrowserSpeechAgent=()=>null;
+  h.box.developmentCartesiaConversation=async()=>{h.realtimeSessions++;throw Error('Connect the local developer agent first.');};
+  await h.shell.startVoice();
+  assert.equal(h.batchDrivers,0);assert.equal(h.realtimeSessions,1);
+  const view=h.renderChat();assert.equal(view.state,'error');assert.equal(view.lines[0].t,'Voice could not start. Try again, or use the keyboard.');
+ }finally{h.close();await h.tick();}
+});
+test('the remaining browser batch Cloud conversation (test-mock builds) speaks only the reply, never a progress cue',async()=>{
+ const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,native:false,platform:'web',clock,peak:.5,holdReply:true});
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+ try{
+  await f.shell.startVoice();await clock.flush();await clock.advance(700);f.peak=0;await clock.advance(1200);await clock.flush();
+  assert.equal(f.sends,1);const input=f.sendInputs[0];
+  assert.equal('onProgress' in input||'onReplyStarted' in input,false,'no progress channel reaches the turn');
+  await clock.advance(5000);assert.equal(f.cloudSpeech,0,'nothing is spoken while the reply is pending');
+  f.releaseReply();await clock.flush();await clock.advance(100);
+  assert.deepEqual((f.speechInputs||[]).map(value=>value.text),['Synthetic matching reply.'],'only the reply is spoken');
+ }finally{f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
 });

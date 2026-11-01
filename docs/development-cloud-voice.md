@@ -42,15 +42,21 @@ are not selected; own keys keep direct Cartesia and never inherit the relay. Bef
 microphone, the page requires the agent's health to report `speechRoute: 'cloud'`,
 `speechProvider: 'cartesia'` and `providerAdmission: 'at-session-start'`.
 
-Cloud admits and bills each relay session. A relay refusal (sign-in, billing, rate limit or an
-unavailable service) ends voice with one calm line and is never retried automatically. Every
-other ending shows one calm line too: a refused or missing microphone keeps its browser recovery
-copy, voice open in another tab says so, and a lost connection or failed session start says
-voice stopped. Raw session text is never shown. A lost session is not reopened automatically.
-While voice stays open, the voice client still replaces its session at an idle moment before
-the 60 second relay ticket ends; each replacement opens a new relay session, which Cloud admits
-and bills on its own. The Cloud resident does not use the recorded-clip conversation loop or its spoken progress cue. Read-aloud
-and dictation keep the batch Cloud speech routes above.
+Cloud admits and bills each relay session. Voice streams while it is open, including silence
+while muted. A Cloud resident with no bound Cloud account shows the sign-in line instead.
+
+The voice client replaces its session at an idle moment before each 60 second relay ticket ends.
+When a turn is still busy at that moment, the agent ends the session at the ticket deadline with
+the `expired` code, and the client opens the next session through the same reconnect. The
+interrupted reply is not replayed. One reconnect is allowed, refilled after 30 seconds live, so
+every ticket boundary renews without user action. Each new session is a new Cloud admission.
+
+Any other ending stops voice. A relay refusal (sign-in, billing, limits or an unavailable
+service) stops the client before it could open another paid session and shows one calm line.
+A refused or missing microphone keeps its browser recovery copy, voice open in another tab says
+so, and a lost connection that cannot be renewed says voice stopped. Raw session text is never
+shown. The Cloud resident has no recorded-clip conversation loop and no spoken progress cue.
+Read-aloud and dictation keep the batch Cloud speech routes above.
 
 Tests cover this with in-memory ports only. Relay latency, billing, the busy hold over the relay
 and the exact refusal codes Cloud sends need a live run against Cloud.

@@ -1,5 +1,4 @@
 import { cloudServiceName } from '../runtime/cloud-protocol';
-import {createBatchProgressAcknowledgment} from '../runtime/local-agent-stream';
 import {developmentCloudVoiceEnabled,developmentCloudRealtimeVoiceEnabled} from '../runtime/development-cloud-voice';
 import {browserCloudResidentEnabled} from '../runtime/browser-cloud-resident';
 import React from 'react';
@@ -225,7 +224,9 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     cloudMode = selected === 'cloud';
     cloudConnectRequired = cloudMode && connectionController.getSnapshot().residentInference!=='direct' && !developmentCloudVoiceEnabled && !(chat&&(developmentCartesiaVoiceEnabled||developmentCloudRealtimeVoiceEnabled)) && (!connectionController.getCloudEnvironment() || !connectionController.getCloudClient()?.credentialId);
     deviceOnly = !cloudMode && (browserDevProfile || localStorage.getItem('alpha.connection.selection.v1') !== null || !Capacitor.isPluginAvailable('DevelopmentAgent'));
-    driver = cloudMode && !cloudConnectRequired && !developmentCloudRealtimeVoiceEnabled && !directCartesia ? createCloudVoice() : deviceOnly ? deviceVoice : voice;
+    // The Cloud resident's conversation is the realtime session, so it builds no batch Cloud driver.
+    const residentChat = !!chat && chat.mode !== 'dictation' && cloudResidentRealtimeActive();
+    driver = cloudMode && !cloudConnectRequired && !developmentCloudRealtimeVoiceEnabled && !directCartesia && !residentChat ? createCloudVoice() : deviceOnly || residentChat ? deviceVoice : voice;
     if (cloudConnectRequired) error = `Sign in to ${voiceServiceName()} to use voice.`;
     onDeviceVoice = !cloudMode && (route === 'device' || browserDevProfile && route === 'agent') ? preparedLocal || createOnDeviceVoice() : null;
     if (route === 'manual') { cloudMode = false; deviceOnly = true; driver = deviceVoice; }
@@ -528,7 +529,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const provider=connectionController.getSnapshot();
     if(provider.residentInference==='direct'&&!provider.providerStatus?.voiceConfigured){conversationState={phase:'error'};error='Voice is off. Add an optional Cartesia key in AI provider settings.';refresh();return;}
     const token=generation;
-    if(cloudConnectRequired&&!developmentCartesiaVoiceEnabled&&!developmentCloudRealtimeVoiceEnabled&&!developmentCloudVoiceEnabled){conversationState={phase:'error'};error=`Sign in to ${voiceServiceName()} to use voice.`;refresh();return;}
+    // A Cloud resident talks only over the speech relay of the Cloud account its agent is bound to.
+    if(cloudResidentRealtimeActive()&&provider.residentInference!=='cloud'||cloudConnectRequired&&!developmentCartesiaVoiceEnabled&&!developmentCloudRealtimeVoiceEnabled&&!developmentCloudVoiceEnabled){conversationState={phase:'error'};error=`Sign in to ${voiceServiceName()} to use voice.`;refresh();return;}
     const controller=new AbortController();readiness=controller;conversationReviewRequired=false;conversationState={phase:'starting'};error='';refresh();
     const current=()=>{controller.signal.throwIfAborted();if(token!==generation||chatDestination!==chat||!chatCurrent())throw new DOMException('Voice conversation changed','AbortError');};
     try{
@@ -555,20 +557,12 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         addListener:(event:'recordingStopped',callback:(clip:Clip)=>void)=>deviceVoice.addListener(event,callback),
       };
       driver=cloudDriver??deviceVoice;cloudMode=!!cloudDriver;
-      let batchCaptureRetired=false;
       const sendTurn=async(input:{turnId:string;text:string;voiceTurnSignal:any;signal:AbortSignal})=>{
         input.signal.throwIfAborted();current();
         // VOICE_SEND_POLICY: 'auto-send' sends this transcript now; 'review' waits for Send or Discard.
         const sent=await sendVoiceEntry({policy:voiceSendPolicy(),transcript:input.text,review:text=>reviewConversationTurn(text,input.signal,current),send:async text=>{
           current();const turn={...conversationPrepared!};conversationReplyWatch=new Set((chat.shell.S().msgs||[]).map((m:Bag)=>String(m.id)));
-          const ack=cloudDriver&&!Capacitor.isNativePlatform()?createBatchProgressAcknowledgment({turnId:input.turnId,conversationId:turn.binding.conversationId,ownerId:turn.binding.session.ownerId,signal:input.signal,assertCurrent:current,captureRetired:()=>batchCaptureRetired,speak:async(cue,signal)=>{const pending=Promise.resolve().then(()=>cloudDriver.speak(cue,signal));const owned=pending.catch(failure=>{if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;});conversationSpeech=owned;try{await owned;}finally{if(conversationSpeech===owned)conversationSpeech=undefined;}}}):undefined;
-          const retireAck=()=>{try{current();}catch{void ack?.stop().catch(()=>{});}};
-          const unsubscribeAck=ack?connectionController.subscribe(retireAck):()=>{};
-          if(ack)document.addEventListener('visibilitychange',retireAck);
-          try{
-            const reply=await chat.shell.sendVoiceTurn({...input,text,...turn,assertCurrent:current,onProgress:ack?.progress,onReplyStarted:ack?.replyStarted,navigation:navigationContinuation(chat,token,input.turnId)});
-            await ack?.finish();return reply;
-          }finally{unsubscribeAck();document.removeEventListener('visibilitychange',retireAck);try{await ack?.stop();}finally{conversationReplyWatch=undefined;}}
+          try{return await chat.shell.sendVoiceTurn({...input,text,...turn,assertCurrent:current,navigation:navigationContinuation(chat,token,input.turnId)});}finally{conversationReplyWatch=undefined;}
         }});
         if(!sent){if(token===generation&&chatDestination===chat)cancelChat();throw new DOMException('Voice message discarded','AbortError');}
         const result=sent.result;input.signal.throwIfAborted();current();
@@ -649,7 +643,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       // The live assistant is not ready (or this is a Cloud route): the recorded-clip loop listens only between replies.
       const conversation:BatchVoiceConversation<Clip>=new BatchVoiceConversation<Clip>({
         conversationId:prepared.binding.conversationId,assertCurrent:current,
-        capture:async input=>{current();batchCaptureRetired=false;conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();const capture=await captureConversationAudio(selected,current,input);return {stop:async()=>{const value=await capture.stop();current();batchCaptureRetired=true;return value;},cancel:async()=>{await capture.cancel();batchCaptureRetired=true;}};},
+        capture:input=>{current();conversationPrepared={...conversationPrepared!,context:chat.shell.voiceConversationContext(prepared.binding)};current();return captureConversationAudio(selected,current,input);},
         transcribe:async(value,signal)=>{
           signal.throwIfAborted();current();
           const request=crypto.randomUUID();requestId=request;
@@ -1096,7 +1090,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
       recorder.statusClass=recorder.connecting?'alpha-voice-connecting':'alpha-voice-status-hidden';const phase=recorder.muted==='true'&&!recorder.muteAutomatically?'paused':recorder.state==='starting'?'connecting':recorder.state==='preparing-speech'?'thinking':recorder.state==='awaiting-user-input'?'paused':recorder.state==='stopping'?'interrupting':recorder.state;recorder.problem=recorder.state==='error';recorder.statusLines=recorder.problem?[]:recorder.lines;recorder.activity=recorder.problem?null:React.createElement(VoiceActivity,{phase,theme:this.S().theme==='dark'?'dark':'light'});
       const directSpeech=chatDestination?.mode!=='dictation'&&(connectionController.getSnapshot().residentInference==='direct'||cloudMode&&developmentCartesiaVoiceEnabled&&!developmentCloudVoiceEnabled);
       recorder.cloudDisclosure=cloudRuntimeEnabled||directSpeech||developmentCloudRealtimeVoiceEnabled;
-      recorder.cloudDisclosureText=directSpeech?'Voice sends recordings and reply text to Cartesia. Your agent runs on this device and uses your direct Cerebras provider.':chatDestination?.mode!=='dictation'&&cloudResidentRealtimeActive()?`Voice streams what you say and reply text to your ${voiceServiceName()} account while voice is open, uses your plan allowance, and plays replies with Cartesia. Your agent runs on this computer.`:developmentCloudRealtimeVoiceEnabled?`Voice sends recordings and reply text to ${voiceServiceName()} through the connected developer agent. Your agent runs on this computer.`:`Voice uploads recordings and reply text to your ${voiceServiceName()} account, uses your plan allowance, and plays replies with Cartesia.`;
+      recorder.cloudDisclosureText=directSpeech?'Voice sends recordings and reply text to Cartesia. Your agent runs on this device and uses your direct Cerebras provider.':chatDestination?.mode!=='dictation'&&cloudResidentRealtimeActive()?`Voice streams what you say and reply text to your ${voiceServiceName()} account while voice is open, including silence while muted, uses your plan allowance, and plays replies with Cartesia. Your agent runs on this computer.`:developmentCloudRealtimeVoiceEnabled?`Voice sends recordings and reply text to ${voiceServiceName()} through the connected developer agent. Your agent runs on this computer.`:`Voice uploads recordings and reply text to your ${voiceServiceName()} account, uses your plan allowance, and plays replies with Cartesia.`;
       // Speech routing is disclosed in Settings > Voice; the live voice composer only opens details for an error.
       recorder.voiceDetails=!!recorder.errorDetail;
       recorder.muteAsset=recorder.muted==='true'?'/icons/lucide/mic-off.svg':'/icons/lucide/mic.svg';}

@@ -186,7 +186,8 @@ test('a refusal from the real loop never flashes the stopped state before the qu
  f.shell.setState=(patch,callback)=>{render(patch,callback);const shown=f.renderChat();const frame=shown?`${shown.state}|${shown.recoveryLabel||''}|${shown.lines.map(line=>line.t).join()}`:'closed';if(frames.at(-1)!==frame)frames.push(frame);};
  f.driver.synthesize=async()=>{throw limited();};
  f.peak=.5;await clock.advance(700);f.peak=0;await clock.advance(1_200);await clock.flush();
- assert.equal(f.renderChat().state,'preparing-speech','the frame is held while the loop retires');
+ // The held frame gives way only to the quiet wait; every rendered frame is checked below.
+ assert.match(f.renderChat().state,/^(preparing-speech|starting)$/,'the frame is held while the loop retires');
  await clock.advance(4_000);
  assert.deepEqual(frames.map(frame=>frame.split('|')[0]),['listening','transcribing','thinking','preparing-speech','starting','listening']);
  assert.doesNotMatch(frames.join('\n'),/Voice conversation stopped|Start Cloud voice|Try voice again|request limit/);

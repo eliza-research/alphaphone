@@ -1,5 +1,5 @@
 import {validateUuid} from '../vendor/eliza/packages/core/src/utils/uuid.ts';
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';import vm from 'node:vm';
+import test from 'node:test';import assert from 'node:assert/strict';import {buildSync} from 'esbuild';import {resolve} from 'node:path';import {pathToFileURL} from 'node:url';import {readFileSync} from 'node:fs';import {stripTypeScriptTypes} from 'node:module';import vm from 'node:vm';
 import {applyServerEvent,loopToListening,INITIAL_VOICE_SESSION_STATE} from '../vendor/eliza/packages/ui/src/voice/voice-session-state.ts';
 // Like the pinned SDK client, reduce each frame into accepted state before the raw callback.
 const sdkOptions=options=>{let state={...INITIAL_VOICE_SESSION_STATE,phase:'listening'};return options&&{...options,
@@ -88,14 +88,18 @@ test('an unexpected active renderer disconnect still retires voice and does not 
  assert.equal(h.stops,1);assert.equal(h.sockets.length,1);assert.equal(h.timers.size,0);assert.equal(h.errors.length,1);
 });
 
-test('Cloud realtime uses canonical client and renderer only after attested session-start admission',async()=>{const h=await setup({cloudRealtime:true,attestation:{speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'at-session-start'}});await h.controller.start();assert.equal(h.options.maxReconnects,0,'Cloud transport loss must not mint automatic paid retries');assert(h.calls.some(c=>c.path==='/api/views/voice-channel'));h.options.onServerEvent({t:'stt_partial',text:'partial'});await h.controller.stop();assert.equal(h.stops,1);assert.equal(h.calls.filter(c=>c.path.includes('/revoke')).length,1);});
+test('Cloud realtime uses canonical client and renderer only after attested session-start admission',async()=>{const h=await setup({cloudRealtime:true,attestation:{speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'at-session-start'}});await h.controller.start();assert.equal(h.options.maxReconnects,1,'one renewal for the relay ticket boundary');assert(h.calls.some(c=>c.path==='/api/views/voice-channel'));h.options.onServerEvent({t:'stt_partial',text:'partial'});await h.controller.stop();assert.equal(h.stops,1);assert.equal(h.calls.filter(c=>c.path.includes('/revoke')).length,1);});
 test('Cloud realtime refuses legacy, direct or deferred provider attestation',async()=>{for(const attestation of [{},{speechRoute:'direct',speechProvider:'cartesia',providerAdmission:'at-session-start'},{speechRoute:'cloud',speechProvider:'other',providerAdmission:'at-session-start'},{speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'deferred'}])await assert.rejects(setup({cloudRealtime:true,attestation}),/not attested/);});
 const cloudRelay={speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'at-session-start'};
-test('Cloud resident conversation is the canonical realtime client on the attested Cloud relay, without paid automatic reconnects',async()=>{const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();assert.equal(h.options.maxReconnects,0,'Cloud transport loss must not mint a second paid session');assert.equal(h.options.preLiveMaxReconnects,0);assert(h.calls.some(c=>c.path==='/api/v1/voice/session/health?conversationId=conversation'));assert(h.calls.some(c=>c.path==='/api/views/voice-channel'));assert(!h.calls.some(c=>/\/api\/(asr|tts)\/cloud/.test(c.path)),'no batch speech request');await h.controller.stop();assert.equal(h.stops,1);assert.equal(h.calls.filter(c=>c.path.includes('/revoke')).length,1);});
+test('Cloud resident conversation is the canonical realtime client on the attested Cloud relay, with one renewal for the ticket boundary',async()=>{const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();assert.equal(h.options.maxReconnects,1,'one renewal, refilled after 30 s live, for the 60 s relay ticket');assert.equal(h.options.preLiveMaxReconnects,0);assert(h.calls.some(c=>c.path==='/api/v1/voice/session/health?conversationId=conversation'));assert(h.calls.some(c=>c.path==='/api/views/voice-channel'));assert(!h.calls.some(c=>/\/api\/(asr|tts)\/cloud/.test(c.path)),'no batch speech request');await h.controller.stop();assert.equal(h.stops,1);assert.equal(h.calls.filter(c=>c.path.includes('/revoke')).length,1);});
 test('Cloud resident refuses a direct, legacy or deferred speech attestation',async()=>{for(const attestation of [{},{...cloudRelay,speechRoute:'direct'},{...cloudRelay,speechProvider:'other'},{...cloudRelay,providerAdmission:'deferred'}])await assert.rejects(setup({cloudResident:true,attestation}),/not attested/);});
 test('Cloud resident own keys keep the direct route and reconnect policy unchanged',async()=>{const snapshot={residentInference:'direct',providerStatus:{voiceConfigured:true}};const h=await setup({cloudResident:true,snapshot,attestation:{...cloudRelay,speechRoute:'direct'}});await h.controller.start();assert.equal(h.options.maxReconnects,undefined);await h.controller.stop();await assert.rejects(setup({cloudResident:true,snapshot,attestation:cloudRelay}),/Direct realtime speech route changed/);});
-test('a Cloud relay refusal reaches voice as one coded terminal error; retryable and direct errors pass unchanged',async()=>{
- for(const code of ['authorization','transport','insufficient_credits']){const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();const lost=Error('voice session lost: server_error');h.options.onServerEvent({t:'error',code,retryable:false});h.options.onError(lost);assert.equal(h.errors.length,1);assert.equal(h.errors[0].code,'voice-relay-'+code);assert.equal(h.errors[0].message,lost.message);assert.equal(h.errors[0].cause,lost);await h.controller.stop();}
+test('a Cloud relay refusal stops the client at once as one coded terminal error; the ticket expiry, retryable and direct errors do not',async()=>{
+ for(const code of ['authorization','transport','insufficient_credits','quota_exhausted']){const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();h.options.onServerEvent({t:'stt_final',text:'check notes',traceId:'turn'});
+  h.options.onServerEvent({t:'error',code,retryable:false});assert.equal(h.stops,1,'stopped before the SDK could re-mint');assert.equal(h.controller.microphoneAutomaticallyMuted,false);
+  h.options.onError(Error('voice session lost: server_error'));assert.equal(h.errors.length,1);assert.equal(h.errors[0].code,'voice-relay-'+code);assert.doesNotMatch(h.errors[0].message,/Add credits/);
+  await h.controller.stop();assert.equal(h.stops,1);assert.equal(h.calls.filter(c=>c.path.includes('/revoke')).length,1);}
+ {const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();h.options.onServerEvent({t:'stt_final',text:'check notes',traceId:'turn'});h.options.onServerEvent({t:'error',code:'expired',retryable:false});assert.equal(h.stops,0,'the planned ticket expiry is renewed by the SDK');assert.equal(h.errors.length,0);assert.equal(h.controller.microphoneAutomaticallyMuted,false,'the interrupted turn releases its hold');await h.controller.stop();}
  {const h=await setup({cloudResident:true,attestation:cloudRelay});await h.controller.start();const failure=Error('Microphone stopped');h.options.onServerEvent({t:'error',code:'transport',retryable:true});h.options.onError(failure);assert.equal(h.errors[0],failure,'a retryable frame is not a refusal');await h.controller.stop();}
  {const h=await setup();await h.controller.start();const failure=Error('voice session lost: server_error');h.options.onServerEvent({t:'error',code:'authorization',retryable:false});h.options.onError(failure);assert.equal(h.errors[0],failure,'direct speech errors are unchanged');await h.controller.stop();}
 });
@@ -185,4 +189,84 @@ test('accepted session reset retires busy traces and old frames cannot revive th
  h.options.onServerEvent({t:'stt_final',text:'late old request',traceId:'old'});h.options.onServerEvent({t:'speaking_start',traceId:'old'});h.options.onServerEvent({t:'speaking_end',traceId:'old'});h.options.onServerEvent({t:'usage',traceId:'old',sttMs:0,ttsChars:0});assert.equal(h.controller.microphoneAutomaticallyMuted,false);
  h.options.onServerEvent({t:'stt_final',text:'fresh request',traceId:'new'});assert.equal(h.controller.microphoneAutomaticallyMuted,true);h.options.onServerEvent({t:'usage',traceId:'new',sttMs:0,ttsChars:0});assert.equal(h.controller.microphoneAutomaticallyMuted,false);
  }finally{await h.controller.stop();}
+});
+
+/** The pinned SDK client (bundled from the prepared client features) on the Cloud relay route: only
+ * the agent, sockets, microphone graph and clocks are synthetic. The agent self-severs a session at
+ * its 60 s ticket with {t:'error',code:'expired'} and a close (host voice/session.ts teardown("expired")). */
+let pinnedClient;
+function loadPinnedClient(){
+ if(pinnedClient)return pinnedClient;
+ const root=resolve('.eliza/client-features'),entry=resolve(root,'packages/ui/src/voice/voice-session-client-core.ts');
+ const bundle=buildSync({entryPoints:[entry],bundle:true,write:false,platform:'browser',format:'cjs',target:'es2022',define:{'import.meta.url':JSON.stringify(pathToFileURL(entry).href)},alias:{'@elizaos/host/voice/ui-context':resolve(root,'packages/host/src/voice/ui-context.ts'),'@elizaos/core/view-interaction':resolve(root,'packages/core/src/view-interaction.ts'),'@elizaos/core/logging':resolve(root,'packages/core/src/logging.ts'),'@elizaos/voice/turn':resolve(root,'packages/voice/src/turn.ts'),'@elizaos/core/speech':resolve(root,'packages/core/src/speech.ts')}}).outputFiles[0].text;
+ const module={exports:{}};new Function('module','exports',bundle)(module,module.exports);
+ return pinnedClient=module.exports.createVoiceSessionClient;
+}
+async function relayFixture(){
+ let now=0,mints=0,refuse,timerId=0;const sockets=[],errors=[],marks=[],calls=[],phases=[],timers=new Map();const epoch=()=>1_800_000_000_000+now;
+ // One fake clock for the SDK (global timers) and this adapter (its realm), restored by release().
+ const realTimers={setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout};
+ const setTimer=(fn,delay=0,...args)=>{const id=++timerId;timers.set(id,{run:()=>fn(...args),at:now+Math.max(0,Number(delay)||0)});return id;},clearTimer=id=>{timers.delete(id);};
+ globalThis.setTimeout=setTimer;globalThis.clearTimeout=clearTimer;
+ // Whole event-loop turns (setImmediate is not mocked) drain every pending promise chain.
+ const flush=async()=>{for(let i=0;i<20;i++)await new Promise(resolve=>setImmediate(resolve));};
+ class Socket{
+  readyState=0;binaryType='arraybuffer';listeners=new Map();
+  constructor(){sockets.push(this);queueMicrotask(()=>{this.readyState=1;this.emit('open',{});});}
+  addEventListener(type,listener){this.listeners.set(type,[...(this.listeners.get(type)||[]),listener]);}
+  removeEventListener(type,listener){this.listeners.set(type,(this.listeners.get(type)||[]).filter(value=>value!==listener));}
+  emit(type,event){for(const listener of this.listeners.get(type)||[])listener(event);}
+  frame(value){this.emit('message',{data:JSON.stringify(value)});}
+  send(data){if(typeof data!=='string'||JSON.parse(data).t!=='hello')return;const id=mints;queueMicrotask(()=>{if(refuse){this.frame({t:'error',code:refuse,retryable:false});this.close();}else this.frame({t:'ready',sessionId:'session-'+id,traceId:'ready-'+id,playbackCompletion:false,uiContext:false});});}
+  close(){if(this.readyState!==3){this.readyState=3;this.emit('close',{});}}
+ }
+ const microphone=()=>{const track={enabled:true,readyState:'live',getSettings:()=>({}),addEventListener(){},removeEventListener(){},stop(){this.readyState='ended';}};return {getTracks:()=>[track],getAudioTracks:()=>[track]};};
+ const graph=()=>{const node={connect(){return this;},disconnect(){}};return {sampleRate:16000,state:'running',destination:node,createMediaStreamSource:()=>node,createScriptProcessor:()=>({...node,onaudioprocess:null}),async resume(){},async suspend(){},async close(){this.state='closed';},addEventListener(){},removeEventListener(){}};};
+ const agent={async request(path){calls.push(path);
+  if(path.includes('/health'))return {ready:true,conversationId:'conversation',agentId:'agent',...cloudRelay};
+  if(path==='/api/v1/voice/session/consent')return {consentNonce:'consent-'+calls.length};
+  if(path==='/api/v1/voice/session'){mints++;return {sessionId:'session-'+mints,token:'one-use-'+mints,wsUrl:'ws://localhost/voice-'+mints,expiresAt:epoch()+60000,uplink:{codecs:['pcm16']},downlink:{codecs:['pcm16']}};}
+  if(path==='/api/views/voice-channel')return {wsUrl:'ws://localhost/__alpha-local-renderer/ws?sessionId=relay',expiresAt:Date.now()+120000};
+  if(path.includes('/revoke'))return {revoked:true};return {};}};
+ const context=vm.createContext({validateUuid,readDevicePreferences:async()=>({askBeforeAgentActions:true}),window:new EventTarget(),AbortController,DOMException,Response,Error,URL,Date,setTimeout:setTimer,clearTimeout:clearTimer,location:{host:'localhost'},WebSocket:class{constructor(){queueMicrotask(()=>this.onopen?.());}close(){}},Capacitor:{isNativePlatform:()=>false},developmentCloudRealtimeVoiceEnabled:false,browserCloudResidentEnabled:true,devSurfacesEnabled:true,
+  connectionController:{getSnapshot:()=>({residentInference:'cloud'}),getBrowserSpeechAgent:()=>agent,voiceRendererClientId:()=>'11111111-1111-4111-8111-111111111111',voiceConversationCurrent:()=>true,async refreshDeveloperVoiceHistory(){}},
+  loadClient:async()=>({createVoiceSessionClient:options=>loadPinnedClient()({...options,webSocketFactory:()=>new Socket(),getUserMedia:async()=>microphone(),createMicAudioContext:graph,createPlaybackAudioContext:graph,now:()=>now,epochNow:epoch,onTraceMark:mark=>marks.push(mark.name)})})});
+ vm.runInContext(source.replace('import.meta.env.DEV','true').replace("import.meta.env.VITE_ALPHA_DEV_CARTESIA","'0'")+';globalThis.create=developmentCartesiaConversation;',context);
+ const controller=await context.create({binding,assertCurrent(){},onState:phase=>phases.push(phase),onTranscript(){},onError:error=>errors.push(error)});
+ return {controller,sockets,errors,marks,calls,phases,flush,get mints(){return mints;},refuse(code){refuse=code;},
+  release(){globalThis.setTimeout=realTimers.setTimeout;globalThis.clearTimeout=realTimers.clearTimeout;},
+  async advance(ms){const target=now+ms;for(;;){const next=[...timers].filter(([,timer])=>timer.at<=target).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;now=next[1].at;timers.delete(next[0]);next[1].run();await flush();}now=target;await flush();}};
+}
+test('Cloud: a turn still busy when its 60 s relay ticket expires continues on a renewed session without user action',async()=>{
+ const h=await relayFixture();
+ try{
+  await h.controller.start();await h.flush();assert.equal(h.phases.at(-1),'listening');
+  const old=h.sockets[0];old.frame({t:'stt_final',text:'tell me about my week',traceId:'turn-1'});old.frame({t:'speaking_start',traceId:'turn-1'});
+  assert.equal(h.controller.microphoneAutomaticallyMuted,true,'the turn holds the microphone');
+  await h.advance(60000);assert.ok(h.marks.includes('token_rotation_deferred'),'the busy turn deferred idle rotation past the deadline');assert.equal(h.mints,1);
+  old.frame({t:'error',code:'expired',retryable:false});old.close();await h.flush();await h.advance(3000);
+  assert.deepEqual(h.errors.map(error=>error.message),[],'a ticket boundary is not an error');
+  assert.equal(h.mints,2,'one renewed relay session');assert.equal(h.sockets.length,2);assert.equal(h.phases.at(-1),'listening');
+  assert.equal(h.controller.microphoneAutomaticallyMuted,false,'the interrupted turn released its hold');assert.equal(h.calls.filter(path=>path.includes('/revoke')).length,0,'voice was not stopped');
+  // The next ticket boundary, busy again, renews again: the budget refilled after 30 s live.
+  h.sockets[1].frame({t:'stt_final',text:'and next week',traceId:'turn-2'});await h.advance(60000);
+  h.sockets[1].frame({t:'error',code:'expired',retryable:false});h.sockets[1].close();await h.flush();await h.advance(3000);
+  assert.equal(h.errors.length,0);assert.equal(h.mints,3);assert.equal(h.phases.at(-1),'listening');
+ }finally{h.release();await h.controller.stop();}
+});
+test('Cloud: an idle session still rotates before its ticket without an error',async()=>{
+ const h=await relayFixture();
+ try{
+  await h.controller.start();await h.flush();assert.equal(h.phases.at(-1),'listening');await h.advance(51000);
+  assert.ok(h.marks.includes('token_rotation'));assert.equal(h.mints,2);assert.equal(h.errors.length,0);assert.equal(h.phases.at(-1),'listening');
+ }finally{h.release();await h.controller.stop();}
+});
+for(const code of ['authorization','insufficient_credits'])test(`Cloud: a relay refusal (${code}) on a renewed session ends voice and never re-mints`,async()=>{
+ const h=await relayFixture();
+ try{
+  await h.controller.start();await h.flush();assert.equal(h.phases.at(-1),'listening');h.refuse(code);await h.advance(51000);
+  assert.equal(h.mints,2,'the idle rotation');assert.equal(h.errors.length,1);assert.equal(h.errors[0].code,'voice-relay-'+code);assert.doesNotMatch(h.errors[0].message,/Add credits/);
+  await h.advance(130000);assert.equal(h.mints,2,'no paid re-mint after a refusal');assert.equal(h.errors.length,1);
+  await h.controller.stop();assert.deepEqual(h.calls.filter(path=>path.includes('/revoke')),['/api/v1/voice/session/session-1/revoke','/api/v1/voice/session/session-2/revoke']);
+ }finally{h.release();await h.controller.stop();}
 });
