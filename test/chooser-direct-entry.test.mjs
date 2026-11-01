@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import React from 'react';
+import React,{act} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {transformSync} from 'esbuild';
+import {JSDOM} from 'jsdom';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
 const panelSource=readFileSync(new URL('../apps/app/src/runtime/cloud-sign-in-ui.tsx',import.meta.url),'utf8');
@@ -33,6 +34,52 @@ test('Restore saved sign-in is a Cloud control: offered with Cloud sign-in, abse
  const html=renderToStaticMarkup(renderBranch(React,CloudSignInPanel,legacy,true,true,true,()=> 'production',false,null,'unpackaged',controller,false,false,()=>null,undefined,null,false,true,OwnKeysSelected,OwnProviderChoice,'model',()=>{}));
  assert.match(html,/Cerebras API key/);assert.match(html,/Sign in with Cloud instead/);
  assert.doesNotMatch(html,/Restore saved sign-in|Continue with Google|Email me a code|Retry sign-in/);
+});
+// The same welcome branch in a DOM, so the method switch and a Cloud outcome are used as the owner uses them.
+async function welcome(run){
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'}),previous={};
+ for(const key of ['window','document','HTMLElement','IS_REACT_ACT_ENVIRONMENT']){previous[key]=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{value:key==='IS_REACT_ACT_ENVIRONMENT'?true:dom.window[key],configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client');const root=createRoot(dom.window.document.getElementById('root'));
+ const calls=[],cloud={...controller,signInEmail(address){calls.push('email:'+address);},cancelSignIn(){calls.push('cancel');},clearOutcome(){calls.push('clear');}};
+ const Welcome=({snapshot})=>renderBranch(React,CloudSignInPanel,snapshot,true,true,true,()=> 'production',false,null,'unpackaged',cloud,false,false,()=>null,undefined,null,false,true,SignInOrOwnKeys,OwnProviderChoice,'model',()=>calls.push('dismiss'));
+ const show=snapshot=>act(async()=>{root.render(React.createElement(Welcome,{snapshot}));});
+ const document=dom.window.document,button=name=>[...document.querySelectorAll('button')].find(item=>item.textContent===name),ownView=()=>document.querySelector('section[aria-label="Own API keys"]');
+ try{await run({document,window:dom.window,show,button,ownView,calls});}
+ finally{await act(()=>root.unmount());dom.window.close();for(const [key,value] of Object.entries(previous)){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}
+}
+const idle={signIn:{step:'choose',environment:'production'},cloudAccount:null,busy:false,message:'',error:''};
+test('with no Cloud sign-in running, the welcome page switches to own keys and back',async()=>welcome(async({show,button,ownView,calls})=>{
+ await show(idle);
+ assert.equal(button('Use your own API keys').disabled,false);
+ await act(async()=>button('Use your own API keys').click());
+ assert.ok(ownView());assert.equal(button('Continue with Google'),undefined);assert.equal(button('Email me a code'),undefined);
+ await act(async()=>button('Sign in with Cloud instead').click());
+ assert.equal(ownView(),null);assert.ok(button('Email me a code'));assert.equal(button('Use your own API keys').disabled,false);
+ assert.deepEqual(calls,[],'switching methods starts, cancels and clears nothing');
+}));
+test('a Cloud sign-in in flight keeps its panel: the switch waits, Cancel stays, and a late result lands in view',async()=>{
+ const code={step:'code',environment:'production',email:'owner@example.invalid',attemptId:'attempt-1',resendAt:0,expiresAt:Date.now()+600000};
+ const outcomes={code:{...idle,signIn:code},refused:{...idle,error:'Email sign-in is unavailable. Try again.'},cancelled:idle};
+ for(const [outcome,result] of Object.entries(outcomes))await welcome(async({document,window,show,button,ownView,calls})=>{
+  await show(idle);
+  const form=document.querySelector('form[aria-label="Sign in with email"]');form.querySelector('input').value='owner@example.invalid';
+  await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+  // The email start is in flight and its result has not arrived. The owner tries to switch.
+  await show({...idle,busy:true,message:'Sending your code…'});
+  const toOwn=button('Use your own API keys'),switchDisabled=toOwn.disabled;
+  await act(async()=>toOwn.click());
+  const whileBusy={switchDisabled,ownView:!!ownView(),cancelUsable:button('Cancel sign-in')?.disabled===false};
+  if(outcome==='cancelled')await act(async()=>button('Cancel sign-in')?.click());
+  // The deferred Cloud result arrives.
+  await show(result);
+  const alert=document.querySelector('[role="alert"]');
+  assert.deepEqual({whileBusy,ownView:!!ownView(),codeInView:!!document.querySelector('form[aria-label="Enter your email code"]'),emailInView:!!button('Email me a code'),
+   cloudError:alert&&!alert.closest('section[aria-label="Own API keys"]')?alert.textContent:null,calls},{
+   whileBusy:{switchDisabled:true,ownView:false,cancelUsable:true},ownView:false,codeInView:outcome==='code',emailInView:outcome!=='code',
+   cloudError:outcome==='refused'?result.error:null,calls:outcome==='cancelled'?['email:owner@example.invalid','cancel']:['email:owner@example.invalid']},outcome);
+  // Once Cloud has answered, the switch is available again.
+  assert.equal(button('Use your own API keys').disabled,false,outcome);
+ });
 });
 test('ready choice renders usable email path and explicit unavailable Google notice',()=>{
  const html=render({signIn:{step:'choose',environment:'production'},busy:false,message:'',error:''});
