@@ -18,6 +18,18 @@ async function saved(page:any){
  await expect.poll(()=>page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');const binding=await c.assistantDraftBinding(new AbortController().signal);return (await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text||'';})).toBe(text);
  await expect(status(page)).toHaveCount(0);
 }
+/** The development agent with its transport replaced: each dispatch records the person's text (after the client observation). */
+async function developmentAgent(page:any){
+ await page.goto('/?mode=dev');await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();await c.startDevelopment('local');(window as any).sendDraftBinding=await c.assistantDraftBinding(new AbortController().signal);const {LocalAgentProtocol}=await import('/src/runtime/local-agent.ts');(window as any).draftRequests=[];LocalAgentProtocol.prototype.send=async(_id,text)=>{(window as any).draftRequests.push(String(text).split('[USER MESSAGE]\n').pop());return {text:'Received'};};});
+}
+const draftBinding=(page:any)=>page.evaluate(async()=>(await import('/src/runtime/connection-ui.tsx')).connectionController.assistantDraftBinding(new AbortController().signal));
+const storedDraft=(page:any,binding:string)=>page.evaluate(async(binding:string)=>(await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding)).read())?.text,binding);
+const earlierDraft=(page:any,binding:string)=>page.evaluate(async(binding:string)=>(await(await import('/src/runtime/assistant-draft-store.ts')).readEarlierDraft(binding)).text,binding);
+/** Another window replaces this binding's saved copy behind the composer. */
+const writeElsewhere=(page:any,binding:string,text:string)=>page.evaluate(async({binding,text}:{binding:string;text:string})=>{const store=await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore(binding);await store.save(await store.read(),text);},{binding,text});
+const visibleLayers=(page:any)=>page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]');
+const visibleComposer=(page:any)=>visibleLayers(page).getByRole('textbox').first();
+const earlierButton=(page:any,name:string)=>visibleLayers(page).getByRole('button',{name,exact:true});
 test('an unsent multiline draft survives reload and clearing stays cleared',async({page})=>{
  await composer(page).fill('Remember this\nwithout sending');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Remember this\nwithout sending');// Successful restore stays quiet; the exact composer value above proves restoration.
  await expect(status(page)).toHaveCount(0);await composer(page).fill('');await saved(page);await page.reload();await expect(composer(page)).toHaveValue('');
@@ -28,12 +40,56 @@ test('another tab cannot replace a draft silently and recovery retains the curre
 });
 test('failed autosave keeps editable text and explicit retry can save it',async({page})=>{
  await expect(composer(page)).toBeEnabled();await page.evaluate(()=>{const put=IDBObjectStore.prototype.put;(window as any).restoreDraftPut=()=>{IDBObjectStore.prototype.put=put;};IDBObjectStore.prototype.put=function(...args:any[]){if(this.name==='documents')throw new DOMException('Full','QuotaExceededError');return put.apply(this,args as any);};});
- await composer(page).fill('Keep this text');await expect(status(page)).toContainText('Draft was not saved');await expect(composer(page)).toHaveValue('Keep this text');await page.evaluate(()=>(window as any).restoreDraftPut());await page.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Keep this text');
+ await composer(page).fill('Keep this text');await expect(status(page)).toContainText('Draft was not saved');await expect(composer(page)).toHaveValue('Keep this text');
+ // Send does not hide the failure: the notice, the text and its retry stay; nothing is set aside.
+ await composer(page).press('Enter');await expect(status(page)).toContainText('Draft was not saved');await expect(composer(page)).toHaveValue('Keep this text');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);await page.evaluate(()=>(window as any).restoreDraftPut());await page.getByRole('button',{name:'Replace saved draft with this text',exact:true}).click();await saved(page);await page.reload();await expect(composer(page)).toHaveValue('Keep this text');
 });
 test('Send clears the retained draft and dispatches only the reviewed text once',async({page})=>{
- await page.goto('/?mode=dev');await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();await c.startDevelopment('local');(window as any).sendDraftBinding=await c.assistantDraftBinding(new AbortController().signal);const {LocalAgentProtocol}=await import('/src/runtime/local-agent.ts');(window as any).draftRequests=[];LocalAgentProtocol.prototype.send=async(_id,text)=>{(window as any).draftRequests.push(text);return {text:'Received'};};});
+ await developmentAgent(page);
  await composer(page).fill('Reviewed draft');await saved(page);await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests.length)).toBe(1);// The draft is kept until the dispatch is confirmed, then cleared once.
  await expect.poll(()=>page.evaluate(async()=>(await(await(await import('/src/runtime/assistant-draft-store.ts')).assistantDraftStore((window as any).sendDraftBinding)).read())?.text)).toBe('');await expect(page.getByRole('textbox',{name:'Message Alpha',exact:true})).toHaveValue('');
+});
+// The draft guard never blocks Send. An empty saved copy found when the draft opens is bookkeeping and
+// resolves without asking.
+test('an empty saved copy found when the draft opens resolves without a banner, and Send works',async({page})=>{
+ await developmentAgent(page);await composer(page).fill('Before storage stopped');await saved(page);
+ const binding=await draftBinding(page);await writeElsewhere(page,binding,'');
+ // Reads of this draft fail until Retry, so the binding reopens with the composer's text.
+ await page.evaluate(async(binding:string)=>{const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(binding))),n=>n.toString(16).padStart(2,'0')).join(''),key='alpha.browser.assistant-draft:v1:'+hash,get=IDBObjectStore.prototype.get;(window as any).restoreDraftGet=()=>{IDBObjectStore.prototype.get=get;};IDBObjectStore.prototype.get=function(...args:any[]){if(args[0]===key)throw new DOMException('Unavailable','UnknownError');return get.apply(this,args as any);};},binding);
+ await composer(page).fill('Typed while storage was unavailable');await expect(status(page)).toContainText('Draft was not saved. Your current text is retained.');
+ await page.evaluate(()=>(window as any).restoreDraftGet());await page.getByRole('button',{name:'Retry draft storage',exact:true}).click();
+ await saved(page);await expect(composer(page)).toHaveValue('Typed while storage was unavailable');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+ await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Typed while storage was unavailable']);
+ await expect.poll(()=>storedDraft(page,binding)).toBe('');expect(await earlierDraft(page,binding)).toBe('');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+});
+
+// A real conflict never blocks Send either: the other copy is kept in browser storage first (a sibling
+// row of the same draft document store) and offered as "Restore earlier draft" until restored.
+test('a real conflict never blocks Send, and the earlier copy survives a reload and restores exactly',async({page})=>{
+ await developmentAgent(page);await composer(page).fill('Words before the other window');await saved(page);
+ const slot=await draftBinding(page),earlier='Earlier words\n  from another window ';await writeElsewhere(page,slot,earlier);
+ await composer(page).fill('Words to send');await expect(status(page)).toContainText('Review the saved copy');
+ await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Words to send']);
+ await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();const key=await draftBinding(page);
+ await expect.poll(()=>earlierDraft(page,key)).toBe(earlier);expect(await storedDraft(page,key)).not.toBe(earlier);
+ await page.reload();await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();if(!c.getSnapshot().session)await c.startDevelopment('local');});
+ await expect.poll(()=>draftBinding(page)).toBe(key);await earlierButton(page,'Restore earlier draft').click();
+ await expect(visibleComposer(page)).toHaveValue(earlier);
+ await expect.poll(()=>storedDraft(page,key)).toBe(earlier);await expect.poll(()=>earlierDraft(page,key)).toBe('');await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+ await page.reload();await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();if(!c.getSnapshot().session)await c.startDevelopment('local');});
+ await expect.poll(()=>draftBinding(page)).toBe(key);await expect(visibleComposer(page)).toHaveValue(earlier);await page.waitForTimeout(1_000);await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+});
+
+test('a dismissed earlier draft stays dismissed after a reload and never shows in another conversation',async({page})=>{
+ await developmentAgent(page);await composer(page).fill('Words before the other window');await saved(page);
+ await writeElsewhere(page,await draftBinding(page),'Dismiss these words');await composer(page).fill('Words to send');await expect(status(page)).toContainText('Review the saved copy');
+ await composer(page).press('Enter');await expect.poll(()=>page.evaluate(()=>(window as any).draftRequests)).toEqual(['Words to send']);
+ await expect(earlierButton(page,'Restore earlier draft')).toBeVisible();const key=await draftBinding(page);
+ await page.evaluate(async()=>{await(await import('/src/runtime/connection-ui.tsx')).connectionController.offline();});await expect.poll(()=>draftBinding(page)).toBe(JSON.stringify(['offline']));await page.waitForTimeout(1_000);await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
+ await page.evaluate(async()=>{await(await import('/src/runtime/connection-ui.tsx')).connectionController.startDevelopment('local');});await expect.poll(()=>draftBinding(page)).toBe(key);
+ await earlierButton(page,'Dismiss earlier draft').click();await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);await expect.poll(()=>earlierDraft(page,key)).toBe('');
+ await page.reload();await page.evaluate(async()=>{const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');await c.initialize();if(!c.getSnapshot().session)await c.startDevelopment('local');});
+ await expect.poll(()=>draftBinding(page)).toBe(key);await page.waitForTimeout(1_000);await expect(earlierButton(page,'Restore earlier draft')).toHaveCount(0);
 });
 
 test('connection changes restore only that connection draft and retain the offline copy',async({page})=>{

@@ -73,6 +73,8 @@ function fixture(){
     retainReadReply(){},completeReadReply:async()=>{},proposalCard:()=>undefined,
     publishCommittedDeviceChanges:(receipt,_client,owner)=>published.push({receipt,owner}),
     transportSettled:async()=>{},dispatched:()=>true,releaseComposerSend(){},
+    // The composer's draft bookkeeping (no conflict here, and no earlier draft to set aside or follow).
+    stepAsideDraftConflict:async()=>{},followEarlierDraft:async()=>{},
     restoredText:text=>text,
   };
   vm.runInNewContext(compiled,box);

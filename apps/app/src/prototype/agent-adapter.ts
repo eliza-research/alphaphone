@@ -26,7 +26,7 @@ import {availabilityReview} from './calendar-availability-review';
 import {presentDeviceRecordOperation} from '../runtime/device-record-presentation';
 import { passwordSurfaceOpen } from '../passwords/password-manager';
 import {AssistantDraftController} from './assistant-draft-controller';
-import {assistantDraftStore} from '../runtime/assistant-draft-store';
+import {assistantDraftStore,clearEarlierDraft,keepEarlierDraft,readEarlierDraft,type EarlierDraft} from '../runtime/assistant-draft-store';
 import {browserNotesPort,browserNotesRecovery} from '../runtime/browser-notes-document';
 import {audioDeletionRecovery} from '../runtime/note-audio-deletions';
 import {addNotesTrashEntry,editNotesTrash,isNotesTrashFull,withNotesDeletionLock} from '../runtime/notes-trash';
@@ -80,6 +80,110 @@ class NotDispatched extends Error {}
 // A page entering the back/forward cache (`persisted`) is restored later, so it is not leaving.
 let pageLeaving=false;
 if(typeof window!=='undefined'){window.addEventListener('pagehide',(event:PageTransitionEvent)=>{if(!event.persisted)pageLeaving=true;});window.addEventListener('pageshow',()=>{pageLeaving=false;});}
+/** Empty or identical saved copies are bookkeeping, not a choice: resolve them without asking. */
+function autoResolveDraftConflict(shell:Shell):boolean{
+  const draft=shell.composerDraft,state=draft?.state;
+  // Only the copy found when a draft opens; a failed save keeps its notice and explicit retry.
+  if(!state?.conflict||state.unsettled||state.error||shell.draftAutoResolving||state.message!=='A saved draft is available. Review both copies.')return false;
+  const saved=String(state.savedText||'').trim(),current=String(shell.S().draft||'').trim();
+  const resolve=saved===current||!saved?'keep':!current?'restore':undefined;
+  const key=draft.binding+'\u0000'+saved;
+  if(!resolve||shell.draftAutoResolved===key)return false;
+  shell.draftAutoResolved=key;shell.draftAutoResolving=true;
+  queueMicrotask(()=>{try{if(resolve==='keep')draft.keepCurrent();else draft.restoreSaved();if(shell.firstSendReview)shell.refreshDraftBinding();}finally{shell.draftAutoResolving=false;}});
+  return true;
+}
+/**
+ * A real conflict never blocks sending. The saved copy is first kept durably as this binding's
+ * earlier draft (assistant-draft-store.ts); only then does the editor text replace it and send.
+ * "Restore earlier draft" offers it, across reloads, until it is restored or dismissed. If it
+ * cannot be kept, the saved copy is not replaced: the conflict stays for review and nothing is
+ * sent. A message that may already have been sent (unsettled) is never set aside.
+ */
+async function stepAsideDraftConflict(shell:Shell):Promise<void>{
+  const draft=shell.composerDraft,binding=draft?.binding;
+  // If another window saves newer text meanwhile, that copy is kept too (after the first).
+  for(let kept:string|undefined,attempt=0;draft?.state?.conflict&&!draft.state.unsettled&&draft.binding===binding;attempt++){
+    const saved=draft.state.savedText;
+    // An empty copy, or the text being sent, is not worth offering again.
+    if(!saved.trim()||saved===kept||saved.trim()===String(shell.S().draft||'').trim()){draft.keepCurrent();break;}
+    if(attempt>2)return;
+    try{showEarlierDraft(shell,await keepEarlierDraft(binding,saved));}catch{throw Error('The saved draft could not be set aside. Review both copies. Nothing was sent.');}
+    kept=saved;
+  }
+  if(shell.firstSendReview)shell.refreshDraftBinding();
+}
+/** Offer `earlier` beside its own binding's composer only; an empty copy offers nothing. */
+function showEarlierDraft(shell:Shell,earlier:EarlierDraft){
+  shell.earlierDraftRead=earlier.binding;shell.earlierDraft=earlier.text.trim()?earlier:undefined;
+  if(shell.live)shell.setState({});
+}
+/** Read once each time the composer opens another binding, so the offer survives a reload. */
+async function offerEarlierDraft(shell:Shell){
+  const binding=shell.composerDraft.binding;
+  if(!binding||shell.earlierDraftRead===binding)return;
+  shell.earlierDraftRead=binding;shell.earlierDraft=undefined;
+  // An unreadable copy is not offered, and setting another aside fails: conflicts stay for review.
+  let earlier:EarlierDraft;try{earlier=await readEarlierDraft(binding);}catch{return;}
+  if(shell.live&&shell.earlierDraftRead===binding&&!shell.earlierDraft)showEarlierDraft(shell,earlier);
+}
+/**
+ * Restoring puts the earlier copy back in the editor; newer typing follows it, as when a send is
+ * not dispatched. The stored copy is cleared only once the composer's own draft has saved the
+ * editor, so a failed save or a reload in between offers it again instead of losing it.
+ */
+function restoreEarlierDraft(shell:Shell){
+  const earlier:EarlierDraft|undefined=shell.earlierDraft,draft=shell.composerDraft;
+  if(!earlier||earlier.binding!==draft.binding||draft.holding||shell.draftSendPending)return;
+  const current=String(shell.S().draft||''),text=current.trim()?earlier.text+'\n'+current:earlier.text;
+  shell.earlierDraft=undefined;
+  shell.setState((previous:Shell)=>draft.binding!==earlier.binding||String(previous.draft||'')!==current?null:{draft:text},async()=>{
+    if(!shell.live)return;
+    if(draft.binding!==earlier.binding||String(shell.S().draft||'')!==text){showEarlierDraft(shell,earlier);return;}
+    for(const delay of [0,150,600,1500,4000]){
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      let saved:string|undefined;try{saved=(await(await assistantDraftStore(earlier.binding)).read())?.text;}catch{return;}
+      // Saved as restored, or as the person has edited it since in this conversation.
+      if(saved!==text&&(!shell.live||draft.binding!==earlier.binding||saved!==String(shell.S().draft||'')))continue;
+      try{await clearEarlierDraft(earlier);}catch{/* Another window changed it: it is read again when this conversation next opens. */}
+      return;
+    }
+  });
+}
+function dismissEarlierDraft(shell:Shell){
+  const earlier:EarlierDraft|undefined=shell.earlierDraft;if(!earlier)return;
+  shell.earlierDraft=undefined;shell.setState({});
+  clearEarlierDraft(earlier).catch(async()=>{
+    // Storage failed, or another window changed the copy: offer what is stored now.
+    let latest=earlier;try{latest=await readEarlierDraft(earlier.binding);}catch{/* Offer the copy this view knows. */}
+    if(!shell.live||shell.composerDraft.binding!==earlier.binding)return;
+    showEarlierDraft(shell,latest);shell.toast('The earlier draft could not be dismissed. It is still saved.');
+  });
+}
+/**
+ * When a send settles, the earlier copy of a new chat follows the composer into the conversation
+ * its first send created, as an unsent first message does (releaseComposerSend): it is saved there
+ * before it is cleared from the "no conversation yet" slot, so a reload in between keeps one copy.
+ */
+async function followEarlierDraft(shell:Shell,slot:string){
+  let identity:unknown;try{identity=JSON.parse(slot);}catch{return;}
+  if(!Array.isArray(identity)||identity.length!==4||identity[3]!==null)return;
+  for(const delay of [0,150,600,1500]){
+    if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+    await shell.draftBindingTask;
+    const key=shell.composerDraft.binding;
+    if(!shell.live||!key)return;
+    if(key===slot)continue;
+    if(!createdFromSlot(slot,key))return;
+    try{
+      const earlier=await readEarlierDraft(slot);if(!earlier.text.trim())return;
+      const moved=await keepEarlierDraft(key,earlier.text);await clearEarlierDraft(earlier);
+      if(shell.live&&shell.composerDraft.binding===key)showEarlierDraft(shell,moved);
+    }catch{/* Not moved: it stays offered with the new chat's own slot. */}
+    return;
+  }
+}
+
 /**
  * A new chat's first message is held (marked as sending) in the owner and agent's "no conversation
  * yet" draft slot; its send then creates the conversation and saves it as the restart selection.
@@ -576,8 +680,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.stopTileWatch = watchReturnToApp(() => { if (this.live && this.S().shade) this.refreshTileFacts(); });
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
-    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
-    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
+    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(!this.live)return;if(autoResolveDraftConflict(this))return;this.setState({});});
+    this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);void offerEarlierDraft(this);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
     // Only fresh typing before the first verified session can cross startup admission.
@@ -1172,7 +1276,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
     out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
-    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
+    out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};out.earlierDraftAvailable=!!this.earlierDraft&&this.earlierDraft.binding===this.composerDraft?.binding;out.restoreEarlierDraft=()=>restoreEarlierDraft(this);out.dismissEarlierDraft=()=>dismissEarlierDraft(this);
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{
       const connection=connectionController.getSnapshot(),current=String(this.S().draft||'');
@@ -1369,7 +1473,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     if(fromComposer){
       this.draftSendPending=true;
       // The durable draft keeps this text until the message is known to have been dispatched.
-      try{await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
+      try{await this.draftBindingTask;await stepAsideDraftConflict(this);await this.draftBindingTask;heldKey=this.composerDraft.binding;await this.composerDraft.hold(heldText,current);}catch(error){this.toast(error instanceof Error?error.message:'Draft could not be prepared. Nothing was sent.');return;}finally{this.draftSendPending=false;}
     }
     const reviewedSource=fromComposer?this.reviewedSourceDraft:null;if(fromComposer)this.reviewedSourceDraft=null;
     // Everything this send later shows belongs to the agent connection it was sent on.
@@ -1477,7 +1581,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         }
       }
     }
-    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false, turnStatus: '' }); }
+    finally { if(this.sendAttempt===attempt)this.sendAttempt=null; if (this.live) this.setState({ typing: false, turnStatus: '' }); if(heldKey)void followEarlierDraft(this,heldKey); }
   };
   p.agentSay = function (text: string, card?: Shell, identity?:{id?:string;messageBinding?:{conversationId:string;session:unknown};deviceReceipt?:true},current?:()=>boolean) {
     this.setState((previous: Shell) => {

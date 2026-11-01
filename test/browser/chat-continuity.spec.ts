@@ -218,6 +218,108 @@ test('restoring a new chat\'s first message after a restart moves it into the co
   expect(await fixture(page, f => ({ posts: f.posts, creates: f.creates }))).toEqual({ posts: 0, creates: 0 });
 });
 
+// A draft conflict never blocks Send. Another window saved different words to the new chat's draft
+// slot; Send still posts the composer's text once. The other copy is first kept in its own device
+// slot (`assistant-draft:v1:` + SHA-256 of ["earlier-draft",<binding>], the same secure-slot format
+// as every draft), follows the composer into the conversation the send created, and is offered as
+// "Restore earlier draft" until it is restored or dismissed, across reloads.
+const EARLIER = 'Written in another window';
+const SENT = 'Sent from this window';
+const earlierButton = (page: Page, name: string) => page.locator('[data-alpha-layer="composer"][aria-hidden="false"], [data-alpha-layer="conversation"][aria-hidden="false"]').getByRole('button', { name, exact: true });
+const earlierDraft = (page: Page, binding: string) => page.evaluate(async binding => (await (await import('/src/runtime/assistant-draft-store.ts')).readEarlierDraft(binding)).text, binding);
+async function reloaded(page: Page) {
+  await page.reload();
+  await expect.poll(() => fixture(page, f => f.ready), { timeout: 30_000 }).toBe(true);
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0, { timeout: 20_000 });
+}
+async function conflictedSend(page: Page) {
+  await connected(page);
+  await typeDraft(page, 'Words before the other window');
+  const slot = await bindingKey(page);
+  expect(JSON.parse(slot)[3]).toBeNull();
+  await page.evaluate(async ({ binding, text }) => { const { assistantDraftStore } = await import('/src/runtime/assistant-draft-store.ts'); const store = await assistantDraftStore(binding); await store.save(await store.read(), text); }, { binding: slot, text: EARLIER });
+  await composer(page).fill(SENT);
+  await expect(page.getByRole('status', { name: 'Assistant draft status', exact: true })).toContainText('Review the saved copy', { timeout: 15_000 });
+  await composer(page).press('Enter');
+  await expect.poll(() => fixture(page, f => f.posts), { timeout: 15_000 }).toBe(1);
+  await fixture(page, f => f.release('Got it.'));
+  await expect(conversation(page).getByText('Got it.', { exact: true })).toHaveCount(1);
+  // The posted turn carries the client observation, then exactly the composer's text.
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('continuity-agent') || '{}').history.filter((m: any) => m.role === 'user').map((m: any) => String(m.text).split('[USER MESSAGE]\n').pop()))).toEqual([SENT]);
+  const key = await bindingKey(page);
+  expect(JSON.parse(key)[3]).toBe('fixture-chat');
+  await expect(earlierButton(page, 'Restore earlier draft')).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => earlierDraft(page, key)).toBe(EARLIER);
+  await expect.poll(() => earlierDraft(page, slot)).toBe('');
+  expect(await savedDraft(page, key)).not.toBe(EARLIER);
+  return { slot, key };
+}
+
+test('a draft conflict never blocks Send, and the replaced copy is restorable after a reload', async ({ page }) => {
+  test.setTimeout(150_000);
+  const { key } = await conflictedSend(page);
+  // The kept copy is an encrypted device slot of the draft format, keyed to this conversation only.
+  const stored = await page.evaluate(async binding => {
+    const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['earlier-draft', binding]))));
+    const slot = 'assistant-draft:v1:' + Array.from(bytes, n => n.toString(16).padStart(2, '0')).join('');
+    const row = new Map<string, string>(JSON.parse(sessionStorage.getItem('continuity-store') || '[]')).get(slot);
+    return { slot, text: row ? JSON.parse(row).text : null };
+  }, key);
+  expect(stored.slot).toMatch(/^assistant-draft:v1:[a-f0-9]{64}$/);
+  expect(stored.text).toBe(EARLIER);
+  await reloaded(page);
+  expect(await bindingKey(page)).toBe(key);
+  await expect(composer(page)).toHaveValue('');
+  await earlierButton(page, 'Restore earlier draft').click({ timeout: 20_000 });
+  await expect(composer(page)).toHaveValue(EARLIER);
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  await expect.poll(() => savedDraft(page, key), { timeout: 15_000 }).toBe(EARLIER);
+  // Cleared only once the conversation's own draft holds it.
+  await expect.poll(() => earlierDraft(page, key), { timeout: 15_000 }).toBe('');
+  await reloaded(page);
+  await expect(composer(page)).toHaveValue(EARLIER, { timeout: 20_000 });
+  await page.waitForTimeout(1_000);
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  expect(await fixture(page, f => f.posts)).toBe(0);
+});
+
+test('dismissing the earlier draft clears it durably, and another conversation never offers it', async ({ page }) => {
+  test.setTimeout(150_000);
+  const { key } = await conflictedSend(page);
+  await page.evaluate(async () => { const { connectionController } = await import('/src/runtime/connection-ui.tsx'); await connectionController.newConversation(); });
+  await expect.poll(() => bindingKey(page)).toBe(JSON.stringify([...JSON.parse(key).slice(0, 3), 'fixture-chat-2']));
+  await page.waitForTimeout(1_000);
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  expect(await earlierDraft(page, await bindingKey(page))).toBe('');
+  await page.evaluate(async () => { const { connectionController } = await import('/src/runtime/connection-ui.tsx'); await connectionController.restoreHistory('fixture-chat'); });
+  await expect.poll(() => bindingKey(page)).toBe(key);
+  await earlierButton(page, 'Dismiss earlier draft').click({ timeout: 15_000 });
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  await expect.poll(() => earlierDraft(page, key)).toBe('');
+  await reloaded(page);
+  expect(await bindingKey(page)).toBe(key);
+  await page.waitForTimeout(1_500);
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  await expect(composer(page)).toHaveValue('');
+  expect(await fixture(page, f => f.posts)).toBe(0);
+});
+
+test('the earlier draft of one owner is never offered to another owner', async ({ page }) => {
+  test.setTimeout(150_000);
+  const { key } = await conflictedSend(page);
+  await page.evaluate(async remote => { const { connectionController: c } = await import('/src/runtime/connection-ui.tsx'); await c.disconnect(); (window as any).continuity.ownerId = 'fixture-owner-b'; await (window as any).Capacitor.nativePromise('AlphaConnection', 'secureWrite', { slot: 'remote:' + remote, value: JSON.stringify({ origin: remote, token: 'remote-session-token', identityId: 'fixture-owner-b', sessionId: 'remote-session-token', expiresAt: Date.now() + 86_400_000 }) }); await c.pair('remote', remote, ''); }, REMOTE);
+  await expect.poll(() => page.evaluate(async () => (await import('/src/runtime/connection-ui.tsx')).connectionController.getSnapshot().session?.ownerId)).toBe('fixture-owner-b');
+  await expect(page.locator('.alpha-connection-scrim')).toHaveCount(0);
+  const other = await bindingKey(page);
+  expect(JSON.parse(other)[1]).toBe('fixture-owner-b');
+  await page.waitForTimeout(1_500);
+  await expect(earlierButton(page, 'Restore earlier draft')).toHaveCount(0);
+  await expect(composer(page)).toHaveValue('');
+  expect(await earlierDraft(page, other)).toBe('');
+  // Owner A's copy is untouched, for owner A only.
+  expect(await earlierDraft(page, key)).toBe(EARLIER);
+});
+
 // The ACTION_ASSIST surface (AlphaAssistActivity) and the app are two renderers over the same device
 // draft slot of a conversation: words typed in either open in the other, Close keeps them, and
 // nothing is sent. A reload with the other entry stands in for the other Activity's renderer.
