@@ -69,8 +69,9 @@ jobs:
       pull-requests: write
       # A GITHUB_TOKEN push starts no pull_request workflow, so the PR's checks are dispatched.
       actions: write
+    # The write token reaches only the steps that call gh or push: npm ci never sees it and the
+    # checkout persists no credentials.
     env:
-      GH_TOKEN: ${{ github.token }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
       NEW_PIN: ${{ needs.status.outputs.develop }}
       STATUS_JSON: ${{ needs.status.outputs.json }}
@@ -78,6 +79,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.status.outputs.main }}
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -94,6 +96,8 @@ jobs:
       - name: Repin with the owning scripts
         id: apply
         env:
+          # verify-upstream --record-reachability reads the develop compare with gh api.
+          GH_TOKEN: ${{ github.token }}
           ELIZA_PIN_SYNC_AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
         run: |
           printf '%s' "$STATUS_JSON" > "$RUNNER_TEMP/status.json"
@@ -114,15 +118,21 @@ jobs:
       - name: Push the bot branch
         if: env.DRY_RUN != 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           BOT_HEAD: ${{ needs.status.outputs.bot_head }}
         run: |
           # The lease refuses to replace a bot branch that moved since the status job read it.
           case "$BOT_BRANCH" in bot/*) ;; *) echo "::error::Refusing to push $BOT_BRANCH"; exit 1 ;; esac
+          # The checkout kept no credentials; this push alone authenticates, through the environment.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0='http.https://github.com/.extraheader' GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
           git push --force-with-lease="refs/heads/$BOT_BRANCH:$BOT_HEAD" origin "HEAD:refs/heads/$BOT_BRANCH"
       - name: Open or update the PR
         id: pr
         if: env.DRY_RUN != 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ needs.status.outputs.pr }}
         run: |
           title="Pin Eliza develop ${NEW_PIN:0:10}"
@@ -135,12 +145,15 @@ jobs:
       - name: Dispatch the PR checks
         # Only a PR the sync job found ready is worth full CI; ELIZA_PIN_SYNC_DISPATCH_CHECKS=false stops it.
         if: env.DRY_RUN != 'true' && steps.apply.outputs.ready == 'true' && vars.ELIZA_PIN_SYNC_DISPATCH_CHECKS != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run browser.yml --ref "$BOT_BRANCH"
           gh workflow run android.yml --ref "$BOT_BRANCH"
       - name: Auto-merge (off unless ELIZA_PIN_SYNC_AUTOMERGE is true)
         if: env.DRY_RUN != 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           AUTOMERGE: ${{ vars.ELIZA_PIN_SYNC_AUTOMERGE }}
           NUMBER: ${{ steps.pr.outputs.number }}
           READY: ${{ steps.apply.outputs.ready }}

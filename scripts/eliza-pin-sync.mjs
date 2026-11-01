@@ -28,6 +28,7 @@ export const RECORDS = {
   clientPatches: 'patches/eliza/cloud-speech-client-manifest.json',
   mobileUuid: 'patches/eliza/mobile-uuid-build.json',
   calendarBridge: 'scripts/ci/calendar-bridge.py',
+  combinedSource: 'scripts/combined-agent-source.mjs',
   inventory: 'docs/mvp-remaining-work-2026-10-09.json',
   requirements: 'docs/requirements.json',
   status: 'docs/mvp-current-status.md',
@@ -59,11 +60,12 @@ function setPinField(root, file, key, from, to) {
 }
 
 // The records are written by JSON.stringify(value, null, 2); refuse to reformat one that is not.
+const EDITED_JSON = [RECORDS.mobileUuid, RECORDS.voiceHost, RECORDS.embeddingHost, RECORDS.requirements, RECORDS.dispositions];
+const generatedJson = text => `${JSON.stringify(JSON.parse(text), null, 2)}\n` === text;
 function editJson(root, file, edit) {
   const text = read(root, file);
-  const value = JSON.parse(text);
-  if (`${JSON.stringify(value, null, 2)}\n` !== text) throw new Error(`${file} is not in its generated JSON form`);
-  fs.writeFileSync(path.join(root, file), `${JSON.stringify(edit(value), null, 2)}\n`);
+  if (!generatedJson(text)) throw new Error(`${file} is not in its generated JSON form`);
+  fs.writeFileSync(path.join(root, file), `${JSON.stringify(edit(JSON.parse(text)), null, 2)}\n`);
 }
 
 /** Patch targets whose recorded pre-image no longer matches the file at the new pin. */
@@ -188,11 +190,16 @@ export function pinRecordProblems(root) {
   };
   for (const [file, key] of [...PLAIN_PIN_FIELDS, [RECORDS.nativePatches, 'baseCommit'], [RECORDS.clientPatches, 'baseCommit'], [RECORDS.mobileUuid, 'baseCommit']]) once(file, `"${key}": "${pin}"`);
   once(RECORDS.calendarBridge, `SDK = '${pin}'`);
+  // apply edits these in place; checking them first keeps a reformatted record from stopping it midway.
+  for (const file of EDITED_JSON) if (!generatedJson(read(root, file))) problems.push(`${file} is not in its generated JSON form`);
   const requalification = readJson(root, RECORDS.embeddingHost).requalification;
   if (requalification?.required === true && requalification.atPin !== pin) problems.push(`${RECORDS.embeddingHost}: the open requalification names ${requalification.atPin}, not the pin`);
   const evidence = readJson(root, RECORDS.voiceHost).sourceAdmission?.currentSourceComparison?.evidence;
   const previous = evidence && fs.existsSync(path.join(root, evidence)) ? readJson(root, evidence) : null;
   if (!Array.isArray(previous?.inputs) || !previous.embeddingInputs || !previous.consumerAndroidModules) problems.push(`${RECORDS.voiceHost}: the current source comparison names no build-input evidence with inputs, embedding inputs and consumer modules`);
+  // The frozen combined source admits the engine gitlink by identity; a repin moves it with the engine.
+  if (!SHA.test(previous?.forkPins?.to ?? '')) problems.push(`${RECORDS.voiceHost}: the current build-input evidence records no engine gitlink`);
+  else once(RECORDS.combinedSource, `'${ENGINE}':'${previous.forkPins.to}'`);
   try { statusPinText(read(root, RECORDS.status), {from: pin, to: pin}); } catch (error) { problems.push(error.message); }
   return problems;
 }
@@ -324,6 +331,15 @@ function apply({root, to, vendor, skipScripts, statusFile, date = new Date().toI
   fs.writeFileSync(path.join(root, evidencePath), `${JSON.stringify(evidence, null, 2)}\n`);
   report.native = {evidence: evidencePath, changedPaths: evidence.changedPaths, consumerChanges: evidence.consumerAndroidModules.changedPaths, forkPins: evidence.forkPins};
   report.applied.push(`${evidencePath}: ${evidence.note}`);
+  // An engine gitlink move also moves the identity the frozen combined source admits (#777 did it by hand).
+  const {from: engineFrom, to: engineTo} = evidence.forkPins;
+  if (engineFrom !== engineTo) {
+    if (!SHA.test(engineTo ?? '')) need(`${RECORDS.combinedSource}: ${ENGINE} is no longer a gitlink at the new pin.`);
+    else {
+      fs.writeFileSync(path.join(root, RECORDS.combinedSource), replaceOnce(read(root, RECORDS.combinedSource), `'${ENGINE}':'${engineFrom}'`, `'${ENGINE}':'${engineTo}'`, RECORDS.combinedSource));
+      report.applied.push(`${RECORDS.combinedSource}: admits the moved engine gitlink ${engineShort(engineTo)} (was ${engineShort(engineFrom)}).`);
+    }
+  }
   if (current.requalificationRequired === true) {
     editJson(root, RECORDS.voiceHost, value => ({...value, sourceAdmission: nextVoiceComparison(value.sourceAdmission, evidence, evidencePath)}));
     report.applied.push(`${RECORDS.voiceHost}: the current source comparison moved to history; the new one cites ${evidencePath}.`);
@@ -371,7 +387,7 @@ function apply({root, to, vendor, skipScripts, statusFile, date = new Date().toI
 const CHECKS = [
   ['verify-upstream', 'scripts/verify-upstream.mjs', '--upstream-reachability=fail'],
   ['Third-party notices', 'scripts/generate-licenses.mjs', '--check'],
-  ['Pin-bound record tests', '--test', '--test-reporter=dot', 'test/eliza-pin-sync.test.mjs', 'test/docs-requirements-consistency.test.mjs', 'test/docs-inventory-consistency.test.mjs', 'test/upstream-reachability.test.mjs', 'test/embedding-host-admission.test.mjs', 'test/voice-host-record.test.mjs', 'test/mobile-uuid-build.test.mjs', 'test/dependency-audit.test.mjs', 'test/licenses.test.mjs'],
+  ['Pin-bound record tests', '--test', '--test-reporter=dot', 'test/eliza-pin-sync.test.mjs', 'test/docs-requirements-consistency.test.mjs', 'test/docs-inventory-consistency.test.mjs', 'test/upstream-reachability.test.mjs', 'test/embedding-host-admission.test.mjs', 'test/voice-host-record.test.mjs', 'test/mobile-uuid-build.test.mjs', 'test/dependency-audit.test.mjs', 'test/licenses.test.mjs', 'test/host-speech-admission.test.mjs'],
 ];
 
 export function renderBody(s, report, {automerge = false} = {}) {

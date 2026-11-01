@@ -156,7 +156,8 @@ branch `bot/eliza-pin-sync` from the current `main`, with the steps of the manua
   each patch manifest whose targets are unchanged at the new pin;
 - writes `docs/evidence/sdk-<short>-build-input-admission-<date>.json` over the previous
   record's paths, then rolls the voice host comparison and the embedding host's open
-  requalification forward;
+  requalification forward, and moves the engine gitlink that `scripts/combined-agent-source.mjs`
+  admits when the pin moves the engine (#777);
 - re-records `scripts/ci/upstream-reachability.json` with
   `node scripts/verify-upstream.mjs --record-reachability`, re-audits with
   `node scripts/dependency-audit.mjs --resident --write` and regenerates the notices with
@@ -182,7 +183,9 @@ fetch and the scripts above).
 It never pushes `main`. Its one push is a `--force-with-lease` to `bot/eliza-pin-sync`, which
 `test/ci-emulator-evidence.test.mjs` pins. The workflow grants nothing at workflow level, and
 its jobs hold the only write grants in any workflow: `contents`, `pull-requests` and `actions`
-for the PR job, `issues` for the optional drift comment.
+for the PR job, `issues` for the optional drift comment. The PR job's checkout keeps no
+credentials and `npm ci` runs without a token; the token reaches only the repin step (its
+`gh api` reads) and the push, PR, dispatch and auto-merge steps.
 
 | Repository variable | Default | Effect |
 | --- | --- | --- |

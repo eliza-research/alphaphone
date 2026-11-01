@@ -17,7 +17,7 @@ const { commit } = reachabilityOnly
 	: verifyPinnedUpstream(process.cwd());
 
 if (!reachabilityOnly && argv.includes("--record-reachability")) {
-	// Explicit, networked refresh of the recorded compare. CI never runs this.
+	// Explicit, networked refresh of the recorded compare. In CI only the develop pin sync runs it.
 	const lock = JSON.parse(fs.readFileSync("upstream.lock.json", "utf8"));
 	const repository = new URL(lock.url).pathname.replace(/^\//, "").replace(/\.git$/, "");
 	const api = (route, jq) =>
