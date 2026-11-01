@@ -1,9 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';import {stripTypeScriptTypes} from 'node:module';
 // The chat composer's own wiring (agent-adapter.ts: its draft helpers, the controller it builds on
-// mount and the draft lines of componentDidUpdate and render) over the shared controller and the
-// shared compare-and-exchange rows, exactly as the pin projects them. Only the React state queue and
-// the device slot are stand-ins. Two fixtures over one map of rows are two windows (the app and
-// AlphaAssistActivity) on the same device slot.
+// mount, the draft lines of componentDidUpdate and render, and the hold its Send runs before
+// dispatch) over the shared controller and the shared compare-and-exchange rows, exactly as the pin
+// projects them. Only the React state queue and the device slot are stand-ins. Two fixtures over one
+// map of rows are two windows (the app and AlphaAssistActivity) on the same device slot.
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const ts=source=>stripTypeScriptTypes(source,{mode:'transform'});
 const load=path=>import('data:text/javascript;base64,'+Buffer.from(ts(read(path))).toString('base64'));
@@ -15,6 +15,7 @@ const helpers=between(adapter,'function createdFromSlot(','const preDispatchRefu
 const mount=between(adapter,'    this.composerDraft=new AssistantDraftController(','    this.refreshDraftBinding=');
 const update=between(adapter,"this.composerDraft?.edit(String(this.S().draft||''));",'const shade=');
 const savedCopy=between(adapter,'out.draftSavedText=',';out.draftOpening=').slice('out.draftSavedText='.length);
+const sendHold=between(adapter,'      this.draftSendPending=true;\n      // The durable draft keeps','\n    }\n    const reviewedSource=');
 const SAVED_AVAILABLE='A saved draft is available. Review both copies.',NOT_SAVED='Draft was not saved. Review the saved copy before replacing it.';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -24,18 +25,20 @@ function fixture(raws=new Map()){
  const exchanges=[];let before,failing=false;
  const slot=binding=>({async read(){return raws.get(binding)??null;},async compareExchange(expected,value){if(failing){exchanges.push({binding,expected,value,failed:true});throw Error('Secure storage write failed');}const run=before;before=undefined;run?.();const saved=(raws.get(binding)??null)===expected;exchanges.push({binding,expected,value,saved});if(saved)raws.set(binding,value);return {status:saved?'saved':'conflict'};}});
  const stores=new Map(),assistantDraftStore=async binding=>{if(!stores.has(binding))stores.set(binding,compareExchangeDraftStore(binding,slot(binding)));return stores.get(binding);};
- const pending=[],prompts=[];let refreshes=0;
- const shell={live:true,state:{draft:''},startupDraft:null,reviewedSourceDraft:null,firstSendReview:undefined,S(){return this.state;},refreshDraftBinding(){refreshes++;},
+ const pending=[],prompts=[],toasts=[];let refreshes=0;
+ const shell={live:true,state:{draft:''},startupDraft:null,reviewedSourceDraft:null,firstSendReview:undefined,S(){return this.state;},refreshDraftBinding(){refreshes++;},toast(message){toasts.push(message);},
   setState(update,callback){
    // Every render the composer gets: a conflict here is the review prompt above the composer.
    const draft=this.composerDraft?.state;if(draft?.conflict)prompts.push({savedText:draft.savedText,message:draft.message});
    pending.push(()=>{const patch=typeof update==='function'?update(this.state):update;if(patch)Object.assign(this.state,patch);this.componentDidUpdate();callback?.();});
   }};
  const context=vm.createContext({AssistantDraftController:DurableDraftController,DEFAULT_DURABLE_DRAFT_MESSAGES,assistantDraftStore,shell});
- vm.runInContext(ts(`${helpers}\n(function(){${mount}}).call(shell);\nshell.componentDidUpdate=function(){${update}};\nshell.savedCopy=function(draft){return ${savedCopy};};`),context);
+ vm.runInContext(ts(`${helpers}\n(function(){${mount}}).call(shell);\nshell.componentDidUpdate=function(){${update}};\nshell.savedCopy=function(draft){return ${savedCopy};};\nshell.sendHold=async function(heldText,current){let heldKey;${sendHold}\nreturn true;};`),context);
  const draft=shell.composerDraft;
  const flush=async()=>{for(let n=0;n<40;n++){while(pending.length)pending.shift()();await tick();}};
- return {draft,shell,prompts,exchanges,flush,raws,
+ return {draft,shell,prompts,toasts,exchanges,flush,raws,
+  // The composer's Send up to dispatch: true when its text is held and would be sent now.
+  async pressSend(){const held=await shell.sendHold(String(shell.state.draft||''));await flush();return held===true;},
   refreshes:()=>refreshes,
   // The composer's input event: its state update renders, and componentDidUpdate records the text.
   type(text){shell.state.draft=text;shell.componentDidUpdate();},
@@ -226,4 +229,67 @@ test('clearing the composer beside an empty copy that could not be saved over di
  g.beforeNextExchange(()=>g.setRaw(key,otherWindowRow(key,'Other window words','ow')));
  g.type('abc');await g.flush();g.type('');await g.flush();
  assert.equal(g.draft.state.conflict,true);assert.equal(g.draft.state.savedText,'Other window words');assert.equal(g.row(key).text,'Other window words');
+});
+
+test('a Send refused over another window\'s clear is reviewed, never kept: that window may have sent the same text',async()=>{
+ // Both windows show the same restored draft. The assistant window sends it, and its commit leaves
+ // the row empty. The app window still shows the text (it does not read the draft again on resume)
+ // and presses Send: the hold is refused on its older receipt, and the empty row it then reads is
+ // the only sign that this text was already sent.
+ const raws=new Map(),key='["origin","owner","agent","sent-elsewhere"]',app=fixture(raws),assist=fixture(raws);
+ await app.seed(key,'Book the table');await app.open(key);await assist.open(key);
+ assert.equal(app.shell.state.draft,'Book the table');assert.equal(assist.shell.state.draft,'Book the table');
+ await assist.send('Book the table');
+ const cleared=app.raw(key);assert.equal(app.row(key).text,'');
+ assert.equal(await app.pressSend(),false,'nothing is dispatched');
+ assert.equal(app.toasts.length,1);
+ assert.equal(app.draft.state.conflict,true);assert.equal(app.draft.state.savedText,'');assert.equal(app.draft.state.message,NOT_SAVED);
+ assert.deepEqual(app.prompts.at(-1),{savedText:'',message:NOT_SAVED},'the review is shown');
+ assert.equal(app.raw(key),cleared,'the text is not saved back over the other window\'s clear');
+ assert.equal(app.shell.state.draft,'Book the table');
+ // A second press dispatches nothing either while the review is open.
+ assert.equal(await app.pressSend(),false);
+ assert.equal(app.draft.state.conflict,true);assert.equal(app.raw(key),cleared);
+ // Sending it again is the person's choice from the review: Replace saves it, and Send then holds it.
+ app.draft.keepCurrent();await app.flush();
+ assert.equal(app.row(key).text,'Book the table');assert.equal(app.draft.state.conflict,false);
+ assert.equal(await app.pressSend(),true);assert.equal(app.row(key).sending,true);
+ // Restore takes the empty copy instead: nothing is left to send.
+ const raws2=new Map(),r=fixture(raws2),s=fixture(raws2);
+ await r.seed(key,'Book the table');await r.open(key);await s.open(key);await s.send('Book the table');
+ assert.equal(await r.pressSend(),false);r.draft.restoreSaved();await r.flush();
+ assert.equal(r.shell.state.draft,'');assert.equal(r.draft.state.conflict,false);assert.equal(r.row(key).text,'');
+});
+
+test('Send still dispatches typed text on the first press, also over another window\'s clear',async()=>{
+ // No other window: no review, no notice, and the text is held as sending.
+ const key='["origin","owner","agent","send"]',f=fixture();
+ await f.open(key);f.type('hello');await f.flush();
+ assert.equal(await f.pressSend(),true);
+ assert.deepEqual(f.prompts,[]);assert.deepEqual(f.toasts,[]);assert.equal(f.row(key).text,'hello');assert.equal(f.row(key).sending,true);
+ // The owner's report: "hi" typed while the draft opens over the empty row a sent message leaves,
+ // and Send pressed before it has opened (Send waits for the binding). No review; it sends at once.
+ const g=fixture();await g.seed(key,'Sent','');g.shell.state.draft='hi';g.shell.draftBindingTask=g.draft.open(key);
+ assert.equal(await g.pressSend(),true);
+ assert.deepEqual(g.prompts,[]);assert.deepEqual(g.toasts,[]);assert.equal(g.row(key).text,'hi');assert.equal(g.row(key).sending,true);
+ // Over another window's clear: the assistant window sent its own message and cleared the row, then
+ // "hi" is typed here. The refused keystroke write is kept with no review, and Send holds it at once.
+ const raws=new Map(),a=fixture(raws),b=fixture(raws);
+ await a.seed(key,'Sent','');await a.open(key);await b.open(key);
+ b.type('What is the weather');await b.flush();await b.send('What is the weather');
+ a.type('hi');await a.flush();
+ assert.deepEqual(a.prompts,[]);assert.equal(a.row(key).text,'hi');
+ assert.equal(await a.pressSend(),true);
+ assert.deepEqual(a.prompts,[]);assert.deepEqual(a.toasts,[]);assert.equal(a.row(key).text,'hi');assert.equal(a.row(key).sending,true);
+ // Text kept that way earlier changes nothing for a later refused Send: when the other window then
+ // clears the row (it may have sent this text), the Send is reviewed exactly as above.
+ const raws2=new Map(),c=fixture(raws2),d=fixture(raws2);
+ await c.seed(key,'Sent','');await c.open(key);await d.open(key);
+ d.type('x');await d.flush();d.type('');await d.flush();
+ c.type('hi');await c.flush();
+ assert.deepEqual(c.prompts,[]);assert.equal(c.row(key).text,'hi');
+ c.setRaw(key,otherWindowRow(key,'','other-window-sent-hi'));
+ assert.equal(await c.pressSend(),false);
+ assert.equal(c.draft.state.conflict,true);assert.equal(c.draft.state.savedText,'');assert.equal(c.draft.state.message,NOT_SAVED);
+ assert.equal(c.row(key).text,'');
 });

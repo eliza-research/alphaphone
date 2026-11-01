@@ -169,12 +169,14 @@ function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:strin
  * or failed is kept like this once for the same binding and composer text: the controller does not
  * say which it was, and keeping it again could repeat a failing write without end. If that keep
  * fails too, its "Draft was not saved" notice and explicit retry stay.
+ * A write refused while the composer sends is reviewed, never kept: another window's send leaves
+ * the same empty row, so it may be the only sign that this text was already sent from there.
  */
 function keepOverEmptySavedDraft(shell:Shell):boolean{
   const draft=shell.composerDraft,state=draft.state,kept=draft.binding+'\u0000'+String(shell.S().draft||'');
   if(!state.conflict){if(shell.emptyDraftKept!==kept)shell.emptyDraftKept=undefined;return false;}
   if(state.unsettled||state.savedText.trim())return false;
-  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){if(shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;}
+  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable){if(shell.draftSendPending||shell.emptyDraftKept===kept)return false;shell.emptyDraftKept=kept;}
   draft.keepCurrent();
   if(shell.firstSendReview)shell.refreshDraftBinding();
   return true;
