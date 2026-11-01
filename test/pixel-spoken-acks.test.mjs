@@ -396,7 +396,8 @@ test('on-device batch: the model acknowledgement plays through on-device speech 
 // with no PCM, and any Cloud error frame, fail the whole session through its error event, and the
 // retired session refuses later speech. A refused speak call (audio focus, busy speaker) fails only
 // that utterance. `mutes` records the capture's mute calls (false: capturing); `closeMute`, when
-// set, is how the native mute for a close settles (deferred, refused or never).
+// set, is how the native mute for a close settles (deferred, refused or never), and `openMute`
+// how the unmute for a listen does.
 function socketFixture({echoCancelled=true}={}){
  const clock=voiceFakeClock(),f=viewFixture({cloudProfile:true,clock,holdReply:true});
  loadSession(f);
@@ -407,7 +408,7 @@ function socketFixture({echoCancelled=true}={}){
   async addListener(_event,callback){n.emit=callback;return {remove:async()=>{}};},
   async startCloudSpeech(input){n.sessionId=input.sessionId;return {sessionId:input.sessionId,sampleRate:16000,echoCancelled};},
   async stopCloudSpeech(){n.stops++;n.utterance=null;},
-  async setCloudSpeechMuted({muted}){n.mutes.push(muted);if(muted)await n.closeMute?.();},
+  async setCloudSpeechMuted({muted}){n.mutes.push(muted);await (muted?n.closeMute:n.openMute)?.();},
   async speakCloudSpeech({utteranceId,text}){if(n.retired)throw Error('Invalid speech request');if(n.utterance||n.draining||n.refuse?.(text)){n.refused.push(text);throw Error('Speech could not start');}n.utterance={id:utteranceId,text,started:false};n.spoken.push(text);},
   async cancelCloudSpeech({utteranceId}){n.cancels++;if(n.retired||n.utterance?.id!==utteranceId)return;n.utterance=null;n.draining=true;if(n.holdCancel)await new Promise(resolve=>n.releaseCancel=resolve);n.draining=false;},
  };
@@ -1287,8 +1288,8 @@ test('the ack is folded into the voice adapter: no cue module, and only the clip
 // claude/busy-mic-native-hold-20261101): submission closes the capture, and the turn is sent only
 // once the native mute confirmed that close, so the ack (spoken inside the request) and the reply
 // never play over open input; a close the bridge refuses, or does not confirm within its 2.5 s
-// bound, ends the conversation, and so does a Mute close that failed before the turn was
-// submitted; nothing reopens either way. The closed capture still
+// bound, ends the conversation, and so does a Mute close that fails before a turn waits on it, at
+// once, also with nothing heard (idle); nothing reopens either way. The closed capture still
 // hears the socket's end (the bridge keeps the last listen as its lifecycle observer), so a
 // transport, expiry, protocol or owner failure during the hold ends the turn at once, also while
 // the ack is refused. A refusal alone, on a healthy socket, stays silence. These rows need a
@@ -1380,8 +1381,8 @@ test('busy hold over the speech socket: a close the native mute does not answer 
 });
 
 // Mute mid-speech finalizes the utterance; the turn is submitted after the gap. A Mute close that
-// failed before that, or a socket end once the Mute close is confirmed, ends the conversation
-// instead of sending a turn the closed or dead input cannot answer.
+// fails before that (at once), or a socket end once the Mute close is confirmed, ends the
+// conversation instead of sending a turn the closed or dead input cannot answer.
 test('busy hold over the speech socket: Mute mid-speech, the final arrives, the native mute refuses and the socket fails before the gap: nothing is sent',busyHold,async()=>{
  const f=socketFixture(),n=f.n;let refuse;n.closeMute=()=>new Promise((_,reject)=>refuse=reject);
  try{
@@ -1420,10 +1421,99 @@ test('busy hold on-device: Mute mid-speech, the final arrives, the Mute close re
   f.renderChat().toggleMute();await f.clock.flush();
   h.onSpeechEnd(20);h.onSegment('Add lunch with Sam tomorrow.');await f.clock.flush();
   reject(Error('Native transcription close was not confirmed.'));await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'listening','Mute alone stays quiet until the turn would be sent');
+  assert.equal(f.renderChat()?.state,'error','Mute is not left showing over the unconfirmed close');
   await f.clock.advance(1300);await f.clock.flush();
   assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
   await f.clock.advance(5000);
   assert.equal(f.sends,0);assert.deepEqual(f.s.spoken(),[]);assert.equal(closes,1);assert.equal(listens,1,'no replacement capture');
+ }finally{await closeLive(f);}
+});
+
+// Idle Mute (nothing heard, nothing waiting to be sent): a native mute the bridge refuses, or does
+// not answer within its 2.5 s bound, ends the conversation once with the microphone error and stops
+// the socket once; Unmute, also pressed while that mute is pending, reopens nothing and nothing is
+// sent. A Mute the native mute confirms stays quiet, and Unmute reopens the socket capture.
+const microphoneNotices=f=>(f.renderChat()?.lines||[]).filter(line=>/^The microphone stopped\./.test(line.t)).length;
+for(const [how,closeMute,boundMs,unmuteAtMs] of [
+ ['refuses',async()=>{throw Error('Microphone could not change state');},0],
+ ['never answers',()=>new Promise(()=>{}),2500],
+ ['never answers, Unmute pressed while it is pending,',()=>new Promise(()=>{}),2500,1000],
+])
+test(`busy hold over the speech socket: an idle Mute whose native mute ${how} ends the conversation once; the socket stops once, nothing reopens or is sent`,busyHold,async()=>{
+ const f=socketFixture(),n=f.n;
+ try{
+  await f.shell.startVoice();await f.clock.flush();n.closeMute=closeMute;
+  f.renderChat().toggleMute();await f.clock.flush();
+  assert.deepEqual(n.mutes,[false,true]);
+  if(boundMs){
+   assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');
+   if(unmuteAtMs){await f.clock.advance(unmuteAtMs);f.renderChat().toggleMute();await f.clock.flush();}
+   await f.clock.advance(boundMs-(unmuteAtMs??0)-1);
+   assert.equal(f.renderChat()?.state,'listening');assert.deepEqual(n.mutes,[false,true],'nothing reopens while the mute is pending');
+   await f.clock.advance(1);await f.clock.flush();
+  }
+  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
+  assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1,'the socket is retired once');
+  f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
+  assert.deepEqual(n.mutes,[false,true],'nothing reopens');assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);
+  assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+ }finally{await closeSocket(f);}
+});
+
+test('busy hold over the speech socket: an idle Mute the native mute confirms stays quiet; Unmute reopens the socket capture and the next turn is sent',busyHold,async()=>{
+ const f=socketFixture(),n=f.n;let confirm;n.closeMute=()=>new Promise(resolve=>confirm=resolve);
+ try{
+  await f.shell.startVoice();await f.clock.flush();
+  f.renderChat().toggleMute();await f.clock.advance(2000);confirm();n.closeMute=undefined;await f.clock.flush();await f.clock.advance(5000);
+  assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');assert.equal(n.stops,0);
+  f.renderChat().toggleMute();await f.clock.flush();
+  assert.equal(f.renderChat()?.muted,'false');assert.deepEqual(n.mutes,[false,true,false],'Unmute reopens the socket capture');
+  n.utter('Add lunch with Sam tomorrow.');await f.clock.advance(0);
+  assert.equal(f.sends,1);assert.equal(f.sendInputs[0].text,'Add lunch with Sam tomorrow.');assert.equal(microphoneNotices(f),0);
+ }finally{await closeSocket(f);}
+});
+
+test('busy hold over the speech socket: Mute while the capture reopens after the reply, its native mute refused: the conversation ends once; nothing reopens or is sent again',busyHold,async()=>{
+ const f=socketFixture(),n=f.n;
+ try{
+  await socketTurn(f);
+  f.releaseReply();await f.clock.flush();assert.deepEqual(n.spoken,[REPLY]);
+  let reopened;n.openMute=()=>new Promise(resolve=>reopened=resolve);n.closeMute=async()=>{throw Error('Microphone could not change state');};
+  n.audioStart();n.complete();await f.clock.flush();
+  assert.deepEqual(n.mutes,[false,true,false],'the reopen waits for the native unmute');
+  f.renderChat().toggleMute();await f.clock.flush();
+  reopened();await f.clock.flush();
+  assert.equal(f.renderChat()?.state,'error');assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+  f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
+  assert.deepEqual(n.mutes,[false,true,false,true],'the reopened capture is closed at Mute and nothing opens again');
+  assert.equal(f.sends,1);assert.deepEqual(n.spoken,[REPLY]);assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+ }finally{await closeSocket(f);}
+});
+
+test('busy hold over the speech socket: Stop while an idle Mute waits for the native mute retires the socket at once and resolves at the bridge bound with no error',busyHold,async()=>{
+ const f=socketFixture(),n=f.n;n.closeMute=()=>new Promise(()=>{});
+ try{
+  await f.shell.startVoice();await f.clock.flush();
+  f.renderChat().toggleMute();await f.clock.advance(1000);
+  let stopped=false;const stopping=f.shell.stopVoiceConversation().then(()=>{stopped=true;});await f.clock.flush();
+  assert.equal(f.renderChat()?.state,'stopping');assert.equal(n.stops,1,'Stop retires the socket');
+  await f.clock.advance(1499);assert.equal(stopped,false,'Stop waits for the pending native mute');
+  await f.clock.advance(1);await stopping;assert.equal(stopped,true);assert.equal(f.renderChat()?.state,undefined,'voice closed, not failed');
+  await f.clock.advance(5000);
+  assert.equal(microphoneNotices(f),0);assert.deepEqual(n.mutes,[false,true]);assert.equal(f.sends,0);assert.equal(n.stops,1);
+ }finally{await closeSocket(f);}
+});
+
+test('busy hold on-device: an idle Mute whose close rejects ends the conversation once; Unmute reopens nothing and nothing is sent',busyHold,async()=>{
+ const f=onDeviceLiveFixture();let reject,closes=0,cancels=0,listens=0;
+ f.box.nativeAssistantListener=()=>async input=>{listens++;f.s.handlers=input;return {fullDuplex:true,close:()=>{closes++;return new Promise((_,no)=>reject=no);},cancel:async()=>{cancels++;}};};
+ try{
+  await f.shell.startVoice();await f.clock.flush();
+  f.renderChat().toggleMute();await f.clock.flush();
+  assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');
+  reject(Error('Native transcription close was not confirmed.'));await f.clock.flush();
+  assert.equal(f.renderChat()?.state,'error');assert.equal(microphoneNotices(f),1);
+  f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
+  assert.equal(f.sends,0);assert.deepEqual(f.s.spoken(),[]);assert.equal(closes,1);assert.equal(cancels,1,'the failed capture is retired once');assert.equal(listens,1,'no replacement capture');
  }finally{await closeLive(f);}
 });
