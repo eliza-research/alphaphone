@@ -7,7 +7,9 @@ import test from 'node:test';
 // Source Extensions event order: a failed append fires error, then updateend; detaching the element
 // removes each SourceBuffer (abort, then updateend, while it appends) and then fires sourceclose.
 // The clip body is held open by the test and records its cancellation; zero network, media or audio.
-const code=stripTypeScriptTypes(readFileSync('apps/app/src/browser/streamed-speech.ts','utf8').replace(/^export /gm,''),{mode:'transform'})+';return {StreamedSpeech,streamedSpeechSource};';
+// The streamed clip is the self-contained last section of the browser voice module.
+const voice=readFileSync('apps/app/src/browser/voice.ts','utf8'),section=voice.indexOf('/** Cloud read-aloud arrives as audio/mpeg chunks');assert.ok(section>0,'streamed speech section found');
+const code=stripTypeScriptTypes(voice.slice(section).replace(/^export /gm,''),{mode:'transform'})+';return {StreamedSpeech,streamedSpeechSource};';
 const idle=async()=>{for(let i=0;i<5;i++)await new Promise(resolve=>setTimeout(resolve,0));};
 function harness(){
  const medias=[],revoked=[],cancelled=[];let upstream;
