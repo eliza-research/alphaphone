@@ -9,7 +9,7 @@ import {nativeViewDeclarationsJson} from './native-view-policy.mjs';
 import {CLOUD_SDK_BASES} from './cloud-sdk-authority.mjs';
 export const CLOUD_MODEL='cerebras/qwen-3.8-27b';
 /** Host-owned process. No provider key is written to configuration or returned to the renderer. */
-export async function createCloudResidentHost({source,profile,port,environment='production',profileMode='lean',launch=startPrivateRuntimeProcess,inherited=process.env,request=fetch,startGoogleHost}){
+export async function createCloudResidentHost({source,profile,port,environment='production',profileMode='lean',launch=startPrivateRuntimeProcess,inherited=process.env,request=fetch,startGoogleHost,cloudRealtimeVoice=false}){
  if(!['production','staging'].includes(environment))throw Error('Invalid Cloud environment');
  if(profileMode!=='lean'&&profileMode!=='full')throw Error('Invalid Cloud resident profile mode');
  const root=path.resolve(import.meta.dirname,'..');
@@ -51,7 +51,7 @@ export async function createCloudResidentHost({source,profile,port,environment='
   if(!retiring&&running&&bound?.credentialId===credential?.credentialId&&bound?.reference===credential?.reference&&bound?.expiresAt===credential?.expiresAt)return status(credential?.credentialId);
   await stop();
   if(credential&&(!credential.token||typeof credential.token!=='string'||!credential.credentialId||credential.expiresAt!==undefined&&(!Number.isFinite(credential.expiresAt)||credential.expiresAt<=Date.now())))throw Error('Invalid Cloud resident binding');
-  const settings={...(environment==='staging'?{ELIZA_DEV_SOURCE:'1',ELIZA_DEV_CLOUD_ENV_AUTHORITY:'staging-explicit'}:{}),ELIZA_VAULT_PASSPHRASE:vaultPassphrase,ELIZAOS_CLOUD_USE_INFERENCE:credential?'true':'false',ELIZAOS_CLOUD_USE_EMBEDDINGS:credential?'true':'false',ELIZA_DISABLE_LOCAL_EMBEDDINGS:'true',ELIZA_LOCAL_EMBEDDING_ENABLED:'0',ELIZA_ASR_ENABLED:'0',ELIZA_PARADEE_ENABLED:'0',...(credential?{ELIZAOS_CLOUD_API_KEY:credential.token,ELIZAOS_CLOUD_BASE_URL:CLOUD_SDK_BASES[environment],ELIZAOS_CLOUD_SMALL_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_LARGE_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_EMBEDDING_MODEL:'bge-small-en-v1.5',ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS:'384'}:{})};
+  const settings={...(environment==='staging'?{ELIZA_DEV_SOURCE:'1',ELIZA_DEV_CLOUD_ENV_AUTHORITY:'staging-explicit'}:{}),ELIZA_VAULT_PASSPHRASE:vaultPassphrase,ELIZAOS_CLOUD_USE_INFERENCE:credential?'true':'false',ELIZAOS_CLOUD_USE_EMBEDDINGS:credential?'true':'false',ELIZA_DISABLE_LOCAL_EMBEDDINGS:'true',ELIZA_LOCAL_EMBEDDING_ENABLED:'0',ELIZA_ASR_ENABLED:'0',ELIZA_PARADEE_ENABLED:'0',...(credential?{ELIZAOS_CLOUD_API_KEY:credential.token,ELIZAOS_CLOUD_BASE_URL:CLOUD_SDK_BASES[environment],ELIZAOS_CLOUD_SMALL_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_LARGE_MODEL:CLOUD_MODEL,ELIZAOS_CLOUD_EMBEDDING_MODEL:'bge-small-en-v1.5',ELIZAOS_CLOUD_EMBEDDING_DIMENSIONS:'384'}:{}),...(credential&&cloudRealtimeVoice?{ELIZA_SELF_HOSTED_VOICE_ENABLED:'1',ELIZA_SELF_HOSTED_VOICE_CLOUD_RELAY_ENABLED:'1'}:{})};
   googleHost=credential&&startGoogleHost?await startGoogleHost(privateProfile.token,{credentialId:credential.credentialId,reference:credential.reference}):null;
   let log;
   try{
