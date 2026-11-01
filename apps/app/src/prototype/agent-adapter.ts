@@ -26,6 +26,7 @@ import {availabilityReview} from './calendar-availability-review';
 import {presentDeviceRecordOperation} from '../runtime/device-record-presentation';
 import { passwordSurfaceOpen } from '../passwords/password-manager';
 import {AssistantDraftController} from './assistant-draft-controller';
+import {DEFAULT_DURABLE_DRAFT_MESSAGES} from '../../../../.eliza/client-features/packages/ui/src/state/durable-draft-controller.ts';
 import {assistantDraftStore} from '../runtime/assistant-draft-store';
 import {browserNotesPort,browserNotesRecovery} from '../runtime/browser-notes-document';
 import {audioDeletionRecovery} from '../runtime/note-audio-deletions';
@@ -154,6 +155,25 @@ function releaseComposerSend(shell:Shell,heldKey:string|undefined,heldText:strin
     draft.edit(heldText);
     void settleFirstSendSlot(heldKey,key,heldText,()=>shell.live&&draft.binding===key);
   });
+}
+/**
+ * An empty saved copy (the cleared row a sent message or a reset leaves, or another window's clear)
+ * holds nothing to recover, so the composer does not offer it for review when the draft opens, or
+ * when the composer is empty too. Called as the controller publishes the conflict, before anything
+ * renders it, so the decision is made on that same state and binding. The editor's text is kept as
+ * "Replace saved draft with this text" keeps it: saved over the empty copy with the receipt the
+ * controller has just read, so a newer write by another window still refuses the save and is
+ * offered instead. A copy that may already have been sent is always reviewed. A write of typed text
+ * that failed or was refused keeps its notice and explicit retry: the controller does not say which,
+ * and keeping it again here could repeat a failing write without end.
+ */
+function keepOverEmptySavedDraft(shell:Shell):boolean{
+  const draft=shell.composerDraft,state=draft.state;
+  if(!state.conflict||state.unsettled||state.savedText)return false;
+  if(state.message!==DEFAULT_DURABLE_DRAFT_MESSAGES.savedAvailable&&String(shell.S().draft||''))return false;
+  draft.keepCurrent();
+  if(shell.firstSendReview)shell.refreshDraftBinding();
+  return true;
 }
 const preDispatchRefusals=new Set(['Finish the connection or history operation before sending.','Wait for the current reply before sending another message.',NO_AGENT_SEND,RESIDENT_STARTING_NOTICE,RESIDENT_RECOVERING_NOTICE]);
 // It also marks every failure that happened before it posted the message (`notDispatched`).
@@ -576,7 +596,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.stopTileWatch = watchReturnToApp(() => { if (this.live && this.S().shade) this.refreshTileFacts(); });
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
-    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
+    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live&&!keepOverEmptySavedDraft(this))this.setState({});});
     this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
