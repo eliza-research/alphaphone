@@ -50,6 +50,11 @@ test('every subview of a retained view is opened by a state that asserts it is t
   // photos-empty (the viewer left open after its photo disappears) has no tap path; a fixture state
   // opens it directly and asserts it like the others.
   const unreachable = new Set();
+  // calendar-opening is the blank cover a Home calendar card opens its event over, so the day list
+  // never shows through. Hidden from assistive technology, it is never the exposed subview; the
+  // calendar-detail drawn over it is asserted like the others. It stays exempt only while it is empty.
+  const covers = new Set(['calendar-opening']);
+  for (const id of covers) assert.match(template, new RegExp(`<div data-alpha-subview="${id}" aria-hidden="true" style="[^"]*"></div>`), `${id} stays an empty cover hidden from assistive technology`);
   const table = states.slice(states.indexOf('const SUBVIEW'), states.indexOf('export const MOCK_STATES'));
   assert.match(states, /\.map\(start => mock\(start, \[\], SUBVIEW\[start\]\)\)/, 'deep-link states assert their subview');
   assert.match(states, /const showing = async[\s\S]*?\[data-alpha-subview="\$\{subview\}"\]:not\(\[inert\]\)[\s\S]*?toBeVisible\(\)/, 'a declared subview is asserted when the state opens');
@@ -60,7 +65,7 @@ test('every subview of a retained view is opened by a state that asserts it is t
     ...[...states.matchAll(/shows: '([a-zA-Z-]+)'/g)].map(match => match[1]),
   ]);
   for (const id of subviews) {
-    if (id.endsWith('-list') || unreachable.has(id)) continue;
+    if (id.endsWith('-list') || unreachable.has(id) || covers.has(id)) continue;
     assert.ok(asserted.has(id), `a state opens and asserts the ${id} subview`);
   }
   // Menus, search fields, sheets and the Undo toast are states of their own.
