@@ -164,7 +164,7 @@ test('actual controller keeps wrong-code challenge and prevents duplicate verifi
 });
 
 test('native Back and Escape share auth cancellation instead of leaving an expired code form',()=>{
-  const source=part('    const dismiss = () => {','    const back = ');
+  const source=part('  const dismiss = () => {','  useEffect(');
   const compile=transformSync(source,{loader:'ts',format:'cjs'}).code;
   let current={signIn:{...code}},calls=[];
   const controller={getSnapshot:()=>current,cancelSignIn:()=>calls.push('auth'),cancel:()=>calls.push('generic'),close:()=>calls.push('close')};
@@ -173,6 +173,7 @@ test('native Back and Escape share auth cancellation instead of leaving an expir
   current={signIn:null};dismiss();assert.deepEqual(calls,['auth','generic'],'reads the current auth state, not stale effect state');
   const handlers=part('    const back = ','      if (event.key === \'Tab\'');
   assert.equal((handlers.match(/dismiss\(\)/g)||[]).length,2,'edge Back and Escape use the same dispatch');
+  assert.equal((ui.match(/onCancel=\{dismiss\}/g)||[]).length,2,'the own-key Cancel on the welcome page and in Settings uses it too');
 });
 
 test('cancelling another operation does not conceal its genuine late failure',async()=>{

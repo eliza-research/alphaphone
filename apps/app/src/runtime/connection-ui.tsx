@@ -3170,6 +3170,12 @@ export function ConnectionChooser() {
     const releaseInert = holdPhoneInert(phone);
     return () => { releaseInert(); previous?.focus(); };
   }, [visible]);
+  // Escape, Android Back and the own-key form's Cancel during a check share one dispatch.
+  const dismiss = () => {
+    if (connectionController.getSnapshot().signIn) connectionController.cancelSignIn();
+    else if (snapshot.busy) connectionController.cancel();
+    else connectionController.close();
+  };
   useEffect(() => {
     if (!visible) return;
     const phone = document.querySelector<HTMLElement>('.os');
@@ -3182,11 +3188,6 @@ export function ConnectionChooser() {
     // A child form restores its input after verification. Updating the trap for busy state must
     // preserve that focus, rather than moving it back to the dialog and dismissing the keyboard.
     if (!panel.current?.contains(document.activeElement)) panel.current?.focus();
-    const dismiss = () => {
-      if (connectionController.getSnapshot().signIn) connectionController.cancelSignIn();
-      else if (snapshot.busy) connectionController.cancel();
-      else connectionController.close();
-    };
     const back = (event: Event) => { if(document.querySelector("dialog[open]"))return; event.preventDefault(); event.stopImmediatePropagation(); dismiss(); };
     window.addEventListener('alpha-back', back, true);
     const key = (event: KeyboardEvent) => {
@@ -3228,11 +3229,11 @@ export function ConnectionChooser() {
       </div>
     </aside>;
   }
-  const providerChoice=<OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCloud={()=>connectionController.selectCloudProvider()}/>;
+  const providerChoice=<OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCancel={dismiss} onCloud={()=>connectionController.selectCloudProvider()}/>;
   if(snapshot.purpose==='provider')return <div className="alpha-connection-scrim"><div className="alpha-connection alpha-connection-native" role="dialog" aria-modal="true" aria-labelledby="provider-title" tabIndex={-1} ref={panel}><header><h1 id="provider-title">AI provider</h1><button aria-label="Close AI provider settings" disabled={snapshot.busy} onClick={()=>connectionController.close()}>×</button></header>{providerChoice}{snapshot.error&&<p role="alert">{snapshot.error}</p>}{snapshot.message&&<p role="status">{snapshot.message}</p>}</div></div>;
   const requiredSignInView: SignInView = snapshot.signIn ?? { step: 'choose', environment: residentEnvironment() };
   if (snapshot.signIn || signInEntryRequired) return <div className={signInPage?'alpha-auth-page':'alpha-connection-scrim'}><div className={`alpha-connection alpha-connection-native alpha-cloud-sign-in${signInPage?' alpha-auth-content':''}`} role={signInPage?'main':'dialog'} aria-modal={signInPage?undefined:true} aria-labelledby="cloud-sign-in-title" aria-busy={snapshot.busy||undefined} tabIndex={-1} ref={panel}>
-    <SignInOrOwnKeys ownKeys={back=><OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} error={snapshot.error} message={snapshot.message} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCloud={()=>connectionController.selectCloudProvider()} onBack={checked=>{if(checked)connectionController.clearOutcome();back();}}/>}>
+    <SignInOrOwnKeys ownKeys={back=><OwnProviderChoice busy={snapshot.busy} status={snapshot.providerStatus} error={snapshot.error} message={snapshot.message} onSave={(key,voice)=>connectionController.configureLocal(key,LOCAL_PROVIDER_MODEL,voice)} onCancel={dismiss} onCloud={()=>connectionController.selectCloudProvider()} onBack={checked=>{if(checked)connectionController.clearOutcome();back();}}/>}>
     <CloudSignInPanel serviceLoader={loadSignInService} phone={cloudSignInPhone && inAppPhone} emailEnabled={inAppEmail} view={requiredSignInView} busy={snapshot.busy} ready={!!snapshot.signIn} dismissible={!signInPage} google={inAppGoogle} message={snapshot.message} error={snapshot.error} errorIsNotice={snapshot.error===RESIDENT_UNPACKAGED}
       actions={{phone:number=>void connectionController.signInPhone(number),google:()=>void connectionController.signInGoogle(),email:address=>void connectionController.signInEmail(address),verify:code=>void connectionController.verifySignInCode(code),resend:()=>void connectionController.resendSignInCode(),cancel:()=>connectionController.cancelSignIn()}}
       extra={signInEntryRequired && !snapshot.signIn && !snapshot.busy
@@ -3449,19 +3450,20 @@ function SignInOrOwnKeys({children,ownKeys}:{children:import('react').ReactNode;
 }
 
 /** One explicit choice; key values live only in the submitted form and native credential vault. */
-function OwnProviderChoice({busy,status,error,message,onSave,onCloud,onBack}:{busy:boolean;status?:LocalProviderStatus|null;error?:string;message?:string;onSave:(key:string,voice?:string)=>Promise<void>;onCloud:()=>Promise<void>;onBack?:(checked:boolean)=>void}){
+function OwnProviderChoice({busy,status,error,message,onSave,onCancel,onCloud,onBack}:{busy:boolean;status?:LocalProviderStatus|null;error?:string;message?:string;onSave:(key:string,voice?:string)=>Promise<void>;onCancel:()=>void;onCloud:()=>Promise<void>;onBack?:(checked:boolean)=>void}){
  const [editing,setEditing]=useState(!!onBack),[switching,setSwitching]=useState(false),[attempted,setAttempted]=useState(false);
  const ai=useRef<HTMLInputElement>(null),speech=useRef<HTMLInputElement>(null);
  const own=status?.selected===true&&status.provider==='cerebras';
  const native=Capacitor.isNativePlatform(),host=native||browserCloudResidentEnabled;
  const clear=()=>{if(ai.current)ai.current.value='';if(speech.current)speech.current.value='';};
  // The one key form (config/login-surfaces.json inventories its two fields once); first run and
- // Settings differ only in its note and Settings' Cancel.
+ // Settings differ only in its note and Settings' Cancel. While a check runs, both offer Cancel:
+ // the dispatch Escape and Android Back use, so a stopped check never saves or selects the keys.
  const keyForm=(note:string,cancel?:import('react').ReactNode)=>!host?<p role="status">Own API keys need Android secure storage. This browser cannot save or activate provider keys.</p>:<form onSubmit={event=>{event.preventDefault();const key=ai.current?.value||'',voice=speech.current?.value||'';clear();setAttempted(true);void onSave(key,voice||undefined);}}>
    <label>Cerebras API key<input ref={ai} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} required disabled={busy}/></label>
    <label>Cartesia API key (optional)<input ref={speech} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={busy}/></label>
    <p>{note}</p>
-   <button disabled={busy}>Save and use own keys</button>{cancel}
+   <button disabled={busy}>Save and use own keys</button>{busy?<button type="button" onClick={()=>{clear();onCancel();}}>Cancel</button>:cancel}
   </form>;
  // First run offers the key form alone; Settings keeps the explicit Cloud or own-key switch.
  if(onBack)return <section aria-label="Own API keys">
@@ -3483,7 +3485,7 @@ function OwnProviderChoice({busy,status,error,message,onSave,onCloud,onBack}:{bu
   {editing&&<>
    <p>Cerebras receives prompts and selected context. Optional Cartesia voice receives recordings and reply text. Provider charges use your own accounts. Switching is manual; failed requests never switch providers.</p>
    {keyForm(`${native?'Keys are stored with Android Keystore.':'Keys stay in this host session memory only and are lost when the host closes. They are not saved in the browser.'} Save checks the Cerebras model list; it does not send a chat or a voice request. Cartesia is saved without a live check.`,
-    <button type="button" disabled={busy} onClick={()=>{clear();setEditing(false);}}>Cancel</button>)}
+    <button type="button" onClick={()=>{clear();setEditing(false);}}>Cancel</button>)}
   </>}
  </section>;
 }
