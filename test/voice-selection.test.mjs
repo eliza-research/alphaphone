@@ -16,7 +16,7 @@ function load(store, f = {account: true, dev: false}) {
     cloudRuntimeEnabled: f.cloud === true, testMocksEnabled: f.mocks === true, localStorage: store, Date, JSON, Number, Event: class { constructor(type) { this.type = type; } },
     window: {dispatchEvent: event => { events.push(event.type); return true; }},
     get browserDevProfile() { return f.dev; },
-    connectionController: {getCloudEnvironment: () => f.account ? 'production' : null, getCloudClient: () => f.account ? {sessionId: 'synthetic-session', credentialId: 'synthetic-credential'} : null},
+    connectionController: {getSnapshot:()=>({residentInference:f.direct?'direct':undefined,providerStatus:{voiceConfigured:f.voice!==false}}),getCloudEnvironment: () => f.account ? 'production' : null, getCloudClient: () => f.account ? {sessionId: 'synthetic-session', credentialId: 'synthetic-credential'} : null},
   };
   const source = fs.readFileSync('apps/app/src/runtime/voice-selection.ts', 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export function', 'function').replaceAll('export type', 'type');
   vm.runInNewContext('{' + stripTypeScriptTypes(source, {mode: 'transform'}) + '\nglobalThis.api={selectVoiceRoute,chooseVoiceRoute,voiceRoutePreference,cloudVoiceAvailable,voicePreferenceKeys,cloudSpeechDisclosure,voiceSendPolicy,setVoiceSendPolicyForTests};}', box);
@@ -72,4 +72,11 @@ test('explicit production Cloud profile never silently selects local speech or e
     assert.equal(v.cloudVoiceAvailable(),account);assert.equal(v.voiceRoutePreference(),'cloud');
     assert.equal(v.setVoiceSendPolicyForTests('review'),false);
   }
+});
+
+test('explicit own keys choose the resident network voice route without a Cloud account',()=>{
+ const v=load(storage(),{direct:true,voice:true,account:false});
+ assert.equal(v.selectVoiceRoute('default'),'cloud');assert.equal(v.selectVoiceRoute('agent'),'cloud');assert.equal(v.selectVoiceRoute('device'),'device');
+ assert.equal(v.cloudVoiceAvailable(),true);assert.match(v.cloudSpeechDisclosure(),/own API key/);assert.doesNotMatch(v.cloudSpeechDisclosure(),/Cloud account/);
+ const off=load(storage(),{direct:true,voice:false,account:false});assert.equal(off.cloudVoiceAvailable(),false);assert.equal(off.selectVoiceRoute('default'),'cloud');
 });
