@@ -925,6 +925,7 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{calendar.deepOpening}}"><div data-alpha-subview="calendar-opening" aria-hidden="true" style="position:absolute;inset:0;background:var(--bg);z-index:4"></div></sc-if>
   <sc-if value="{{calendar.detail}}">
     <div ref="{{calendar.detailFocus}}" data-alpha-subview="calendar-detail" inert="{{calendar.detailCovered}}" aria-hidden="{{calendar.detailCovered}}" class="enter" style="position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 4">
       <div data-alpha-app-header="detail" style="display: flex; align-items: center; height: 56px; margin-top: 44px; padding: 0 8px; gap: 2px; flex-shrink: 0">
