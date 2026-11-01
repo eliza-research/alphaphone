@@ -1,3 +1,4 @@
+import {Capacitor} from '@capacitor/core';
 import type {CloudServiceInfo} from './cloud-service-info';
 import {cloudServiceName, type CloudEnvironment} from './cloud-protocol';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -5,7 +6,8 @@ import type { SignInView } from './connection-ui';
 
 /**
  * Alpha's own Eliza Cloud sign-in screens: Google (Android's native account picker), or an email
- * code typed here, then a second verification when the account has one. No Eliza Cloud web page.
+ * code typed here, then a second verification when the account has one. Browser-host Google uses
+ * the canonical hosted OAuth and approval page; Android retains its native picker.
  * Codes stay in the input while verification is pending or can be retried. They are never stored
  * outside the form, and a different attempt or verification step replaces the input.
  */
@@ -77,7 +79,7 @@ export function CloudSignInPanel({ view, busy, google, phone, emailEnabled = tru
         <button disabled={busy || !ready}>Text me a code</button>
       </form>}
     </>}
-    {view.step === 'google' && <p>Choose your Google account in the Android sign-in sheet. Alpha will finish signing you in.</p>}
+    {view.step === 'google' && <p>{Capacitor.isNativePlatform()?'Choose your Google account in the Android sign-in sheet. Alpha will finish signing you in.':'Finish Google sign-in in the opened window, then authorize Alpha. This page will update automatically.'}</p>}
     {(view.step === 'code' || view.step === 'mfa') && <form key={`${view.step}:${view.attemptId}`} className="alpha-cloud-sign-in-code" aria-busy={busy || undefined} aria-label={view.step === 'code' ? view.phone ? 'Enter your phone code' : 'Enter your email code' : 'Enter your verification code'} onSubmit={submitCode}>
       {view.step === 'code' && <p>Enter the six-digit code sent to <strong>{view.phone || view.email}</strong>.</p>}
       {view.step === 'mfa' && <p>{view.method === 'totp' ? 'This account uses an authenticator app. Enter its six-digit code.' : view.method === 'sms' ? 'Enter the six-digit code sent to your phone.' : 'This account’s second verification is not available in Alpha yet.'}</p>}

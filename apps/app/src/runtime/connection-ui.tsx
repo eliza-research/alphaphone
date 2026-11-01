@@ -590,6 +590,7 @@ async function loadSignInService(environment: CloudEnvironment) {
 }
 function makeCloud(environment: CloudEnvironment): CloudProtocol { return testMocksEnabled ? new DevelopmentCloudAgentProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }) : new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }); }
 /** The client for an in-app sign-in in this environment; replaced when the environment changes. */
+let googleSignInGeneration=0;
 function signInClient(environment: CloudEnvironment): CloudProtocol {
   if (cloud.environment !== environment) cloud = makeCloud(environment);
   return cloud;
@@ -661,7 +662,9 @@ function showPostSignInSetup() {
  * earlier rules: a failed start recovers and the caller's ensureResident() starts it again (P-43),
  * and a key Cloud refused right after issuing it is removed rather than kept for a retry that cannot work.
  */
-async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean) {
+async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expected?:{credentialId:string;credentialReference?:string}) {
+  const assertExpected=async()=>{if(!expected)return;const current=await cloudCredentialStore.read(residentEnvironment());signal.throwIfAborted();if(current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');};
+  await assertExpected();
   const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   signal.throwIfAborted(); retire();
   // The retired agent's AI binding no longer applies; the restarted agent reports its own (connectResident).
@@ -669,11 +672,13 @@ async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean) {
   let refused = false, setup = false;
   try {
     const admission = await admitCloudResident(signal);
+    await assertExpected();
     refused = !state.cloudAccount && state.residentPlanNotice !== 'offline' && !!issued && (await cloudCredentialStore.read(residentEnvironment()).catch(() => null))?.credentialId === issued;
     signal.throwIfAborted();
     update({ signIn: null, message: '', ...(refused ? {} : { residentStarting: true }) });
     if (!refused) { showPostSignInSetup(); setup = true; }
     await connectResident(signal, admission);
+    await assertExpected();
     // A binding notice the start reported stays within setup (it shows connection errors), not over it.
     if (setup && state.cloudAccount) update({ open: false, purpose: 'agent' });
   } catch (error) { if (residentAlwaysPresent && !active) update({ kind: 'recovering' }); update({ signIn: null }); if (!setup) showPostSignInSetup(); throw error; }
@@ -683,14 +688,15 @@ async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean) {
   } else if (unconfirmed) update({ message: `Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.` });
 }
 /** The key is stored; the existing identity, entitlement and agent paths take over unchanged. */
-async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated, signal: AbortSignal) {
+async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}) {
+  if(expected){const saved=await cloudCredentialStore.read(client.environment);signal.throwIfAborted();if(saved?.credentialId!==expected.credentialId||saved?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');}
   const created = outcome.accountCreated === true;
   prepareSignInReplacement();
   const unconfirmed = outcome.previousSignIn === 'unconfirmed';
-  if (residentCloudFlow()) { update({ accountCreated: created }); await residentSignedIn(signal, unconfirmed); return; }
+  if (residentCloudFlow()) { update({ accountCreated: created }); await residentSignedIn(signal, unconfirmed, expected); return; }
   update({ signIn: null, accountCreated: created });
   const accountOnly = state.purpose === 'cloud-account';
-  await verifyService(client, signal);
+  await verifyService(client, signal, expected);
   if (!active) save({ kind: 'none' });
   if (accountOnly || created || unconfirmed) update({ message: created ? `Signed in. ${cloudServiceName(cloud.environment)} created a new account for this sign-in.` : unconfirmed ? `Signed in to ${cloudServiceName(cloud.environment)}. ${cloudServiceName(cloud.environment)} did not confirm revoking the previous sign-in.` : `Signed in to ${cloudServiceName(cloud.environment)}.` });
   else if (hosted) await hosted.inspectPersonal(signal);
@@ -2388,6 +2394,7 @@ export const connectionController = {
    * enters an email; no Eliza Cloud web page is opened. */
   async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = false, automatic = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
+    googleSignInGeneration++;
     // An automatic readiness probe must not erase why the saved sign-in was refused.
     // A new attempt explicitly started by the owner still clears the earlier error.
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
@@ -2424,9 +2431,24 @@ export const connectionController = {
     if (!automatic) await ensureResident();
   },
   /** Leaves the sign-in screen for the chooser and burns the pending attempt. Stored sign-in stays unchanged. */
-  cancelSignIn() {
+  async cancelSignIn() {
     const view = state.signIn;
     const pending = !!operation;
+    const cancellingOperation=operation;
+    if(pending&&view?.step==='google'){
+      const client=signInClient(view.environment);
+      if(client.googleCancellationSupported){
+        try{
+          // Keep this attempt visible until the host tells us whether it committed.
+          const committed=await client.cancelGoogleSignIn();
+          if(committed)return;
+          if(operation!==cancellingOperation||state.signIn!==view)return;
+        }catch{
+          if(operation===cancellingOperation)update({error:'Sign-in completion is unconfirmed. Wait for the result before trying again.'});
+          return;
+        }
+      }
+    }
     // Back on the required top-level chooser has nowhere to go; keep its controls usable.
     if (!pending && view?.step === 'choose' && productionCloudSignInRequired(state)) return;
     const closeExplicitEntry=!pending&&(!view||view.step==='choose')&&explicitSignedOutCloudEntry(state);
@@ -2436,17 +2458,24 @@ export const connectionController = {
   },
   /** Android's native Google account picker, followed by the existing session flow. */
   async signInGoogle() {
-    const view = state.signIn; if (!view) return;
-    await work('Choose your Google account to sign in to Alpha.', async signal => {
-      update({ signIn: { step: 'google', environment: view.environment } });
-      const client = signInClient(view.environment);
-      let outcome: CloudSignInGoogleOutcome;
-      try { outcome = await client.signInWithGoogle(signal); signal.throwIfAborted(); }
-      catch (error) { signal.throwIfAborted(); signInFailed(view.environment); throw error; }
-      if (outcome.status === 'mfa') { showGoogleMfa(outcome); return; }
-      await signedIn(client, outcome, signal);
+    const view=state.signIn;if(!view)return;
+    const generation=++googleSignInGeneration;
+    await work('Choose your Google account to sign in to Alpha.',async signal=>{
+      update({signIn:{step:'google',environment:view.environment}});
+      const client=signInClient(view.environment);
+      let outcome:Awaited<ReturnType<CloudProtocol['signInWithGoogle']>>;
+      try{outcome=await client.signInWithGoogle(signal);}
+      catch(error){signal.throwIfAborted();signInFailed(view.environment);throw error;}
+      if(outcome.status==='mfa'){signal.throwIfAborted();showGoogleMfa(outcome);return;}
+      if(!outcome.committedCredential){signal.throwIfAborted();await signedIn(client,outcome,signal);return;}
+      // Postcommit reconciliation ignores only the old cancellation signal.
+      // A new sign-in generation, environment or credential still fences adoption.
+      const reconciliation=new AbortController();
+      const current=()=>{if(generation!==googleSignInGeneration||cloud!==client||cloud.environment!==view.environment)reconciliation.abort(new DOMException('Sign-in replaced','AbortError'));};
+      current();const unsubscribe=connectionController.subscribe(current);
+      try{reconciliation.signal.throwIfAborted();await signedIn(client,outcome,reconciliation.signal,outcome.committedCredential);}
+      finally{unsubscribe();}
     });
-    // A cancelled or failed sign-in never leaves the phone without its agent (P-43).
     await ensureResident();
   },
   /** Sends a six-digit code to the address. Resending waits out the cooldown the host enforces. */

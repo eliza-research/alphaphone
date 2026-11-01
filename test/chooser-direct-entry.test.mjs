@@ -35,15 +35,15 @@ test('automatic readiness probes once per unresolved entry, rearms after a form 
  draw(true,true);assert.equal(count,1);draw(true);draw(true);assert.equal(count,2);
  draw(false);draw(true);assert.equal(count,3);
 });
-test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',()=>{
- const code=between(source,'  cancelSignIn() {','  async signInGoogle()');let aborted=0,closed=0,changes=[];
+test('Cancel delegates in-flight readiness to the existing abort operation, without clearing saved credentials',async()=>{
+ const code=between(source,'  async cancelSignIn() {','  async signInGoogle()');let aborted=0,closed=0,changes=[];
  const entry=between(source,'export function explicitSignedOutCloudEntry(', 'export function connectionChooserVisible(').replace('export ','');
  const make=new Function('operation','connectionController','state','productionCloudSignInRequired','update',transformSync('const isAndroid=false,browserCloudResidentEnabled=false;'+entry+'const target={'+code+'};',{loader:'ts'}).code+';return target;');
  const run=(active,signIn=null,required=false,rest={})=>make(active,{cancel(){aborted++;},close(){closed++;}},{signIn,...rest},()=>required,v=>changes.push(v)).cancelSignIn();
- run({});assert.equal(aborted,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
- changes=[];run({}, {step:'code',environment:'production'});assert.equal(aborted,2);assert.deepEqual(changes,[{signIn:{step:'choose',environment:'production'},message:'',error:''}]);
- changes=[];run(null,{step:'choose',environment:'production'},true);assert.equal(aborted,2);assert.deepEqual(changes,[],'required idle chooser remains usable');
- run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
- run(null,null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'idle explicit signed-out account entry returns to the app');
- run({},null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'in-flight work is cancelled without dismissing its entry');
+ await run({});assert.equal(aborted,1);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ changes=[];await run({}, {step:'code',environment:'production'});assert.equal(aborted,2);assert.deepEqual(changes,[{signIn:{step:'choose',environment:'production'},message:'',error:''}]);
+ changes=[];await run(null,{step:'choose',environment:'production'},true);assert.equal(aborted,2);assert.deepEqual(changes,[],'required idle chooser remains usable');
+ await run(null);assert.equal(aborted,3);assert.deepEqual(changes,[{signIn:null,message:'',error:''}]);
+ await run(null,null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'idle explicit signed-out account entry returns to the app');
+ await run({},null,false,{open:true,purpose:'cloud-account',cloudAccount:null});assert.equal(closed,1,'in-flight work is cancelled without dismissing its entry');
 });

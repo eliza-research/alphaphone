@@ -98,7 +98,7 @@ test('resend starts at thirty seconds and cannot be clicked during the countdown
 
 function controllerFixture({isAndroid=false,browserCloudResidentEnabled=false}={}){
   const source=`
-    let operation=null,residentStartInBackground=false,active=null,signInReadinessOwner=null;
+    let operation=null,residentStartInBackground=false,active=null,signInReadinessOwner=null,googleSignInGeneration=0;
     const state={signIn:{step:'code',environment:'production',attemptId:'old',email:'person@example.invalid'},open:true,busy:false,message:'',error:''};
     const events=[],update=values=>{Object.assign(state,values);events.push({...values});};
     const cloud={cancelLogin(){events.push({cancel:true});}};
@@ -116,7 +116,7 @@ function controllerFixture({isAndroid=false,browserCloudResidentEnabled=false}={
     const connectionController={
     ${part('  close() {', '  cancel() {')}
     cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));cloud.cancelLogin();},
-    ${part('  cancelSignIn() {','  /** Android’s native'.replace('’',"'"))}
+    ${part(ui.includes('  async cancelSignIn() {')?'  async cancelSignIn() {':'  cancelSignIn() {','  async signInGoogle()')}
     ${part('  async signInGoogle()', '  /** Sends a six-digit code')}
     ${part('  async signInEmail(', '  /**\n   * Native finished a Google return')}
     };
@@ -130,7 +130,7 @@ function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{reso
 test('actual controller cancellation returns to chooser and ignores late verification success',async()=>{
   const f=controllerFixture(),pending=deferred();f.client.verifyEmailSignIn=()=>pending.promise;
   const request=f.connectionController.verifySignInCode('123456');
-  assert.equal(f.state.busy,true);f.connectionController.cancelSignIn();
+  assert.equal(f.state.busy,true);await f.connectionController.cancelSignIn();
   assert.deepEqual(f.state.signIn,choose);pending.resolve({status:'authenticated'});await request;
   assert.equal(f.state.busy,false);assert.equal(f.state.error,'');
   assert.ok(!f.events.some(e=>e.authenticated));
@@ -142,12 +142,22 @@ test('actual controller rejects late email challenge and Google failure after ca
     if(method==='email')f.client.startEmailSignIn=()=>pending.promise;
     else f.client.signInWithGoogle=()=>pending.promise;
     const request=method==='email'?f.connectionController.signInEmail('person@example.invalid'):f.connectionController.signInGoogle();
-    f.connectionController.cancelSignIn();
+    await f.connectionController.cancelSignIn();
     if(method==='email')pending.resolve({attemptId:'late',expiresAt:1,resendAt:1});else pending.reject(new Error('late provider error'));
     await request;assert.equal(f.state.error,'');assert.equal(f.state.busy,false);
     assert.deepEqual(f.state.signIn,choose,'cancelled send/picker returns to a usable chooser');
     assert.notEqual(f.state.signIn?.attemptId,'late');assert.ok(!f.events.some(e=>e.authenticated));
   }
+});
+
+test('actual controller email code and native Google completions still finish through the ordinary signed-in step',async()=>{
+  const done={status:'authenticated',environment:'production',expiresAt:Date.now()+60000,accountCreated:false};
+  const email=controllerFixture();email.client.verifyEmailSignIn=async()=>done;
+  await email.connectionController.verifySignInCode('123456');
+  assert.equal(email.events.filter(e=>e.authenticated).length,1);assert.equal(email.state.error,'');assert.equal(email.state.busy,false);
+  const google=controllerFixture();google.state.signIn={...choose};google.client.signInWithGoogle=async()=>done;
+  await google.connectionController.signInGoogle();
+  assert.equal(google.events.filter(e=>e.authenticated).length,1);assert.equal(google.state.error,'');assert.equal(google.state.busy,false);
 });
 
 test('actual controller keeps wrong-code challenge and prevents duplicate verification dispatch',async()=>{
@@ -178,11 +188,11 @@ test('cancelling another operation does not conceal its genuine late failure',as
   await request;assert.equal(f.state.error,'Saved effect could not be confirmed');
 });
 
-test('Back on the required chooser keeps sign-in enabled instead of creating a retry dead end',()=>{
+test('Back on the required chooser keeps sign-in enabled instead of creating a retry dead end',async()=>{
   const f=controllerFixture();f.state.signIn={...choose};f.setRequired(true);
-  f.connectionController.cancelSignIn();
+  await f.connectionController.cancelSignIn();
   assert.deepEqual(f.state.signIn,choose);assert.equal(f.events.length,0);
-  f.setRequired(false);f.connectionController.cancelSignIn();
+  f.setRequired(false);await f.connectionController.cancelSignIn();
   assert.equal(f.state.signIn,null,'optional account dialog can still be dismissed');
 });
 
@@ -197,12 +207,12 @@ test('verified account is not redirected from membership into first-run sign-in'
 
 test('explicit account chooser preserves newer in-app email/phone readiness and never starts hosted auth',async()=>{
  const begin=part('  async beginSignIn(', '  /** Leaves the sign-in screen');
- const body=`${explicitEntrySource}function make(purpose,methods){let operation=null,epoch=0,signInReadinessOwner=null,inAppGoogle=false,inAppPhone=false,inAppEmail=false;const cloudSignIn={},cloudServiceName=()=> 'Eliza Cloud',state={open:true,purpose,cloudAccount:null},updates=[],calls=[];const residentCloudFlow=()=>false,residentEnvironment=()=> 'production',cloudEnvironmentAllowed=()=>true,isAndroid=false;let cloud={environment:'production',cancelLogin(){calls.push('cancel');}};const inAppSignInMethods=async()=>{calls.push('status');return methods;},update=patch=>{updates.push(patch);Object.assign(state,patch);},work=async(_,fn)=>fn(new AbortController().signal),ensureResident=async()=>{},browserCloudLoginAction=async()=>calls.push('web-auth'),residentBrowserLoginAction=async()=>calls.push('resident-auth');const connectionController={${begin}};return {controller:connectionController,state,updates,calls,methods:()=>({google:inAppGoogle,phone:inAppPhone,email:inAppEmail})};}`;
+ const body=`${explicitEntrySource}function make(purpose,methods){let operation=null,epoch=0,signInReadinessOwner=null,googleSignInGeneration=0,inAppGoogle=false,inAppPhone=false,inAppEmail=false;const cloudSignIn={},cloudServiceName=()=> 'Eliza Cloud',state={open:true,purpose,cloudAccount:null},updates=[],calls=[];const residentCloudFlow=()=>false,residentEnvironment=()=> 'production',cloudEnvironmentAllowed=()=>true,isAndroid=false;let cloud={environment:'production',cancelLogin(){calls.push('cancel');}};const inAppSignInMethods=async()=>{calls.push('status');return methods;},update=patch=>{updates.push(patch);Object.assign(state,patch);},work=async(_,fn)=>fn(new AbortController().signal),ensureResident=async()=>{},browserCloudLoginAction=async()=>calls.push('web-auth'),residentBrowserLoginAction=async()=>calls.push('resident-auth');const connectionController={${begin}};return {controller:connectionController,state,updates,calls,methods:()=>({google:inAppGoogle,phone:inAppPhone,email:inAppEmail})};}`;
  const compiled=transformSync(body,{loader:'ts',format:'cjs'}).code,make=new Function(compiled+';return make;')();
  for(const purpose of ['cloud-account','plan','agent'])for(const methods of [null,{google:false,phone:true,email:false}]){const f=make(purpose,methods);await f.controller.beginSignIn('production');assert.equal(f.state.signIn.step,'choose');assert.deepEqual(f.calls,['status','cancel']);assert.deepEqual(f.methods(),{google:false,phone:methods?.phone===true,email:methods===null||methods.email!==false});}
 });
 
-test('Back from optional explicit sign-in returns to Settings through the existing close fence',()=>{const f=controllerFixture();Object.assign(f.state,{signIn:{...choose},purpose:'cloud-account',cloudAccount:null});f.connectionController.cancelSignIn();assert.equal(f.state.signIn,null);assert.equal(f.state.open,false);assert.equal(f.state.purpose,'agent');assert.ok(!f.events.some(event=>event.authenticated));});
+test('Back from optional explicit sign-in returns to Settings through the existing close fence',async()=>{const f=controllerFixture();Object.assign(f.state,{signIn:{...choose},purpose:'cloud-account',cloudAccount:null});await f.connectionController.cancelSignIn();assert.equal(f.state.signIn,null);assert.equal(f.state.open,false);assert.equal(f.state.purpose,'agent');assert.ok(!f.events.some(event=>event.authenticated));});
 
 test('initial chooser visibly presents email alongside Google without another disclosure',async()=>panel(async({document,window,render})=>{
   const visible=element=>{
@@ -238,9 +248,9 @@ test('service terms and privacy still open without the technical service-documen
 }));
 
 // Extracted controller functions retain their real module-level platform collaborators.
-test('required chooser Back retains its guard on Android and browser-resident platforms',()=>{
+test('required chooser Back retains its guard on Android and browser-resident platforms',async()=>{
  for(const platform of [{isAndroid:true,browserCloudResidentEnabled:false},{isAndroid:false,browserCloudResidentEnabled:true}]){
   const f=controllerFixture(platform);f.state.signIn={...choose};f.setRequired(true);
-  f.connectionController.cancelSignIn();assert.deepEqual(f.state.signIn,choose);assert.equal(f.events.length,0);
+  await f.connectionController.cancelSignIn();assert.deepEqual(f.state.signIn,choose);assert.equal(f.events.length,0);
  }
 });
