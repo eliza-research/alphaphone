@@ -3,11 +3,11 @@
   "repository": "elizaOS/eliza",
   "base": "develop",
   "baseCommit": "3861ffd1cbac332f25e1552dc977953a87f1adee",
-  "head": "d5f0e2aea48a7ce578cdb16f9808f4d26f006ba2",
+  "head": "5a6769f2587d19d08862278b81b5daa30e3e4f80",
   "recordedAt": "2026-11-01",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...d5f0e2aea48a7ce578cdb16f9808f4d26f006ba2",
+  "command": "Local exact-child comparison to prior reviewed d5f0e2aea48a7ce578cdb16f9808f4d26f006ba2",
   "status": "ahead",
-  "aheadBy": 94,
+  "aheadBy": 95,
   "behindBy": 0,
   "mergeBase": "3861ffd1cbac332f25e1552dc977953a87f1adee",
   "pinOnlyCommits": [
@@ -374,6 +374,10 @@
     {
       "sha": "d5f0e2aea48a7ce578cdb16f9808f4d26f006ba2",
       "subject": "feat(native-agent): support owner-provided inference and voice credentials"
+    },
+    {
+      "sha": "5a6769f2587d19d08862278b81b5daa30e3e4f80",
+      "subject": "feat(voice): add owner-bound direct batch transcription"
     }
   ],
   "pullRequests": [
@@ -738,5 +742,5 @@
       "merged": false
     }
   ],
-  "qualificationNote": "Published unmerged SDK candidate; normal build/runtime/native qualification is pending. No qualification transfers from old pin."
+  "qualificationNote": "Unpublished local SDK candidate during GitHub write hold. Comparison inherits the reviewed parent record plus one exact child; normal build/runtime/native qualification remains pending. No qualification transfers from old pin."
 }
