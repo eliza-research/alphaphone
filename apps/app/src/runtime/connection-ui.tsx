@@ -2471,9 +2471,10 @@ export const connectionController = {
       // The host result supersedes an unconfirmed-cancel notice shown while it was pending.
       update({error:''});
       // Postcommit reconciliation ignores only the old cancellation signal.
-      // A new sign-in generation, environment or credential still fences adoption.
+      // A new sign-in generation, environment or credential still fences adoption. The resident flow's own
+      // admission replaces the client for the same environment, so client identity is not a fence.
       const reconciliation=new AbortController();
-      const current=()=>{if(generation!==googleSignInGeneration||cloud!==client||cloud.environment!==view.environment)reconciliation.abort(new DOMException('Sign-in replaced','AbortError'));};
+      const current=()=>{if(generation!==googleSignInGeneration||cloud.environment!==view.environment)reconciliation.abort(new DOMException('Sign-in replaced','AbortError'));};
       current();const unsubscribe=connectionController.subscribe(current);
       try{reconciliation.signal.throwIfAborted();await signedIn(client,outcome,reconciliation.signal,outcome.committedCredential);}
       finally{unsubscribe();}

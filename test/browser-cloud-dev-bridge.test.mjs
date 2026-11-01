@@ -839,29 +839,35 @@ test('cancel after rename dispatch waits for and returns the committed outcome',
 
 
 // The real controller sign-in source from connection-ui.tsx (cancelSignIn through signInGoogle, signedIn,
-// verifyService, signInFailed), optionally with the real work(), against the supplied protocol client.
-async function googleControllerHarness(client,store,{realWork=false}={}){
+// verifyService, signInFailed), optionally with the real work() and the real resident path
+// (residentSignedIn, admitCloudResident, which replaces the client through makeCloud), against the supplied client.
+async function googleControllerHarness(client,store,{realWork=false,resident=false,makeCloud=()=>client}={}){
  const source=await readFile(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
  const cut=(from,to,wrap=code=>code)=>{const start=source.search(from),end=source.indexOf(to,start);assert.ok(start>=0&&end>start);return stripTypeScriptTypes(wrap(source.slice(start,end)),{mode:'transform'});};
  // Also locates the synchronous pre-guard method, so these cases run against the base controller too.
  const methods=cut(/^  (?:async )?cancelSignIn\(\) \{/m,'  /** Sends a six-digit code',code=>'({'+code+'})');
  const code=[cut(/^function signInFailed\(/m,'/** The provider authenticated only'),cut(/^async function verifyService\(/m,'let pendingBillingReview:'),cut(/^async function signedIn\(/m,'/** The development hosted-agent client.'),
-  ...(realWork?[cut(/^async function work\(/m,'/** Start (or restart) the resident.',code=>'work='+code)]:[])].join('\n');
+  ...(realWork?[cut(/^async function work\(/m,'/** Start (or restart) the resident.',code=>'work='+code)]:[]),
+  ...(resident?[cut(/^async function residentSignedIn\(/m,'/** The key is stored;'),cut(/^async function admitCloudResident\(/m,'/**\n * Cloud reported, on a background refresh')]:[])].join('\n');
  const serviceSlot=source.match(/const CLOUD_SERVICE = ('[^']+');/);assert.ok(serviceSlot);
- return new Function('client','store','code','methods','crypto','CLOUD_SERVICE',`
- let operation=null,googleSignInGeneration=0,cloud=client,service=null,membershipRead=null,pendingBillingReview=null,signInReadinessOwner=null,residentStartInBackground=false;
- const state={signIn:{step:'choose',environment:'production'},open:true,purpose:'cloud-account',error:'',busy:false},listeners=new Set();
- const update=patch=>{Object.assign(state,patch);for(const listener of [...listeners])listener();},signInClient=()=>client;
+ return new Function('client','store','makeCloud','code','methods','crypto','CLOUD_SERVICE','RESIDENT','OWNER','ORG',`
+ let operation=null,googleSignInGeneration=0,cloud=client,service=null,membershipRead=null,pendingBillingReview=null,signInReadinessOwner=null,residentStartInBackground=false,entitlementRefresher=null;
+ const state={signIn:{step:'choose',environment:'production'},open:true,purpose:RESIDENT?'agent':'cloud-account',error:'',busy:false},listeners=new Set(),log=[];
+ const update=patch=>{Object.assign(state,patch);for(const listener of [...listeners])listener();},signInClient=environment=>{if(cloud.environment!==environment)cloud=makeCloud(environment);return cloud;};
  const cloudCredentialStore=store,CloudProtocolError=Error,localStorage={setItem(){}},refreshMembershipBalance=()=>{};
- const productionCloudSignInRequired=()=>false,explicitSignedOutCloudEntry=()=>false,ensureResident=async()=>{},showGoogleMfa=()=>{throw Error('No MFA');};
- const residentCloudFlow=()=>false,prepareSignInReplacement=()=>{},showPostSignInSetup=()=>{},save=()=>{},hosted=null,active=true,cloudServiceName=()=> 'Cloud';
- const residentRecoveryReason=()=>null,testMocksEnabled=false,expired=()=>false,retire=()=>{},detachService=()=>{},runQueuedResidentRebind=()=>{},runQueuedSignInReturn=()=>{},errorMessage=error=>String(error?.message??error);
+ const productionCloudSignInRequired=()=>false,explicitSignedOutCloudEntry=()=>false,ensureResident=async()=>{log.push('ensureResident');},showGoogleMfa=()=>{throw Error('No MFA');};
+ const residentCloudFlow=()=>RESIDENT,residentEnvironment=()=> 'production',residentAlwaysPresent=true,prepareSignInReplacement=()=>{},showPostSignInSetup=()=>{log.push('setup');},save=()=>{},hosted=null,active=true,cloudServiceName=()=> 'Cloud';
+ const residentRecoveryReason=()=>null,testMocksEnabled=false,expired=()=>false,retire=()=>{log.push('retire');},detachService=()=>{},runQueuedResidentRebind=()=>{},runQueuedSignInReturn=()=>{},errorMessage=error=>String(error?.message??error);
+ // Resident admission as the shared binding controller reports an admitted plan for the stored credential.
+ const stopEntitlementRefresh=()=>{},isEntitlementSignInFailure=()=>false,CloudResidentBindingError=class extends Error{},OFFLINE_NOTICE='offline',EntitlementRefresher=class{},checkEntitlement=async()=>null,planAdmission=()=> 'admit',residentPlanEnded=()=>{},residentRefreshRefused=()=>{};
+ const residentBindingController=(_environment,_client,callbacks)=>({recordAdmission(){},admit:async signal=>{const {credentialId}=await store.read('production');signal.throwIfAborted();const account={userId:OWNER,organizationId:ORG,credentialId,environment:'production'};service=account;callbacks.verified(account);update({cloudAccount:account});callbacks.checked({entitlement:{},view:{kind:'active',source:'plan'}});return {reason:'admitted',plan:{view:{kind:'active'}},identity:{userId:OWNER,organizationId:ORG,credentialId},endsAt:null};}});
+ const connectResident=async(signal,admission)=>{signal.throwIfAborted();log.push('connectResident:'+admission.binding);};
  let work=async(_message,action)=>{operation=new AbortController();try{await action(operation.signal);}finally{operation=null;}};
  eval(code);
  const connectionController={cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));cloud.cancelLogin();},close(){},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);}};
  const actions=eval(methods);
- return {actions,state,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},supersede(){googleSignInGeneration++;for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;}};
- `)(client,store,code,methods,crypto,serviceSlot[1].slice(1,-1));
+ return {actions,state,log,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},supersede(){googleSignInGeneration++;for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;},get cloud(){return cloud;}};
+ `)(client,store,makeCloud,code,methods,crypto,serviceSlot[1].slice(1,-1),resident,owner,org);
 }
 async function wholeGoogleStackFixture(options={}){
  const commit=await googleCommitBoundaryFixture();
@@ -955,7 +961,7 @@ const settled=signal=>new Promise((_,reject)=>{if(signal?.aborted)return reject(
 // The renderer stack over the real development bridge: the real BrowserCloudSignIn's same-origin RPCs reach
 // createBrowserCloudDevHandler over HTTP. before(body) runs ahead of a request; gate(body,data,signal) holds
 // a response after the host handled it; upstream() holds the canonical CLI session poll.
-async function realBridgeGoogleStack({before=async()=>{},gate=async()=>{},upstream=async()=>{}}={}){
+async function realBridgeGoogleStack({before=async()=>{},gate=async()=>{},upstream=async()=>{},resident=false}={}){
  const f=await fixture();
  f.setSignIn(async path=>path==='/steward/auth/providers'?Response.json({google:true,oauth:['google']}):null);
  f.setPollResponse(async()=>{await upstream();return Response.json({status:'authenticated',apiKey:secret,expiresAt:new Date(Date.now()+60000).toISOString()});});
@@ -965,8 +971,8 @@ async function realBridgeGoogleStack({before=async()=>{},gate=async()=>{},upstre
  Object.defineProperty(globalThis,'window',{configurable:true,value:{open:()=>({opener:null,location:{replace(){}},close(){}})}});
  const store={acceptsReferences:true,read:async()=>{const {value}=await (await raw({operation:'secureRead',slot:'cloud:production'})).json();return value===null?null:JSON.parse(value);},write:async()=>{throw Error('Renderer must not write');},clear:async()=>{throw Error('No clear');}};
  const port=new BrowserCloudSignIn(),makeCloud=environment=>Object.assign(new CloudProtocol(environment,async()=>{throw Error('No external request');},store,async()=>{throw Error('No external window');},{signIn:port}),{identity:async()=>({userId:owner,organizationId:org})});
- const harness=await googleControllerHarness(makeCloud('production'),store,{realWork:true});
- return {ops,store,harness,close:async()=>{await new Promise(r=>setTimeout(r,20));globalThis.fetch=realFetch;if(descriptor)Object.defineProperty(globalThis,'window',descriptor);else delete globalThis.window;await f.close();}};
+ const client=makeCloud('production'),harness=await googleControllerHarness(client,store,{realWork:true,resident,makeCloud});
+ return {ops,store,client,harness,close:async()=>{await new Promise(r=>setTimeout(r,20));globalThis.fetch=realFetch;if(descriptor)Object.defineProperty(globalThis,'window',descriptor);else delete globalThis.window;await f.close();}};
 }
 async function adoptedHostCredential(s){
  const disk=await s.store.read();assert.notEqual(disk.credentialReference,reference,'the host committed the new credential');
@@ -1019,5 +1025,29 @@ test('real bridge Cancel retried after a failed cancel RPC retains the previous 
   await s.harness.actions.cancelSignIn();release.resolve();await signing;
   assert.equal((await s.store.read()).credentialReference,reference);assert.equal(s.harness.state.cloudAccount,undefined);
   assert.equal(s.harness.state.signIn.step,'choose');assert.equal(s.harness.state.error,'');assert.equal(s.harness.state.busy,false);
+ }finally{release.resolve();await s.close();}
+});
+// :5361 runs the resident flow (VITE_ALPHA_CLOUD_RESIDENT=1): its admission replaces the sign-in client.
+test('real bridge resident Google completion adopts the committed account and starts the resident on it',async()=>{
+ const s=await realBridgeGoogleStack({resident:true});try{
+  await s.harness.actions.signInGoogle();await adoptedHostCredential(s);
+  assert.notEqual(s.harness.cloud,s.client,'resident admission replaced the client');assert.ok(s.harness.log.includes('connectResident:cloud'));
+ }finally{await s.close();}
+});
+test('real bridge resident Cancel while the committed poll response is in transit adopts and starts the resident',async()=>{
+ const held=deferred(),release=deferred();
+ const s=await realBridgeGoogleStack({resident:true,gate:async(body,data,signal)=>{if(body.operation==='signInPollGoogle'&&data.status==='authenticated'){held.resolve();await Promise.race([release.promise,settled(signal)]);}}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;await s.harness.actions.cancelSignIn();release.resolve();await signing;
+  await adoptedHostCredential(s);assert.ok(s.harness.log.includes('connectResident:cloud'));
+ }finally{release.resolve();await s.close();}
+});
+test('real bridge resident Cancel before the host commit retains the previous account',async()=>{
+ const held=deferred(),release=deferred();
+ const s=await realBridgeGoogleStack({resident:true,upstream:async()=>{held.resolve();await release.promise;}});
+ try{
+  const signing=s.harness.actions.signInGoogle();await held.promise;await s.harness.actions.cancelSignIn();release.resolve();await signing;
+  assert.equal((await s.store.read()).credentialReference,reference);assert.equal(s.harness.state.cloudAccount,undefined);
+  assert.equal(s.harness.state.signIn.step,'choose');assert.equal(s.harness.state.error,'');assert.ok(!s.harness.log.includes('retire'));
  }finally{release.resolve();await s.close();}
 });
