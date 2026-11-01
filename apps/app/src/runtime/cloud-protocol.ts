@@ -268,7 +268,9 @@ export class CloudProtocol {
   }
   /** Whether this build can sign in here. The production web build has no sign-in host. */
   get signInAvailable(): boolean { return this.options.signIn !== undefined; }
-  get googleCancellationSupported(): boolean { return typeof this.options.signIn?.cancelGoogleSignIn === "function"; }
+  /** Browser host only. A native Capacitor plugin proxy answers typeof "function" for any method name, and its
+   * stored key carries a token, not the reference the commit-aware path reads back. */
+  get googleCancellationSupported(): boolean { return !!this.credentials.acceptsReferences && typeof this.options.signIn?.cancelGoogleSignIn === "function"; }
   async cancelGoogleSignIn(): Promise<boolean> { return this.googleSignInCommitted ? true : this.activeGoogleCancellation ? this.activeGoogleCancellation() : false; }
   cancelLogin(): void {
     if(this.activeGoogleCancellation){void this.activeGoogleCancellation().catch(()=>{});return;}
@@ -291,12 +293,13 @@ export class CloudProtocol {
     let resolveCommitted: (value: unknown) => void = () => {};
     const interrupted = new Promise<unknown>((resolve, reject) => { resolveCommitted=resolve;rejectAbort = reject; });
     let cancellation:Promise<boolean>|null=null,committedCancellation=false;
+    const commitAware=!!onCommittedCancellation&&this.googleCancellationSupported;
     const cancel = ():Promise<boolean> => cancellation??=(async()=>{
-      if(onCommittedCancellation&&port.cancelGoogleSignIn){
-        const result=await port.cancelGoogleSignIn();
+      if(commitAware){
+        const result=await port.cancelGoogleSignIn!();
         // Parse the ordinary authenticated contract; never infer success from a phase flag.
         if(result&&typeof result==='object'&&(result as {status?:unknown}).status==='authenticated'){
-          parse(result);committedCancellation=true;onCommittedCancellation();resolveCommitted(result);return true;
+          parse(result);committedCancellation=true;onCommittedCancellation!();resolveCommitted(result);return true;
         }
       }
       controller.abort(signal.reason??new DOMException("Login cancelled","AbortError"));return false;
@@ -304,8 +307,8 @@ export class CloudProtocol {
       // An unconfirmed cancel leaves the host attempt running: keep waiting for its own outcome, and allow a retry.
       cancellation=null;throw error;
     });
-    if(onCommittedCancellation&&port.cancelGoogleSignIn)this.activeGoogleCancellation=cancel;
-    const abort = () => {if(onCommittedCancellation&&port.cancelGoogleSignIn)void cancel().catch(()=>{});else controller.abort(signal.reason);};
+    if(commitAware)this.activeGoogleCancellation=cancel;
+    const abort = () => {if(commitAware)void cancel().catch(()=>{});else controller.abort(signal.reason);};
     const cancelled = () => { void port.cancel().catch(() => {}); rejectAbort(controller.signal.reason); };
     signal.addEventListener("abort", abort, { once: true });
     controller.signal.addEventListener("abort", cancelled, { once: true });
@@ -313,7 +316,7 @@ export class CloudProtocol {
       const value = await Promise.race([run(port), interrupted]);
       if(!committedCancellation)controller.signal.throwIfAborted();
       const parsed=parse(value);
-      if(onCommittedCancellation&&value&&typeof value==='object'&&(value as {status?:unknown}).status==='authenticated')this.googleSignInCommitted=true;
+      if(commitAware&&value&&typeof value==='object'&&(value as {status?:unknown}).status==='authenticated')this.googleSignInCommitted=true;
       return parsed;
     } catch (error) {
       if (controller.signal.aborted) throw controller.signal.reason;
