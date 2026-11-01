@@ -105,7 +105,7 @@ test('a resident start ends with its operation in one update, so setup behind it
     const box={state,AbortController,active:null,cloud:{},testMocksEnabled:false,
       update:patch=>{Object.assign(state,patch);seen.push({busy:state.busy,starting:state.residentStarting});},
       residentRecoveryReason:()=>null,errorMessage:error=>error.message,expired:()=>false,residentCloudFlow:()=>true,runQueuedResidentRebind:()=>{},runQueuedSignInReturn:()=>{}};
-    vm.createContext(box);vm.runInContext('var operation=null,residentStartInBackground=false,signInReadinessOwner=null;\n'+work+';globalThis.run=work;',box);
+    vm.createContext(box);vm.runInContext('var operation=null,operationGeneration=0,residentStartInBackground=false,signInReadinessOwner=null;\n'+work+';globalThis.run=work;',box);
     await box.run('Starting your agent…',async()=>{box.update({residentStarting:true});await new Promise(resolve=>setTimeout(resolve,5));if(fail)throw Error('Local agent failed to start.');},true);
     const started=seen.findIndex(row=>row.starting);
     assert.ok(started>=0);

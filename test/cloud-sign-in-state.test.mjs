@@ -102,7 +102,7 @@ test('resend starts at thirty seconds and cannot be clicked during the countdown
 
 function controllerFixture({isAndroid=false,browserCloudResidentEnabled=false}={}){
   const source=`
-    const ownProviderSelected=()=>false;let operation=null,residentStartInBackground=false,active=null,signInReadinessOwner=null;
+    const ownProviderSelected=()=>false;let operation=null,operationGeneration=0,residentStartInBackground=false,active=null,signInReadinessOwner=null;
     const state={signIn:{step:'code',environment:'production',attemptId:'old',email:'person@example.invalid'},open:true,busy:false,message:'',error:''};
     const events=[],update=values=>{Object.assign(state,values);events.push({...values});};
     const cloud={cancelLogin(){events.push({cancel:true});}};

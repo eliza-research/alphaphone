@@ -15,7 +15,9 @@ async function fixture(page:Page, signedOut=false){
   const w=window as any,base=w.Capacitor.nativePromise;
   const leases=new Set<string>();let selected:any=null;
   // reject: true refuses the key; 'echo' refuses it with a message that repeats most of the entered key.
-  const f=w.ownProvider={events:[] as string[],saved:0,cancelled:0,cleared:0,checks:0,hold:false,reject:false as boolean|'echo',pending:false,release:null as null|(()=>void),matched:false};
+  // hold: true holds the check before native commits; 'saved' holds its reply after native saved the key.
+  // holdStatus answers the next status read late, with the status native had when it was asked.
+  const f=w.ownProvider={events:[] as string[],saved:0,cancelled:0,cleared:0,checks:0,hold:false as boolean|'saved',reject:false as boolean|'echo',pending:false,release:null as null|(()=>void),matched:false,revision:null as null|string,holdStatus:false,statusPending:false,releaseStatus:null as null|(()=>void)};
   localStorage.setItem(dataKey,'existing local app data');
   if(signedOut){delete w.flagOff.slots['cloud:production'];w.flagOff.persist();}
   const status=()=>selected?{provider:'cerebras',configured:true,selected:true,model:'qwen-3.8-27b',revision:selected.revision,voiceConfigured:selected.voice}:base('Agent','providerStatus',{});
@@ -23,16 +25,18 @@ async function fixture(page:Page, signedOut=false){
   w.Capacitor.PluginHeaders.find((p:any)=>p.name==='Agent').methods.push(...['prepareProviderConfiguration','configureProvider','cancelProviderConfiguration'].map(name=>({name,rtype:'promise'})));
   w.Capacitor.nativePromise=async(plugin:string,method:string,input:any)=>{
    if(plugin!=='Agent')return base(plugin,method,input);
-   if(method==='providerStatus'){f.checks++;return status();}
+   if(method==='providerStatus'){f.checks++;if(!f.holdStatus)return status();f.holdStatus=false;const value=await status();f.statusPending=true;await new Promise<void>(resolve=>f.releaseStatus=resolve);f.statusPending=false;return value;}
    if(method==='prepareProviderConfiguration'){const id=crypto.randomUUID();leases.add(id);f.events.push('reserve');return {requestId:id};}
    if(method==='cancelProviderConfiguration'){leases.delete(input.requestId);f.cancelled++;f.events.push('cancel');return {};}
    if(method==='configureProvider'){
     f.events.push('configure');if(!leases.has(input.requestId))throw Error('Provider request cancelled');
     f.matched=input.apiKey==='synthetic-own-cerebras-ui-key'&&input.cartesiaKey==='synthetic-own-cartesia-ui-key'&&input.model==='qwen-3.8-27b';
-    if(f.hold){f.pending=true;await new Promise<void>(resolve=>f.release=resolve);f.pending=false;}
+    if(f.hold===true){f.pending=true;await new Promise<void>(resolve=>f.release=resolve);f.pending=false;}
     if(!leases.has(input.requestId))throw Error('Provider request cancelled');
     if(f.reject)throw Error(f.reject==='echo'?`Cerebras did not accept key ${input.apiKey.slice(1,-1)} for this account.`:'Cerebras did not accept this key. It was not saved.');
-    leases.delete(input.requestId);selected={revision:crypto.randomUUID(),voice:!!input.cartesiaKey};f.saved++;return status();
+    leases.delete(input.requestId);selected={revision:crypto.randomUUID(),voice:!!input.cartesiaKey};f.revision=selected.revision;f.saved++;
+    if(f.hold==='saved'){f.pending=true;await new Promise<void>(resolve=>f.release=resolve);f.pending=false;}
+    return status();
    }
    if(method==='clearProvider'){if(input?.requestId&&!leases.has(input.requestId))throw Error('Provider request cancelled');if(input?.requestId)leases.delete(input.requestId);selected=null;f.cleared++;return base(plugin,method,input);}
    return base(plugin,method,input);
@@ -41,6 +45,9 @@ async function fixture(page:Page, signedOut=false){
  return {logs,errors,foreign};
 }
 const dialog=(page:Page)=>page.getByRole('dialog',{name:'AI provider',exact:true});
+const SAVED_BEFORE_CANCEL='The key was saved before Cancel. Own API keys are selected; switch back in Settings.';
+// Two frames: a state update that a late native reply caused has rendered by then.
+const frames=(page:Page)=>page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
 async function openProvider(page:Page){
  await page.getByRole('button',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'AI provider',exact:true}).click();
@@ -154,6 +161,81 @@ test('Settings offers Cancel during a slow key check; it stops the check and a l
  await expect(dialog(page).getByText('Own API keys · Cerebras',{exact:true})).toBeVisible();
  expect(await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,matched:f.matched};})).toEqual({saved:1,matched:true});
  await noLeaks(page,observed);
+});
+
+test('Cancel claims a save only for this check, never because an earlier own key is selected',async({page})=>{
+ const observed=await fixture(page);await residentHome(page);
+ await openProvider(page);await enterKeys(page);
+ await dialog(page).getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect(dialog(page)).toHaveCount(0);await completeAccessSetup(page);
+ const earlier=await page.evaluate(()=>(window as any).ownProvider.revision);expect(earlier).toEqual(expect.any(String));
+ await page.getByRole('button',{name:'AI provider',exact:true}).click();
+ await expect(dialog(page).getByText('Own API keys · Cerebras',{exact:true})).toBeVisible();
+ // A new key cancelled before native commits it: the earlier key stays selected and no save is claimed.
+ await enterKeys(page);await page.evaluate(()=>(window as any).ownProvider.hold=true);
+ await dialog(page).getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(true);
+ await page.evaluate(()=>(window as any).ownProvider.holdStatus=true);
+ await dialog(page).getByRole('button',{name:'Cancel',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.statusPending)).toBe(true);
+ await page.evaluate(()=>(window as any).ownProvider.releaseStatus());
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.statusPending)).toBe(false);await frames(page);
+ await expect(dialog(page).getByText(SAVED_BEFORE_CANCEL,{exact:true})).toHaveCount(0);
+ await expect(dialog(page).getByRole('status')).toHaveCount(0);await expect(dialog(page).getByRole('alert')).toHaveCount(0);
+ await expect(dialog(page).getByText('Own API keys · Cerebras',{exact:true})).toBeVisible();
+ await expect(dialog(page).getByRole('button',{name:'Save and use own keys',exact:true})).toBeEnabled();
+ await page.evaluate(()=>{const f=(window as any).ownProvider;f.hold=false;f.release();});
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(false);
+ expect(await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,revision:f.revision,cancelled:f.cancelled};})).toEqual({saved:1,revision:earlier,cancelled:1});
+ // A Cancel that lands after native saved this key says so: native reports a new revision.
+ await dialog(page).getByLabel('Cerebras API key',{exact:true}).fill(AI_KEY);
+ await dialog(page).getByLabel('Cartesia API key (optional)',{exact:true}).fill(VOICE_KEY);
+ await page.evaluate(()=>(window as any).ownProvider.hold='saved');
+ await dialog(page).getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(true);
+ await dialog(page).getByRole('button',{name:'Cancel',exact:true}).click();
+ await expect(dialog(page).getByRole('status')).toHaveText(SAVED_BEFORE_CANCEL);
+ await expect(dialog(page).getByText('Own API keys · Cerebras',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{const f=(window as any).ownProvider;f.hold=false;f.release();});
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(false);
+ const latest=await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,revision:f.revision};});
+ expect(latest.saved).toBe(2);expect(latest.revision).not.toBe(earlier);
+ await noLeaks(page,observed);
+});
+
+test('a cancelled check whose status read answers late never overwrites a newer switch to Cloud',async({page})=>{
+ const observed=await fixture(page);await residentHome(page);
+ const account=await page.evaluate(()=>({cloud:(window as any).flagOff.slots['cloud:production'],agent:sessionStorage.getItem('flag-off-agent')}));
+ await openProvider(page);await enterKeys(page);
+ await dialog(page).getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect(dialog(page)).toHaveCount(0);await completeAccessSetup(page);
+ const row=page.getByRole('button',{name:'AI provider',exact:true});
+ await expect(row).toContainText('Own API keys');
+ await row.click();await enterKeys(page);await page.evaluate(()=>(window as any).ownProvider.hold=true);
+ await dialog(page).getByRole('button',{name:'Save and use own keys',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(true);
+ // The cancelled check reads the status back; native answers only after the owner switched to Cloud,
+ // with the own-key status it had when asked.
+ await page.evaluate(()=>(window as any).ownProvider.holdStatus=true);
+ await dialog(page).getByRole('button',{name:'Cancel',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.statusPending)).toBe(true);
+ await dialog(page).getByRole('button',{name:'Cloud',exact:true}).click();
+ await dialog(page).getByRole('button',{name:'Switch to Cloud',exact:true}).click();
+ await expect(dialog(page)).toHaveCount(0);
+ await expect(row).toContainText('Cloud');
+ expect(await page.evaluate(()=>(window as any).ownProvider.cleared)).toBe(1);
+ await page.evaluate(()=>(window as any).ownProvider.releaseStatus());
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.statusPending)).toBe(false);await frames(page);
+ await expect(row).toContainText('Cloud');await expect(row).not.toContainText('Own API keys');
+ await expect(page.getByText(SAVED_BEFORE_CANCEL,{exact:true})).toHaveCount(0);await expect(dialog(page)).toHaveCount(0);
+ // The held check is refused late; Cloud stays selected with the same account.
+ await page.evaluate(()=>{const f=(window as any).ownProvider;f.hold=false;f.release();});
+ await expect.poll(()=>page.evaluate(()=>(window as any).ownProvider.pending)).toBe(false);
+ expect(await page.evaluate(()=>{const f=(window as any).ownProvider;return {saved:f.saved,cleared:f.cleared};})).toEqual({saved:1,cleared:1});
+ await row.click();await expect(dialog(page).getByRole('button',{name:'Cloud',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(dialog(page).getByText('Own API keys · Cerebras',{exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>({cloud:(window as any).flagOff.slots['cloud:production'],agent:sessionStorage.getItem('flag-off-agent')}))).toEqual(account);
+ await expect(page.locator('.alpha-cloud-sign-in')).toHaveCount(0);await noLeaks(page,observed);
 });
 
 test('signed-out onboarding can explicitly select own keys without starting a Cloud sign-in',async({page})=>{

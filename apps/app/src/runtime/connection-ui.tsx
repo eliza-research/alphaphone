@@ -781,10 +781,12 @@ function errorMessage(error: unknown): string {
 }
 /** A resident start that does not open the dialog: Home shows the starting state (P-43). */
 let residentStartInBackground = false;
+/** Counts work() starts: a readback that outlives its operation writes only while no newer one began. */
+let operationGeneration = 0;
 /** `openOnError`: a background check (the quiet Cloud account restore) that opens the dialog only to report a failure. */
 async function work(message: string, action: (signal: AbortSignal) => Promise<void>, background = false, openOnError = false, preserveError = false) {
   if (operation) return;
-  const controller = new AbortController(); signInReadinessOwner = null; operation = controller; residentStartInBackground = background;
+  const controller = new AbortController(); signInReadinessOwner = null; operation = controller; operationGeneration++; residentStartInBackground = background;
   update({ busy: true, ...(background ? {} : { open: true }), message, error: preserveError ? state.error : '' });
   try { await action(controller.signal); }
   catch (error) {
@@ -2326,12 +2328,14 @@ export const connectionController = {
       try{await connectResident(signal);}catch(error){if(residentAlwaysPresent&&!active)update({kind:'recovering'});throw error;}
     });
   },
-  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { let cancelled=false; try { await work('Checking the key with Cerebras…',async signal=>{signal.addEventListener('abort',()=>{cancelled=true;},{once:true});try{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}
+  async configureLocal(apiKey:string,model:string=LOCAL_PROVIDER_MODEL,cartesiaKey?:string) { const before=state.providerStatus; let cancelled=false,generation=0; try { await work('Checking the key with Cerebras…',async signal=>{generation=operationGeneration;signal.addEventListener('abort',()=>{cancelled=true;},{once:true});try{await configureLocalProvider(apiKey,model,cartesiaKey,signal);signal.throwIfAborted();const providerStatus=await localProviderStatus();signal.throwIfAborted();update({providerStatus,signIn:null,residentPlanNotice:null});showPostSignInSetup();await retire();await connectResident(signal);update({message:isAndroid?'Cerebras key verified and saved in Android Keystore. Own API keys selected.':'Cerebras key verified. Own keys are active for this host session only.'});}
     // A provider or native failure never carries an entered key into the visible error: not the
     // key, not the key without surrounding spaces, and not any 12 characters of it in a row.
     catch(error){if(error instanceof Error&&[apiKey,cartesiaKey].some(key=>{const value=key?.trim()??'',run=Math.min(12,value.length);for(let at=0;run&&at+run<=value.length;at++)if(error.message.includes(value.slice(at,at+run)))return true;return false;}))throw Error(OWN_KEYS_NOT_SET_UP);throw error;}}); }
-    // A cancel can land after native already saved the key; show what is actually selected.
-    finally { if(cancelled){ await this.refreshProviderStatus(); if(ownProviderSelected())update({message:'The key was saved before Cancel. Own API keys are selected; switch back in Settings.'}); } } },
+    // A cancel can land after native already saved the key. The status readback writes only while no
+    // newer operation has begun, and says this key was saved only on evidence: own keys selected where
+    // they were not before this check, or under a new native revision. Without it the status shows alone.
+    finally { if(cancelled){ let after:LocalProviderStatus|null=null; try{after=await localProviderStatus();}catch{/* Shown as unavailable, as refreshProviderStatus does. */} if(generation===operationGeneration&&!operation)update({providerStatus:after,...(ownProviderSelected({providerStatus:after})&&before&&(!ownProviderSelected({providerStatus:before})||!!after?.revision&&after.revision!==before.revision)?{message:'The key was saved before Cancel. Own API keys are selected; switch back in Settings.'}:{})}); } } },
   /** Leaving the welcome own-key view after a key check drops that check's outcome, so the Cloud
    * view never shows a key rejection as its own. */
   clearOutcome(){if(!operation)update({message:'',error:''});},

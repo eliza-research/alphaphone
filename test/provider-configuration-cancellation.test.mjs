@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {transformSync} from 'esbuild';
 import {runProviderConfiguration} from '../apps/app/src/runtime/abort-signal.ts';
 
 test('native renderer propagates cancel before paused validation can commit',async()=>{
@@ -49,4 +50,54 @@ test('failed native dispatch releases its reserved lease',async()=>{
  let released=0;const problem=Error('invalid synthetic input');
  await assert.rejects(runProviderConfiguration(new AbortController().signal,{async prepare(){return {requestId:'rejected-native-lease'};},async configure(){throw problem;},async cancel(id){assert.equal(id,'rejected-native-lease');released++;}}),error=>error===problem);
  assert.equal(released,1);
+});
+
+// The real configureLocal and work() with native stubbed: Cancel stops waiting at once (as
+// runProviderConfiguration does) and the status read after it answers whatever native reports.
+function keyCheck(){
+ const ui=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
+ const part=(start,end)=>{const a=ui.indexOf(start),b=ui.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return ui.slice(a,b);};
+ const source=`
+  let state={open:true,purpose:'provider',busy:false,message:'',error:''},operation=null,operationGeneration=0,residentStartInBackground=false,signInReadinessOwner=null,active=null;
+  const update=patch=>{state={...state,...patch};},residentRecoveryReason=()=>null,testMocksEnabled=false,expired=()=>false,errorMessage=e=>e.message,residentCloudFlow=()=>false,runQueuedResidentRebind=()=>{},runQueuedSignInReturn=()=>{},cloud={};
+  const isAndroid=true,LOCAL_PROVIDER_MODEL='qwen-3.8-27b',OWN_KEYS_NOT_SET_UP='Own keys were not set up.',showPostSignInSetup=()=>{},retire=async()=>{},connectResident=async()=>{};
+  const native={status:null,read:null};
+  const configureLocalProvider=(apiKey,model,cartesiaKey,signal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  const localProviderStatus=()=>native.read?native.read():Promise.resolve(native.status);
+  ${part('function ownProviderSelected(','\nfunction residentSignInRequired')}
+  ${part('async function work(','/** Start (or restart) the resident.')}
+  const controller={${part('  async configureLocal(','  /** Leaving the welcome own-key view')}${part('  async refreshProviderStatus()','  /** Stops the running agent')}cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));}};
+  return {controller,native,work,state:()=>state,seed:status=>{state={...state,providerStatus:status};native.status=status??null;},hold:value=>{operation=value;}};`;
+ return new Function(transformSync(source,{loader:'ts',format:'cjs'}).code)();
+}
+const SAVED_BEFORE_CANCEL='The key was saved before Cancel. Own API keys are selected; switch back in Settings.';
+const ownStatus=revision=>({provider:'cerebras',configured:true,selected:true,voiceConfigured:false,...(revision?{revision}:{})});
+const cloudStatus={provider:'elizacloud',configured:false,selected:false,voiceConfigured:false};
+
+test('a cancelled key check claims the save only on native evidence, never from a revision-less or unknown status',async()=>{
+ for(const [before,after,claim,note] of [
+  [ownStatus(),ownStatus(),false,'without revisions an earlier own key and this one look alike'],
+  [ownStatus('a'),ownStatus('a'),false,'the same revision is the earlier key'],
+  [undefined,ownStatus('b'),false,'status unknown before the check'],
+  [cloudStatus,cloudStatus,false,'nothing was saved'],
+  [cloudStatus,ownStatus(),true,'own keys where Cloud was selected'],
+  [ownStatus('a'),ownStatus('b'),true,'a new native revision'],
+ ]){
+  const f=keyCheck();f.seed(before);
+  const request=f.controller.configureLocal('synthetic-own-key');f.controller.cancel();f.native.status=after;await request;
+  assert.deepEqual(f.state().providerStatus,after,note);assert.equal(f.state().message,claim?SAVED_BEFORE_CANCEL:'',note);assert.equal(f.state().busy,false,note);
+ }
+});
+
+test('a cancelled key check drops its late status read once any newer operation began',async()=>{
+ for(const newer of ['work','other']){
+  const f=keyCheck();f.seed(cloudStatus);let answer,asked=false;f.native.read=()=>{asked=true;return new Promise(resolve=>answer=resolve);};
+  const request=f.controller.configureLocal('synthetic-own-key');f.controller.cancel();
+  while(!asked)await new Promise(resolve=>setImmediate(resolve));
+  // A Cloud switch through work(), or an operation that owns the connection without it.
+  let finish;if(newer==='work')void f.work('Switching to Cloud…',()=>new Promise(resolve=>finish=resolve));else f.hold(new AbortController());
+  const current=f.state();answer(ownStatus('b'));await request;
+  assert.equal(f.state(),current,`${newer}: the late read writes nothing`);assert.equal(f.state().providerStatus,cloudStatus,newer);
+  if(newer==='work'){assert.equal(f.state().message,'Switching to Cloud…');finish();}
+ }
 });
