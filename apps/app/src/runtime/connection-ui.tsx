@@ -3499,7 +3499,8 @@ function OwnProviderChoice({busy,status,error,message,onSave,onCancel,onCloud,on
  const clear=()=>{if(ai.current)ai.current.value='';if(speech.current)speech.current.value='';};
  // The one key form (config/login-surfaces.json inventories its two fields once); first run and
  // Settings differ only in its note and Settings' Cancel. While a check runs, both offer Cancel:
- // the dispatch Escape and Android Back use, so a stopped check never saves or selects the keys.
+ // the dispatch Escape and Android Back use. If cancellation lands after commit, status readback
+ // reports the selected provider without claiming this check saved the key.
  const keyForm=(note:string,cancel?:import('react').ReactNode)=>!host?<p role="status">Own API keys need Android secure storage. This browser cannot save or activate provider keys.</p>:<form onSubmit={event=>{event.preventDefault();const key=ai.current?.value||'',voice=speech.current?.value||'';clear();setAttempted(true);void onSave(key,voice||undefined);}}>
    <label>Cerebras API key<input ref={ai} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} required disabled={busy}/></label>
    <label>Cartesia API key (optional)<input ref={speech} type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={busy}/></label>
