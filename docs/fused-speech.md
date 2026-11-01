@@ -196,12 +196,12 @@ recording a clip on the device:
    can hold the VAD open for a whole sentence. The gate is upstream `shouldRespondToVoiceTurn`,
    applied against every sentence of the reply that has started playing. A cough or the reply's own echo leaves the reply running. While a reply plays, voice
    interrupts only over a capture whose platform echo canceller is attached and enabled
-   (`echoCancelled` from `startLiveCapture`); otherwise speech during playback is ignored and the
-   Stop speaking button remains. Interrupting cancels that request or playback (generation ids drop
+   (`echoCancelled` from `startLiveCapture`); otherwise speech during playback is ignored. The voice
+   view offers only Mute and Stop voice conversation. Interrupting cancels that request or playback (generation ids drop
    its late callbacks) and the speech becomes the next turn; the earlier turn is never resent.
    Replies play one sentence at a time and only sentences whose playback completed count as heard:
    the conversation view keeps that text and marks the rest
-   "(Interrupted. The rest of this reply was not played.)". Stop speaking does the same by button.
+   "(Interrupted. The rest of this reply was not played.)".
    Once the reply's message id is known, Alpha also sends exactly the played prefix (the completed
    sentences of the spoken form) to `POST /api/conversations/:id/messages/:messageId/heard`
    (elizaOS #36547), so the agent's stored reply, and its memory and search, keep only the heard
