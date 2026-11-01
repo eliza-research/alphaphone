@@ -177,7 +177,8 @@ adapterTest('Cloud conversation keeps concise phases and accessible route detail
     assert.match(view.cloudDisclosureText,/uploads recordings and reply text.*account.*plan allowance.*Cartesia/);
     assert.equal(typeof view.stop,'function');assert.equal(typeof view.keyboard,'function');
   }
-  h.batchOptions.onState({phase:'idle'});
+  // The loop's own idle is shown once its retire settles (a failure it is about to report replaces it).
+  h.batchOptions.onState({phase:'idle'});await new Promise(resolve=>setImmediate(resolve));
   assert.equal(h.renderChat().lines[0].t,'Voice conversation stopped.');
   assert.equal(h.renderChat().voiceDetails,false);
 });

@@ -154,3 +154,53 @@ test('a normal voice turn is unchanged',async t=>{
  assert.equal(view().doc.querySelector('[role="status"][aria-label="Voice conversation status"]').textContent,'Listening…');
  await clock.advance(30_000);assert.equal(runs.length,1);assert.deepEqual(f.shell.messages,[]);
 });
+
+// The real shared batch loop: the quiet wait meets the loop's own retire, drain and fresh capture.
+async function realLoop(t){
+ const clock=voiceFakeClock();
+ const f=cloudVoiceViewFixture({cloudProfile:true,clock,peak:.5});
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+ t.after(async()=>{f.close();await clock.flush();});
+ await f.shell.startVoice();await clock.flush();
+ const speakTurn=async()=>{f.peak=.5;await clock.advance(700);f.peak=0;await clock.advance(1_200);await clock.flush();};
+ return {f,clock,speakTurn};
+}
+
+test('a chat that stops being current during the quiet wait ends calmly instead of connecting forever',async t=>{
+ const {f,clock,speakTurn}=await realLoop(t);
+ f.error=limited();await speakTurn();f.error=null;
+ assert.equal(f.renderChat().state,'starting');
+ const starts=f.starts;
+ // Hidden when the wait ends, with no visibilitychange and no render while hidden.
+ f.box.document.hidden=true;await clock.advance(4_000);
+ f.box.document.hidden=false;f.shell.componentDidUpdate?.();await clock.advance(60_000);
+ assert.equal(f.renderChat(),null,'not left on Connecting to voice…');
+ assert.deepEqual(f.shell.messages,[CALM]);
+ assert.equal(f.starts,starts,'the microphone does not reopen without a tap');
+});
+
+test('a refusal from the real loop never flashes the stopped state before the quiet wait',async t=>{
+ const {f,clock}=await realLoop(t);
+ // Every frame the voice view renders, not only the ones a clock step happens to land on.
+ const frames=[],render=f.shell.setState.bind(f.shell);
+ f.shell.setState=(patch,callback)=>{render(patch,callback);const shown=f.renderChat();const frame=shown?`${shown.state}|${shown.recoveryLabel||''}|${shown.lines.map(line=>line.t).join()}`:'closed';if(frames.at(-1)!==frame)frames.push(frame);};
+ f.driver.synthesize=async()=>{throw limited();};
+ f.peak=.5;await clock.advance(700);f.peak=0;await clock.advance(1_200);await clock.flush();
+ assert.equal(f.renderChat().state,'preparing-speech','the frame is held while the loop retires');
+ await clock.advance(4_000);
+ assert.deepEqual(frames.map(frame=>frame.split('|')[0]),['listening','transcribing','thinking','preparing-speech','starting','listening']);
+ assert.doesNotMatch(frames.join('\n'),/Voice conversation stopped|Start Cloud voice|Try voice again|request limit/);
+ assert.equal(f.sends,1,'the answered turn is not sent again');
+});
+
+test('Try voice again after a terminal error starts the quiet waits over',async t=>{
+ const {f,clock,runs,view,fail}=await voice(t);
+ await fail(limited());await clock.advance(3_000);
+ await fail(limited());await clock.advance(3_000);
+ await fail(Object.assign(Error('PRIVATE'),{code:'voice-http-401'}));
+ assert.equal(view().model.state,'error');
+ view().model.recover();await clock.flush();assert.equal(runs.length,4);
+ await fail(limited());
+ assert.notEqual(view().model.state,'error');assert.deepEqual(f.shell.messages,[],'a quiet wait, not the pause line');
+ await clock.advance(3_000);assert.equal(runs.length,5);assert.equal(view().model.state,'listening');
+});

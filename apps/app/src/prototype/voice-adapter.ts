@@ -514,9 +514,12 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     // A start failure reaches both the loop's error state and the start catch: one wait covers it.
     if(quietRetry)return true;
     const wait=limit?.retryAfterMs??2000;stopClock();
-    if(quietRetries>=2||wait>30000){cancelChat(false,true);chat.shell.toast('Voice paused. Tap the mic to talk again.');return true;}
+    const pause=()=>{cancelChat(false,true);chat.shell.toast('Voice paused. Tap the mic to talk again.');};
+    if(quietRetries>=2||wait>30000){pause();return true;}
     quietRetries++;conversationState={phase:'starting'};error='';refresh();
-    quietRetry=setTimeout(()=>{quietRetry=undefined;if(token===generation&&chatDestination===chat)void beginConversation();},wait);
+    // A chat that stopped being current during the wait (page hidden, account sheet open) cannot
+    // listen again, and nothing else re-arms it: voice ends calmly instead of connecting forever.
+    quietRetry=setTimeout(()=>{quietRetry=undefined;if(token!==generation||chatDestination!==chat)return;if(chatCurrent())void beginConversation();else pause();},wait);
     return true;
   }
   async function beginConversation(){
@@ -656,7 +659,10 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         },
         send:sendTurn,
         speak:async input=>{input.signal.throwIfAborted();current();const started=()=>{current();markVoiceTiming('first-audio');input.onStarted();};const pending=local?local.speak(input.text,input.signal,started,true):speakCloudSpeechChunks({text:input.text,signal:input.signal,assertCurrent:current,onStarted:started,speak:(text,signal,onStarted)=>cloudDriver!.speak(text,signal,onStarted)});conversationSpeech=pending;try{await pending;input.signal.throwIfAborted();current();}catch(failure){if((failure as {code?:string})?.code==='speech-cleanup-unconfirmed'){mediaUnconfirmed=failure;stopping=Promise.reject(failure);void stopping.catch(()=>{});}throw failure;}finally{if(conversationSpeech===pending)conversationSpeech=undefined;finishVoiceTurn();}},
-        onState:value=>{if(token!==generation||chatDestination!==chat||conversationVoice!==conversation)return;if(value.phase==='error'&&quietVoiceRetry(value.error,chat,token))return;if(value.phase==='speaking')quietRetries=0;conversationState=value;if(value.phase==='error')error=voiceStopped(value);if(value.phase==='listening'){stopClock();tick=setInterval(refresh,250);}else stopClock();refresh();},
+        onState:value=>{if(token!==generation||chatDestination!==chat||conversationVoice!==conversation)return;if(value.phase==='error'&&quietVoiceRetry(value.error,chat,token))return;
+          // The loop retires itself (idle) before it reports a failure: keep this frame until the retire
+          // settles, so a quiet wait never flashes "Voice conversation stopped." and Start Cloud voice.
+          if(value.phase==='idle'&&conversationState.phase!=='idle'){const held=conversationState;void conversation.stop().catch(()=>{}).then(()=>{if(token===generation&&chatDestination===chat&&conversationVoice===conversation&&conversationState===held){conversationState=value;stopClock();refresh();}});return;}if(value.phase==='speaking')quietRetries=0;conversationState=value;if(value.phase==='error')error=voiceStopped(value);if(value.phase==='listening'){stopClock();tick=setInterval(refresh,250);}else stopClock();refresh();},
       });
       conversationVoice=conversation;await conversation.start();current();
     }catch(failure){if(token!==generation||controller.signal.aborted)return;if(quietVoiceRetry(failure,chat,token))return;conversationState={phase:'error',error:failure};const classified=voiceFailure(failure,{transcribing:false,browser:!Capacitor.isNativePlatform()});error=cloudVoiceFailure(failure)||(classified&&(classified.kind==='denied'||classified.kind==='no-microphone')?classified.message:null)||'Voice could not start. Try again, or use the keyboard.';refresh();}
@@ -702,7 +708,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const token=generation,chat=chatDestination,owned=()=>token===generation&&chatDestination===chat&&chatCurrent();
     const phase=conversationState.phase,live=phase==='listening',seconds=live?(Date.now()-started)/1000:(clip?.durationMs||0)/1000;
     const messages:Record<string,string>={idle:'Voice conversation stopped.',starting:'Connecting to voice…',listening:'Listening…',transcribing:'Transcribing…',thinking:'Thinking…','awaiting-user-input':'Microphone off. Review the Notes request in this conversation. Only the note you explicitly share can be used for the answer.','preparing-speech':'Thinking…',speaking:'Speaking…',error:error||'Voice stopped. Check history before starting again.'};
-    const recover=()=>{if(!owned()||mediaUnconfirmed)return;if(cloudConnectRequired){cleanup();connectionController.openCloudAccount();}else if(!connectionController.getSnapshot().session){cleanup();connectionController.open();}else if((phase==='error'&&!conversationReviewRequired)||phase==='idle')void beginConversation();else cancelChat(false,true);};
+    const recover=()=>{if(!owned()||mediaUnconfirmed)return;if(cloudConnectRequired){cleanup();connectionController.openCloudAccount();}else if(!connectionController.getSnapshot().session){cleanup();connectionController.open();}else if((phase==='error'&&!conversationReviewRequired)||phase==='idle'){quietRetries=0;void beginConversation();}else cancelChat(false,true);};
     const unavailable=phase==='error'&&(conversationState.error as {code?:unknown})?.code==='voice-http-503';
     const visibleError=unavailable?'Voice is unavailable right now. Try again later or use the keyboard.':error;
     const awaiting=phase==='awaiting-user-input'||conversationReviewRequired;
