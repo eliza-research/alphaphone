@@ -185,8 +185,8 @@ recording a clip on the device:
    an earlier build is ignored. A message action's Read aloud still plays one reply on request.
    **Path.** When the live assistant is not ready (`nativeLiveVoiceReady` false) or the route is
    Cloud, the conversation runs the recorded-clip loop (`BatchVoiceConversation`), which cannot hear
-   the user while a reply plays; Alpha says so once per session ("Speaking will not interrupt
-   Alpha's reply in this voice mode"). Each conversation turn's timing record keeps its path as the
+   the user while a reply plays. Alpha shows no notice about this; Stop voice conversation ends a
+   reply. Each conversation turn's timing record keeps its path as the
    live ASR mode (`live.mode`: `batch` for the recorded-clip loop, `stream` from the live route), and
    the diagnostics export names it `path: live | batch`.
 7. **Barge-in and heard content.** Speech that starts while a reply is pending or playing is
