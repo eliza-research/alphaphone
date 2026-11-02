@@ -172,6 +172,17 @@ test('a failed update check stays due, one check runs at a time, and Install upd
  expect(await page.locator('body').innerText()).not.toMatch(/Up to date|Update failed|Update unavailable/);
 });
 
+test('an update whose versionName cannot be shown is still offered, under its versionCode',async({page})=>{
+ await nativeStub(page,{updates:[{...update,versionName:'x'.repeat(65)}]});
+ await settings(page);
+ const row=app(page).getByRole('button',{name:'Install update',exact:true});
+ await expect(row).toBeVisible();
+ await expect(app(page).getByText('8',{exact:true})).toBeVisible();
+ expect(await page.locator('body').innerText()).not.toContain('x'.repeat(65));
+ await row.click();
+ await expect.poll(()=>calls(page,'AlphaDevice','installUpdate')).toBe(1);
+});
+
 test('Install update appears only for a newer build of this flavor and signer, and a withdrawn release removes it',async({page})=>{
  await nativeStub(page,{updates:[{...update,versionCode:7},{...update,variant:'standalone'},{...update,signerSha256:'6d'.repeat(32)},update,null]});
  await settings(page);

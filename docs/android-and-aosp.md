@@ -313,7 +313,7 @@ is published or the release was withdrawn, and any earlier offer goes away.
   "versionCode": 2,
   "versionName": "0.1.1",
   "variant": "launcher",
-  "signerSha256": "64 lowercase hex characters: the installed app's certificate SHA-256, as apksigner prints it",
+  "signerSha256": "64 lowercase hex characters: the signing lineage's original certificate SHA-256, as apksigner prints it",
   "apkUrl": "https://github.com/eliza-research/alphaphone/releases/download/app-stable/alpha-phone-2.apk",
   "sha256": "64 lowercase hex characters of the APK",
   "sizeBytes": 400000000,
@@ -322,15 +322,18 @@ is published or the release was withdrawn, and any earlier offer goes away.
 ```
 
 A manifest is offered only to an install with a lower `versionCode`, of its `variant` (`launcher`
-or `standalone`, as `ElizaSystem.getBuildInfo` reports) and signed by the certificate it names
-(`appSigner` in `AlphaDevice.snapshot`). The flavors share the package and signer, so Android
-would install either over the other, and a standalone APK over the launcher image loses the HOME,
-Phone, Contacts and SMS admission; a device signed otherwise (a debug build, a lab-key build
+or `standalone`, as `ElizaSystem.getBuildInfo` reports) and of the signing lineage it names
+(`appSigner` in `AlphaDevice.snapshot`). `versionName` is only shown, as 1 to 64 characters with no
+control characters; a manifest whose name cannot be shown is still offered, under its `versionCode`.
+The flavors share the package and signer, so Android would install either over the other, and a
+standalone APK over the launcher image loses the HOME, Phone, Contacts and SMS admission; a device
+signed otherwise (a debug build, a lab-key build
 reading a release-key manifest, or the reverse) is offered nothing rather than downloading an APK
 Android refuses. One manifest URL therefore serves one flavor and one signer; the default serves
-the launcher image. `signerSha256` names the installed signer: the APK's own certificate, except for
-an APK that rotates its key with APK Signature Scheme v3, which Android installs over the previous key
-through its lineage; that manifest names the previous certificate, and the next one the new.
+the launcher image. `signerSha256` is always the original certificate, index 0 of Android's
+`getSigningCertificateHistory`: the APK's own until a key rotates. APK Signature Scheme v3 key rotation
+never changes it, so a phone that missed the rotating release is still offered later ones, and Android
+installs them through the lineage.
 
 `apkUrl` must be HTTPS (redirects stay on HTTPS). The plugin first abandons any earlier
 PackageInstaller session of Alpha's whose confirmation never reached the owner (Alpha closed
@@ -341,7 +344,8 @@ session for this package. The archive check needs a file, so the cached copy sta
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
 in front, so one that arrives while the screen is locked or another app is open waits and opens when
-Alpha is resumed. A dismissed Android confirmation downloads again on the next tap.
+the surface that started the install is resumed; another of Alpha's surfaces never opens it. A
+dismissed Android confirmation downloads again on the next tap.
 
 Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
 installed versionCode and signing it with the installed app's key, then upload the APK before the

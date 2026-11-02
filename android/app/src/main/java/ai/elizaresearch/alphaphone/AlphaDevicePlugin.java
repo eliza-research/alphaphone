@@ -84,8 +84,8 @@ public final class AlphaDevicePlugin extends Plugin {
   java.util.Map<String,Object> facts=new java.util.LinkedHashMap<>();
   SystemFacts.fact(facts,"appVersionCode",()->BuildConfig.VERSION_CODE);
   SystemFacts.fact(facts,"appUpdatedAt",()->{long at=context.getPackageManager().getPackageInfo(context.getPackageName(),0).lastUpdateTime;return at>0?at:null;});
-  // SHA-256 of Alpha's one signing certificate (apksigner's digest): an update manifest offers an APK only to installs signed like it.
-  SystemFacts.fact(facts,"appSigner",()->{android.content.pm.Signature[] signers=context.getPackageManager().getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES).signingInfo.getApkContentsSigners();return signers.length==1?hex(java.security.MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray())):null;});
+  // SHA-256 of the original certificate of Alpha's one signer (apksigner's digest), which key rotation never changes: an update manifest offers an APK only to installs of that signing lineage.
+  SystemFacts.fact(facts,"appSigner",()->{android.content.pm.SigningInfo signing=context.getPackageManager().getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES).signingInfo;return signing.hasMultipleSigners()?null:hex(java.security.MessageDigest.getInstance("SHA-256").digest(signing.getSigningCertificateHistory()[0].toByteArray()));});
   for(java.util.Map.Entry<String,Object> fact:facts.entrySet())out.put(fact.getKey(),fact.getValue());
  }
  @PluginMethod public void openPasswordProvider(PluginCall call) {
@@ -224,11 +224,13 @@ public final class AlphaDevicePlugin extends Plugin {
   * activity Alpha starts while it is not in front (screen locked during the download, another app open).
   */
  private Intent updateConfirm;
- /** Android's status for an update session: only its request for the owner's confirmation is acted on. */
+ /** The session this plugin created. Every bridge's receiver hears every session's status, and only the creator acts on it. */
+ private volatile int updateSession;
+ /** Android's status for this plugin's update session: only its request for the owner's confirmation is acted on. */
  private final android.content.BroadcastReceiver updateStatus=new android.content.BroadcastReceiver(){
   @Override public void onReceive(Context context,Intent intent){
    Intent confirm=androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class);
-   if(confirm==null||intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)!=PackageInstaller.STATUS_PENDING_USER_ACTION)return;
+   if(confirm==null||intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)!=PackageInstaller.STATUS_PENDING_USER_ACTION||intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID,-1)!=updateSession)return;
    updateConfirm=confirm;
    if(getActivity().getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))confirmUpdate();
   }
@@ -308,7 +310,7 @@ public final class AlphaDevicePlugin extends Plugin {
     if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
     PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
     params.setAppPackageName(getContext().getPackageName());params.setSize(size);
-    int id=installer.createSession(params);
+    int id=installer.createSession(params);updateSession=id;
     try(PackageInstaller.Session session=installer.openSession(id)){
      try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
      session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());

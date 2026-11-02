@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,readdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {nativeSource,fixture,runJvm,root} from './fixtures/jvm-tools.mjs';
 
-// One-tap app update, native side (AlphaDevicePlugin). The download admission runs on the host JVM from the
-// plugin's own source; the rest are source checks (class S) of Android wiring that only a device exercises.
-// The renderer policy is in test/settings-truth.test.mjs and the rendered rows in settings-device-facts.spec.ts.
+// One-tap app update, native side (AlphaDevicePlugin). The download admission and the update flow run on the
+// host JVM from the plugin's own source; the rest are source checks (class S) of Android wiring that only a
+// device exercises. The renderer policy is in test/settings-truth.test.mjs and the rendered rows in
+// settings-device-facts.spec.ts.
 const plugin=readFileSync(nativeSource('AlphaDevicePlugin.java'),'utf8');
 const install=plugin.slice(plugin.indexOf('@PluginMethod public void installUpdate('),plugin.indexOf('@Override protected void handleOnDestroy()'));
-const between=(text,from,to)=>text.slice(text.indexOf(from),text.indexOf(to,text.indexOf(from)));
+const javaFiles=dir=>readdirSync(dir,{recursive:true}).filter(file=>file.endsWith('.java')).map(file=>join(dir,file));
 
 test('the download is admitted only at its declared size and SHA-256',()=>{
  const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.indexOf(' private static final String UPDATE_STATUS=');
@@ -24,16 +25,35 @@ test('the download is admitted only at its declared size and SHA-256',()=>{
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test('the update flow keeps Android\'s confirmation for the bridge that started it, opens it once, and settles every failure quietly',()=>{
+ const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.indexOf(' @Override protected void handleOnDestroy()');
+ const signer=plugin.match(/^ *SystemFacts\.fact\(facts,"appSigner".*$/m)?.[0];
+ assert.ok(start>0&&end>start&&signer,'the update members exist');
+ const dir=mkdtempSync(join(tmpdir(),'alpha-update-flow-'));
+ try{
+  // The plugin's own members in a class of its name; the stubs state what Android and Capacitor do.
+  const members=join(dir,'AlphaDevicePlugin.java');
+  writeFileSync(members,`package ai.elizaresearch.alphaphone;
+import ai.eliza.plugins.system.SystemFacts;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
+import com.getcapacitor.*;
+final class AlphaDevicePlugin extends Plugin {
+ Object appSigner(Context context){java.util.Map<String,Object> facts=new java.util.HashMap<>();
+${signer}
+  return facts.get("appSigner");}
+${plugin.slice(start,end)}}
+`);
+  assert.match(runJvm([members,nativeSource('PluginWorkers.java'),...javaFiles(fixture('app-update-jvm')),fixture('UpdateFlowTest.java')],'ai.elizaresearch.alphaphone.UpdateFlowTest'),/^PASS update flow/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
 test('Android installs only the offered newer build of this package, after any stale session is dropped',()=>{
- // Everything on the worker settles the call: a binder RuntimeException from PackageInstaller is inside the try, not thrown off the executor.
- const worker=between(install,'PluginWorkers.submit(updateWorker,()->{','},()->call.reject(');
- assert.match(worker,/^PluginWorkers\.submit\(updateWorker,\(\)->\{\s*java\.io\.File apk=updateApk\(\);\s*try\{\s*PackageInstaller installer=getContext\(\)\.getPackageManager\(\)\.getPackageInstaller\(\);/);
- assert.match(worker,/\}catch\(Exception unavailable\)\{call\.reject\("Update unavailable"\);\}\s*finally\{apk\.delete\(\);\}\s*$/);
- // From the owner's tap: without install-unknown-apps for Alpha, only that Android page opens.
- const allowed=install.indexOf('if(!getContext().getPackageManager().canRequestPackageInstalls()){');
- assert.ok(allowed>0&&allowed<install.indexOf('Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES')&&install.indexOf('return;')<install.indexOf('PluginWorkers.submit(updateWorker,'));
- const order=['installer.getMySessions()','installer.abandonSession(stale.getSessionId())','copyVerified(in,out,size,sha256);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','session.commit('].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'stale sessions go first; size, SHA-256 and the archive are admitted before a session exists');
+ const order=['installer.getMySessions()','installer.abandonSession(stale.getSessionId())','copyVerified(in,out,size,sha256);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'stale sessions go first; size, SHA-256 and the archive are admitted before a session exists, and its status can only arrive once it is this plugin\'s');
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
@@ -57,25 +77,4 @@ test('Alpha stays nonprivileged and reads one configured HTTPS manifest from its
  assert.ok(docs.includes('`'+url+'`')&&docs.includes('gh release upload app-stable alpha-update-stable.json --repo eliza-research/alphaphone --clobber'),'the runbook publishes to the configured release');
  assert.match(readFileSync(join(root,'android/app/product.gradle'),'utf8'),/buildConfigField 'String', 'ALPHA_UPDATE_MANIFEST_URL', "\\"\$\{updateManifestUrl\}\\""/);
  for(const file of ['apps/app/src/prototype/settings-adapter.ts','android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDevicePlugin.java'])assert.ok(!readFileSync(join(root,file),'utf8').includes(url),file);
-});
-
-test('Android asks for the owner\'s confirmation once Alpha is resumed, and only once',()=>{
- // Android drops an activity Alpha starts while stopped (screen locked during the download), and no later
- // event would retry it: the receiver opens it only while resumed, otherwise handleOnResume does.
- const receiver=between(plugin,'public void onReceive(Context context,Intent intent){','\n };');
- assert.match(receiver,/STATUS_PENDING_USER_ACTION\)return;\s*updateConfirm=confirm;\s*if\(getActivity\(\)\.getLifecycle\(\)\.getCurrentState\(\)\.isAtLeast\(androidx\.lifecycle\.Lifecycle\.State\.RESUMED\)\)confirmUpdate\(\);\s*\}$/);
- assert.doesNotMatch(receiver,/startActivity|hasWindowFocus|shareForeground/,'a resumed Alpha without window focus (shade open, split screen) gets no later resume, so it opens now');
- assert.match(plugin,/@Override protected void handleOnResume\(\)\{super\.handleOnResume\(\);confirmUpdate\(\);\}/);
- // Taken before it is started, so a resume after it opened never opens it again.
- assert.match(between(plugin,'private void confirmUpdate(){','\n }'),/Intent confirm=updateConfirm;updateConfirm=null;\s*if\(confirm!=null\)try\{getActivity\(\)\.startActivity\(confirm\);\}catch\(RuntimeException unavailable\)/);
- assert.equal(plugin.match(/startActivity\(confirm\)/g).length,1);
-});
-
-test('the first plugin of a process deletes a download a killed process left, never one in flight',()=>{
- const load=between(plugin,'@Override public void load(){','\n }');
- assert.match(load,/super\.load\(\);\s*if\(!updateApkSwept\)\{updateApkSwept=true;updateApk\(\)\.delete\(\);\}\s*androidx\.core\.content\.ContextCompat\.registerReceiver/);
- // Static: AlphaAssistActivity's bridge loads a second plugin while MainActivity's may be downloading.
- assert.match(plugin,/\n private static boolean updateApkSwept;\n/);
- assert.match(plugin,/private java\.io\.File updateApk\(\)\{return new java\.io\.File\(getContext\(\)\.getCacheDir\(\),"alpha-update\.apk"\);\}/);
- assert.equal(plugin.match(/"alpha-update\.apk"/g).length,1,'one cache path for the download and the sweep');
 });
