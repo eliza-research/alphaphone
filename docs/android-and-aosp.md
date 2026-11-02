@@ -298,11 +298,13 @@ Install tap opens the page again.
 
 The one manifest URL is `updateManifestUrl` in `app.config.json`; `android/app/product.gradle`
 requires HTTPS and emits it as `BuildConfig.ALPHA_UPDATE_MANIFEST_URL`. The default,
-`https://github.com/eliza-research/alphaphone/releases/latest/download/alpha-update-stable.json`,
-resolves to the newest full (not draft, not prerelease) GitHub release. The app checks on start
-and resume at most once a day after the last answered check, one check at a time, and on Check
-for updates (`apps/app/src/prototype/settings-adapter.ts`, `AlphaDevicePlugin.checkForUpdate`). A
-failed check records nothing, so the next start or resume checks again. A 404 is an answer: nothing
+`https://github.com/eliza-research/alphaphone/releases/download/app-stable/alpha-update-stable.json`,
+is an asset of one rolling release, tag `app-stable`, so no other release of the repository moves or
+withdraws it (`releases/latest` would follow the repository's newest release and answer 404 for any
+release without the manifest). The app checks on start and resume at most once a day after the
+last answered check, one check at a time, and on Check for updates
+(`apps/app/src/prototype/settings-adapter.ts`, `AlphaDevicePlugin.checkForUpdate`). A failed check
+records nothing, so the next start or resume checks again. A 404 is an answer: nothing
 is published or the release was withdrawn, and any earlier offer goes away.
 
 ```json
@@ -311,11 +313,11 @@ is published or the release was withdrawn, and any earlier offer goes away.
   "versionCode": 2,
   "versionName": "0.1.1",
   "variant": "launcher",
-  "signerSha256": "64 lowercase hex characters: apksigner's certificate SHA-256 digest",
-  "apkUrl": "https://github.com/eliza-research/alphaphone/releases/download/TAG/alpha-phone-2.apk",
+  "signerSha256": "64 lowercase hex characters: the installed app's certificate SHA-256, as apksigner prints it",
+  "apkUrl": "https://github.com/eliza-research/alphaphone/releases/download/app-stable/alpha-phone-2.apk",
   "sha256": "64 lowercase hex characters of the APK",
   "sizeBytes": 400000000,
-  "notes": "Optional, at most 500 characters"
+  "notes": "Optional; shown only when at most 500 characters"
 }
 ```
 
@@ -326,23 +328,40 @@ would install either over the other, and a standalone APK over the launcher imag
 Phone, Contacts and SMS admission; a device signed otherwise (a debug build, a lab-key build
 reading a release-key manifest, or the reverse) is offered nothing rather than downloading an APK
 Android refuses. One manifest URL therefore serves one flavor and one signer; the default serves
-the launcher image.
+the launcher image. `signerSha256` names the installed signer: the APK's own certificate, except for
+an APK that rotates its key with APK Signature Scheme v3, which Android installs over the previous key
+through its lineage; that manifest names the previous certificate, and the next one the new.
 
 `apkUrl` must be HTTPS (redirects stay on HTTPS). The plugin first abandons any earlier
-PackageInstaller session of Alpha's that never reached the owner (Android blocks the
-confirmation while Alpha is in the background), downloads at most `sizeBytes` (1 GiB at most)
-to the app cache, refuses any other length or SHA-256, and then reads the archive: it must be
+PackageInstaller session of Alpha's whose confirmation never reached the owner (Alpha closed
+before it was resumed), downloads at most `sizeBytes` (1 GiB at most) to the app cache, refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it open a
 session for this package. The archive check needs a file, so the cached copy stays until the
-session has its own copy (up to twice `sizeBytes` of free space for that moment). A dismissed
-Android confirmation downloads again on the next tap.
+session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
+process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
+in front, so one that arrives while the screen is locked or another app is open waits and opens when
+Alpha is resumed. A dismissed Android confirmation downloads again on the next tap.
 
 Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
-installed versionCode, signing with the installed app's key, and attaching the APK and the
-manifest to the release. Field builds use the release key, distinct from developer keys (P-16,
-P-58); publishing a lab-key APK as the public repository's latest release needs the owner's
-approval. The system copy in `/product/app/AlphaPhone` and these updates share versionCode
+installed versionCode and signing it with the installed app's key, then upload the APK before the
+manifest that names it:
+
+```sh
+# Once: the rolling release, never marked Latest.
+gh release create app-stable --repo eliza-research/alphaphone --latest=false --title "Alpha app update" --notes "One-tap app update manifest"
+# Each update.
+gh release upload app-stable alpha-phone-2.apk --repo eliza-research/alphaphone
+gh release upload app-stable alpha-update-stable.json --repo eliza-research/alphaphone --clobber
+# Withdraw: each phone drops the offer at its next check.
+gh release delete-asset app-stable alpha-update-stable.json --repo eliza-research/alphaphone --yes
+```
+
+A check during the seconds `--clobber` takes between its delete and upload answers 404 and drops
+the offer until the next check. A phone offers the manifest it last read until its next daily
+check, so keep the previous APK at least a day. Field builds use the release key, distinct from
+developer keys (P-16, P-58); publishing a lab-key APK to the public `app-stable` release needs the
+owner's approval. The system copy in `/product/app/AlphaPhone` and these updates share versionCode
 order: an APK update lives in `/data` and outranks an OS image whose Alpha has a lower
 versionCode, so give each OS build's Alpha a versionCode above every APK update published before it.
 

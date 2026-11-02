@@ -219,15 +219,38 @@ public final class AlphaDevicePlugin extends Plugin {
  private static final String UPDATE_STATUS="ai.elizaresearch.alphaphone.UPDATE_STATUS";
  /** Downloads run here, never on the problem-log worker. */
  private final java.util.concurrent.ExecutorService updateWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+ /**
+  * Android's request for the owner's confirmation, kept until Alpha is resumed: Android silently drops an
+  * activity Alpha starts while it is not in front (screen locked during the download, another app open).
+  */
+ private Intent updateConfirm;
  /** Android's status for an update session: only its request for the owner's confirmation is acted on. */
  private final android.content.BroadcastReceiver updateStatus=new android.content.BroadcastReceiver(){
   @Override public void onReceive(Context context,Intent intent){
-   Intent confirm=androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class);android.app.Activity activity=getActivity();
-   if(confirm==null||activity==null||intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)!=PackageInstaller.STATUS_PENDING_USER_ACTION)return;
-   try{activity.startActivity(confirm);}catch(RuntimeException unavailable){/* The next tap starts a fresh session. */}
+   Intent confirm=androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class);
+   if(confirm==null||intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)!=PackageInstaller.STATUS_PENDING_USER_ACTION)return;
+   updateConfirm=confirm;
+   if(getActivity().getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))confirmUpdate();
   }
  };
- @Override public void load(){super.load();androidx.core.content.ContextCompat.registerReceiver(getContext(),updateStatus,new android.content.IntentFilter(UPDATE_STATUS),androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);}
+ /** Shows the kept confirmation once, on the main thread like updateStatus and handleOnResume. */
+ private void confirmUpdate(){
+  Intent confirm=updateConfirm;updateConfirm=null;
+  if(confirm!=null)try{getActivity().startActivity(confirm);}catch(RuntimeException unavailable){/* The next tap starts a fresh session. */}
+ }
+ @Override protected void handleOnResume(){super.handleOnResume();confirmUpdate();}
+ /** The update download in the cache, deleted once the session has its copy or the download is refused. */
+ private java.io.File updateApk(){return new java.io.File(getContext().getCacheDir(),"alpha-update.apk");}
+ /**
+  * The first AlphaDevicePlugin of a process deletes the download a killed process left (up to UPDATE_MAX_BYTES);
+  * a later one (AlphaAssistActivity's bridge beside MainActivity's) never deletes another's download in flight.
+  */
+ private static boolean updateApkSwept;
+ @Override public void load(){
+  super.load();
+  if(!updateApkSwept){updateApkSwept=true;updateApk().delete();}
+  androidx.core.content.ContextCompat.registerReceiver(getContext(),updateStatus,new android.content.IntentFilter(UPDATE_STATUS),androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
+ }
  /** HTTPS only: a redirect never changes protocol, and the network security config refuses cleartext. */
  private static javax.net.ssl.HttpsURLConnection updateConnection(String url)throws java.io.IOException{
   javax.net.ssl.HttpsURLConnection connection=(javax.net.ssl.HttpsURLConnection)new java.net.URL(url).openConnection();
@@ -269,12 +292,12 @@ public final class AlphaDevicePlugin extends Plugin {
   }
   final String apkUrl=call.getString("apkUrl"),sha256=call.getString("sha256");final long size=call.getData().optLong("sizeBytes"),versionCode=call.getData().optLong("versionCode");
   PluginWorkers.submit(updateWorker,()->{
-   PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
-   // An earlier session Android never showed the owner (Alpha was in the background, or closed during the
-   // download) would stay staged in /data/app; Alpha creates no other sessions, so each tap starts clean.
-   for(PackageInstaller.SessionInfo stale:installer.getMySessions())try{installer.abandonSession(stale.getSessionId());}catch(RuntimeException finished){/* Already gone. */}
-   java.io.File apk=new java.io.File(getContext().getCacheDir(),"alpha-update.apk");
+   java.io.File apk=updateApk();
    try{
+    PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
+    // An earlier session whose confirmation never reached the owner (Alpha closed before it resumed) would
+    // stay staged in /data/app; Alpha creates no other sessions, so each tap starts clean.
+    for(PackageInstaller.SessionInfo stale:installer.getMySessions())try{installer.abandonSession(stale.getSessionId());}catch(RuntimeException finished){/* Already gone. */}
     javax.net.ssl.HttpsURLConnection connection=updateConnection(apkUrl);
     try{
      if(connection.getResponseCode()!=200)throw new java.io.IOException("Update unavailable");

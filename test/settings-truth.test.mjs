@@ -34,6 +34,9 @@ test('Software update offers only a complete, newer manifest for this flavor and
  const {schema,variant,signerSha256,...offered}=manifest;
  assert.deepEqual(m.parseUpdateManifest(manifest,installed),offered);
  assert.deepEqual(m.parseUpdateManifest({...manifest,notes:undefined},installed),{...offered,notes:''},'notes are optional');
+ // Notes are only shown: a string of at most 500 characters is, anything else is left out and never refuses the update.
+ assert.equal(m.parseUpdateManifest({...manifest,notes:'x'.repeat(500)},installed)?.notes,'x'.repeat(500));
+ for(const notes of ['x'.repeat(501),7,null,{text:'Faster Home'}])assert.deepEqual(m.parseUpdateManifest({...manifest,notes},installed),{...offered,notes:''},String(notes).slice(0,20));
  assert.equal(m.parseUpdateManifest({...manifest,sizeBytes:m.UPDATE_MAX_BYTES},installed)?.sizeBytes,m.UPDATE_MAX_BYTES);
  // Newer only, against the versionCode Android reports; an unknown installed version offers nothing.
  for(const versionCode of [8,9,undefined,null,'7',0.5,Number.NaN])assert.equal(m.parseUpdateManifest(manifest,{...installed,versionCode}),null,String(versionCode));
@@ -43,6 +46,7 @@ test('Software update offers only a complete, newer manifest for this flavor and
  for(const launcher of [null,undefined,'true'])assert.equal(m.parseUpdateManifest(manifest,{...installed,launcher}),null,String(launcher));
  for(const variant of [undefined,'Launcher','both'])assert.equal(m.parseUpdateManifest({...manifest,variant},installed),null,String(variant));
  // Signed like this install: Android refuses any other signer only after the whole download. An unreported signer offers nothing.
+ // The manifest names the installed signer, so an APK Signature Scheme v3 rotation is offered under its previous certificate.
  for(const signer of ['6d'.repeat(32),'5C'.repeat(32),undefined])assert.equal(m.parseUpdateManifest({...manifest,signerSha256:signer},installed),null,String(signer));
  for(const signer of [undefined,null,''])assert.equal(m.parseUpdateManifest({...manifest,signerSha256:signer},{...installed,signerSha256:signer}),null,'unreported '+signer);
  // HTTPS only, without credentials in the URL.
@@ -52,7 +56,7 @@ test('Software update offers only a complete, newer manifest for this flavor and
  for(const sha256 of ['0A'.repeat(32),'0a'.repeat(31),'0a'.repeat(33),'g'.repeat(64),'',undefined])assert.equal(m.parseUpdateManifest({...manifest,sha256},installed),null,String(sha256));
  for(const sizeBytes of [0,-1,1.5,m.UPDATE_MAX_BYTES+1,'400000000',undefined])assert.equal(m.parseUpdateManifest({...manifest,sizeBytes},installed),null,String(sizeBytes));
  assert.equal(m.UPDATE_MAX_BYTES,2**30);assert.match(java,/static final long UPDATE_MAX_BYTES=1L<<30;/,'renderer and native bounds agree');
- for(const change of [{schema:'alpha-update/v2'},{schema:undefined},{versionCode:'8'},{versionCode:8.5},{versionName:''},{versionName:'x'.repeat(65)},{versionName:'0.1\n1'},{notes:7},{notes:'x'.repeat(501)}])
+ for(const change of [{schema:'alpha-update/v2'},{schema:undefined},{versionCode:'8'},{versionCode:8.5},{versionName:''},{versionName:'x'.repeat(65)},{versionName:'0.1\n1'}])
   assert.equal(m.parseUpdateManifest({...manifest,...change},installed),null,JSON.stringify(change));
  for(const value of [null,undefined,[],'{}',7])assert.equal(m.parseUpdateManifest(value,installed),null);
 });

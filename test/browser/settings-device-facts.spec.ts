@@ -161,8 +161,9 @@ test('a failed update check stays due, one check runs at a time, and Install upd
  expect(await calls(page,'AlphaDevice','checkForUpdate')).toBe(2);
  await install.click();
  await expect.poll(()=>calls(page,'AlphaDevice','installUpdate')).toBe(1);
- const {schema,variant,signerSha256,...offered}=update;
- expect(await page.evaluate(()=>(window as any).settingsFixture.calls.find((c:any)=>c.method==='installUpdate').input)).toEqual(offered);
+ // Only what the native download reads: not versionName or notes.
+ const {apkUrl,sha256,sizeBytes,versionCode}=update;
+ expect(await page.evaluate(()=>(window as any).settingsFixture.calls.find((c:any)=>c.method==='installUpdate').input)).toEqual({apkUrl,sha256,sizeBytes,versionCode});
  // A restart offers the kept answer without checking again.
  await settings(page);
  await expect(install).toBeVisible();

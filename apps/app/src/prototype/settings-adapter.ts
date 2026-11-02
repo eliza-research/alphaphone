@@ -106,7 +106,7 @@ const device = registerPlugin<{
   diagnosticsFacts(): Promise<Bag>;
   shareDiagnostics(input: { text: string }): Promise<{ status: string }>;
   checkForUpdate(): Promise<{ manifest?: string }>;
-  installUpdate(update: AppUpdate): Promise<void>;
+  installUpdate(input: Pick<AppUpdate, 'apkUrl' | 'sha256' | 'sizeBytes' | 'versionCode'>): Promise<void>;
 }>('AlphaDevice');
 const notifications = registerPlugin<{status():Promise<Bag>;openAppSettings():Promise<Bag>;openChannelSettings(input:{id:string}):Promise<{status:string}>;crossAppStatus():Promise<Bag>;notificationApps():Promise<{apps:Bag[]}>;setNotificationPolicy(input:Bag):Promise<Bag>;resumeCrossApp(input:{expectedRevision:string}):Promise<Bag>;openNotificationAccess():Promise<Bag>;notificationHistory():Promise<{items:Bag[]}>;clearNotificationHistory():Promise<void>}>('AlphaNotifications');
 const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }>; getBuildInfo(): Promise<{ launcher?: boolean; version?: string }> }>('ElizaSystem');
@@ -133,8 +133,9 @@ export function installedRows(updatedAt: unknown, format: (at: number) => string
 /**
  * Software update manifest (app.config.json updateManifestUrl, fetched by AlphaDevice.checkForUpdate):
  * {schema: "alpha-update/v1", versionCode, versionName, variant ("launcher" or "standalone"), signerSha256
- * (the APK's signing certificate, as apksigner prints it), apkUrl (HTTPS), sha256 (64 lowercase hex),
- * sizeBytes, notes (optional)}.
+ * (the installed app's signing certificate, AlphaDevice appSigner, as apksigner prints it: the APK's own, or
+ * its previous one when the APK rotates its key with APK Signature Scheme v3), apkUrl (HTTPS), sha256 (64
+ * lowercase hex), sizeBytes, notes (optional; shown only as a string of at most 500 characters)}.
  */
 export const UPDATE_SCHEMA = 'alpha-update/v1';
 /** AlphaDevicePlugin.UPDATE_MAX_BYTES, which the native download enforces, is the same bound. */
@@ -148,13 +149,13 @@ type AppUpdate = {versionCode: number; versionName: string; apkUrl: string; sha2
  */
 export function parseUpdateManifest(value: unknown, installed: {versionCode: unknown; launcher: unknown; signerSha256: unknown}): AppUpdate | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const {schema, versionCode, versionName, variant, signerSha256, apkUrl, sha256, sizeBytes, notes = ''} = value as Record<string, unknown>;
+  const {schema, versionCode, versionName, variant, signerSha256, apkUrl, sha256, sizeBytes, notes} = value as Record<string, unknown>;
   if (schema !== UPDATE_SCHEMA || !Number.isSafeInteger(installed.versionCode) || !Number.isSafeInteger(versionCode) || (versionCode as number) <= (installed.versionCode as number)) return null;
   if (typeof installed.launcher !== 'boolean' || variant !== (installed.launcher ? 'launcher' : 'standalone') || typeof signerSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(signerSha256) || signerSha256 !== installed.signerSha256) return null;
-  if (typeof versionName !== 'string' || !/^[^\u0000-\u001f\u007f]{1,64}$/.test(versionName) || typeof notes !== 'string' || notes.length > 500) return null;
+  if (typeof versionName !== 'string' || !/^[^\u0000-\u001f\u007f]{1,64}$/.test(versionName)) return null;
   if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256) || !Number.isSafeInteger(sizeBytes) || (sizeBytes as number) <= 0 || (sizeBytes as number) > UPDATE_MAX_BYTES || typeof apkUrl !== 'string' || apkUrl.length > 2048) return null;
   try { const url = new URL(apkUrl); if (url.protocol !== 'https:' || url.username || url.password) return null; } catch { return null; }
-  return {versionCode: versionCode as number, versionName, apkUrl, sha256, sizeBytes: sizeBytes as number, notes};
+  return {versionCode: versionCode as number, versionName, apkUrl, sha256, sizeBytes: sizeBytes as number, notes: typeof notes === 'string' && notes.length <= 500 ? notes : ''};
 }
 /** A day after the last answered check, or at once when that time is unknown or in the future. */
 export function updateCheckDue(checkedAt: number, now: number): boolean {
@@ -619,7 +620,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           // Install update only for the version the last manifest offers this install, and an explicit check. No error or "up to date" claim.
           const update=parseUpdateManifest(savedUpdate().manifest,{versionCode:facts.appVersionCode,launcher,signerSha256:facts.appSigner});
           page.groups.push(group([
-            ...(update?[{...action(updateBusy==='install'?'Downloading update…':'Install update',()=>void updateAction('install',()=>device.installUpdate(update).catch(()=>{/* Quiet: the row stays and the next tap retries. */}))),val:versionLabel(update.versionName,update.versionCode),hasVal:true,sub:update.notes,hasSub:!!update.notes,busy:!!updateBusy}]:[]),
+            ...(update?[{...action(updateBusy==='install'?'Downloading update…':'Install update',()=>void updateAction('install',()=>device.installUpdate({apkUrl:update.apkUrl,sha256:update.sha256,sizeBytes:update.sizeBytes,versionCode:update.versionCode}).catch(()=>{/* Quiet: the row stays and the next tap retries. */}))),val:versionLabel(update.versionName,update.versionCode),hasVal:true,sub:update.notes,hasSub:!!update.notes,busy:!!updateBusy}]:[]),
             {...action(updateBusy==='check'?'Checking for updates…':'Check for updates',()=>void updateAction('check',()=>checkForUpdate(true))),busy:!!updateBusy}]));
         }
         page.groups.push(group([{kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))}]));
