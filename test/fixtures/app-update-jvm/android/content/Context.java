@@ -8,6 +8,7 @@ public class Context {
  public java.io.File getCacheDir(){return cache;}
  public android.content.pm.PackageManager getPackageManager(){return packages;}
  public String getPackageName(){return "ai.elizaresearch.alphaphone";}
+ public ContentResolver getContentResolver(){return new ContentResolver();}
  public void unregisterReceiver(BroadcastReceiver receiver){receivers.remove(receiver);}
  public void broadcast(Intent intent){for(BroadcastReceiver receiver:receivers)receiver.onReceive(this,intent);}
 }

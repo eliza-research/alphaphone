@@ -28,14 +28,12 @@ test('the download is admitted only at its declared size and SHA-256',()=>{
 test('the update flow runs one attempt per process, fences a session Android still holds, keeps its confirmation for the bridge that asked, opens it once, and settles every failure quietly',()=>{
  const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.lastIndexOf('}');
  const deadline='UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(6)';
- const signer=plugin.match(/^ *SystemFacts\.fact\(facts,"appSigner".*$/m)?.[0];
- assert.ok(start>0&&end>start&&signer&&plugin.includes(deadline),'the update members exist');
+ assert.ok(start>0&&end>start&&plugin.includes(deadline),'the update members exist');
  const dir=mkdtempSync(join(tmpdir(),'alpha-update-flow-'));
  try{
   // The plugin's own members in a class of its name, with only the deadline shortened to seconds; the stubs state what Android and Capacitor do.
   const members=join(dir,'AlphaDevicePlugin.java');
   writeFileSync(members,`package ai.elizaresearch.alphaphone;
-import ai.eliza.plugins.system.SystemFacts;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
@@ -44,9 +42,6 @@ import android.provider.Settings;
 import com.getcapacitor.*;
 final class AlphaDevicePlugin extends Plugin {
  private final java.util.concurrent.ExecutorService diagnosticsWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
- Object appSigner(Context context){java.util.Map<String,Object> facts=new java.util.HashMap<>();
-${signer}
-  return facts.get("appSigner");}
 ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.SECONDS.toNanos(3)')}}
 `);
   assert.match(runJvm([members,nativeSource('PluginWorkers.java'),...javaFiles(fixture('app-update-jvm')),fixture('UpdateFlowTest.java')],'ai.elizaresearch.alphaphone.UpdateFlowTest'),/^PASS update flow/);
@@ -54,10 +49,13 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
 });
 
 test('Android installs only the offered newer build of this package, and only when no sealed session of Alpha\'s fences the tap',()=>{
- const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','session.fsync(out)','commitUpdate(session,id);','updating.set(false);}\n','updateOwner=this;updateSession=id;','session.commit(','updatesCommitted.incrementAndGet();'].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session\'s status can only arrive once it has its owner, and a commit is counted before its attempt lets go');
- // One path abandons, the failed stage or commit of the attempt's own session asserted below. Nothing abandons a session Android lists as sealed.
+ const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','params.setReferrerUri(','installer.createSession(params)','session.fsync(out)','updateOwner=this;updateSession=id;','commitAttempted=true;','session.commit(','updatesCommitted.incrementAndGet();','updating.set(false);}\n'].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session is bound before Android has it, its status can only arrive once it has its owner, the commit boundary is crossed in that order, and a commit is counted before its attempt lets go');
+ // One path abandons, a failure of the attempt's own session before its commit, asserted below. Nothing abandons a session Android lists as sealed.
  assert.equal(plugin.match(/abandonSession\(/g).length,1);
+ // One commit, the attempt's own first: nothing commits a session a process did not just stage.
+ assert.equal(plugin.match(/session\.commit\(/g).length,1);
+ assert.doesNotMatch(plugin,/refused\)\{updateOwner=null|commitUpdate|getUpdatedMillis|elapsedRealtime/);
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
@@ -65,7 +63,7 @@ test('Android installs only the offered newer build of this package, and only wh
  assert.match(install,/new Intent\(UPDATE_STATUS\)\.setPackage\(getContext\(\)\.getPackageName\(\)\)/);
  assert.match(install,/PendingIntent\.FLAG_MUTABLE/);
  assert.match(plugin,/registerReceiver\(getContext\(\),updateStatus,new android\.content\.IntentFilter\(UPDATE_STATUS\),androidx\.core\.content\.ContextCompat\.RECEIVER_NOT_EXPORTED\)/);
- assert.match(install,/catch\(Exception failed\)\{installer\.abandonSession\(id\);throw failed;\}/);
+ assert.match(install,/catch\(Exception failed\)\{\s*if\(!commitAttempted\)try\{installer\.abandonSession\(id\);\}catch\(RuntimeException cleanup\)\{failed\.addSuppressed\(cleanup\);\}\s*throw failed;\s*\}/);
  // The file goes while the flag is held: a delete after it would hit the next attempt's download.
  assert.match(install,/finally\{apk\.delete\(\);updating\.set\(false\);\}/);
  // A check of 404 is an answer, not a failure.

@@ -337,7 +337,7 @@ installs them through the lineage.
 
 `apkUrl` must be HTTPS (redirects stay on HTTPS). One attempt runs per process, whichever of Alpha's
 surfaces started it. A tap while one runs starts nothing beside it and never replaces what it staged;
-only a tap on the same surface, behind an attempt that fails first, retries. The plugin downloads at most
+only a tap on the same surface, behind an attempt that failed before its commit, retries. The plugin downloads at most
 `sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it open a session for this
@@ -351,138 +351,134 @@ the surface that handed the session to Android is resumed, and a tap while it wa
 A committed session fences every later tap, on any surface and across restarts, because the fence is
 Android's own list (`getMySessions`): a commit seals the session, and Android drops it at its terminal
 status (success or any failure, cancel included), whether or not that status reached Alpha, so a finished
-install, or a status lost while Alpha was dead, frees the next tap. A pending confirmation is not terminal.
-Nothing happens without a tap, and a tap downloads nothing while a session fences it. A session Android lists
-as sealed is never abandoned or replaced, and leaving that list is the only end Alpha acts on. Alpha abandons
-only what its own attempt staged, when that stage or its commit fails, and the refusal is that session's end:
-Android 11 and later refuse Alpha's commit before sealing, and 10 can also refuse it just after, on a validation
-I/O error, with no mark and no status.
+install, or a status lost while Alpha was dead, frees the next tap. A pending confirmation is not terminal, and a
+status that never came is unknown, not a failure. Nothing happens without a tap, and a tap downloads nothing while a
+session fences it. A session Android lists as sealed is never abandoned or replaced. Its fence ends when it leaves
+that list, or when its bound target is what is installed, below.
 
-A tap leaves alone any install it can see. In AOSP a commit that reaches an accepted session ends it on
-Android 10 to 13 at any stage (relinquished through 12, files in use on 13), and on 16 and 17 once its stage
-directory is in use; 14 and 15 stop at a guard first. A second confirmation can end the install too, because
-cancelling one destroys the session. So a tap stays quiet when Android is past asking: the session's progress
-is above 0.8, which only an accepted session reaches (AOSP 10 to 17, for any session but one a reboot restored
-committed, which Alpha never commits), or it reads active. `isActive` alone is not enough: an accepted session
-reads active only from Android 14, and one committed twice never does, because a second commit skips Android's
-increment and not its decrement. A tap also stays quiet for three seconds after Alpha's last exchange with
-Android (a status in flight, a start not yet covering Alpha, usually an accept not yet listed), until the
-surface that opened a confirmation resumes, and while another surface owes a confirmation it kept. A start
-Android dropped holds nothing past those three seconds, and a kept confirmation opens only if Android still
-lists the session and is not past asking. What a tap cannot see is under the windows below.
+A session is committed once, by the attempt that staged it. Alpha abandons only that attempt's own session, for a
+failure before its commit call: opening the session, writing, copying, `fsync`, closing the stream or making the
+status sender. From the commit
+call on nothing proves a refusal. `Session.commit` rethrows a `RemoteException`, and Android 10 marks a commit, as 14
+seals and dispatches one, ahead of the reply that can be lost; the close after a commit can throw; and the same
+exception class comes from different phases on different versions. So whatever is thrown there, Alpha keeps the
+session and its owner, the tap fails quietly, and what happened comes from Android's status or its list. Until
+Android lists that session no more, it fences even if it reads unsealed. A process that ended knows nothing of it,
+but an unsealed session of a dead process never fences: every effect of a commit follows the seal.
 
-A reboot can leave a session Android will not install. Android saves neither progress nor its active count, and
-from Android 11 it writes a session at sealing, before marking the commit, so a session comes back committed only
-if a later write recorded the mark (Android 10 marks first, so always; from Android 12, API 31, a commit of a
-session already marked writes it, as Alpha's own commit at 0.8 below does). It then reads committed at progress 0, because staging counts
-only in the hold that marks a commit (AOSP 10 to 17). Android 11 and later do not validate such a session again,
-and its commit fails, read from AOSP: system_server dies on 11, nothing shows and no status comes on 12 and 13, and
-on 14 to 17 the confirmation shows and its accept fails, or on 14 can kill system_server. Android 10 validates it
-at boot and its confirmation works, but that install reads 0.1 and idle, which nothing fences. So no tap commits
-it. Nor does a tap give it up: a restored mark is not a terminal receipt, so the session stays fenced, with no
-download and no session beside it, until Android lists it no more. A session restored uncommitted is the case
-`Session.commit` documents: a tap commits it, and Android validates it as new.
+No tap commits a session it did not just stage, and nothing an app reads could make that safe. In AOSP a commit that
+reaches an accepted session ends it on Android 10 to 13 at any stage (relinquished through 12, files in use on 13),
+and on 16 and 17 once its stage directory is in use; 14 and 15 stop at a guard first. Progress 0.8 says only that
+staging finished: Android 10 sets the accept and queues the install before progress moves, and every version reads
+an accepted session idle at 0.8 until its one install thread reaches it. A reboot loses what little there is. Android
+saves neither progress nor its active count, and from Android 11 it writes a session at sealing, before marking the
+commit, so a session comes back committed only if a later write recorded the mark (Android 10 marks first, so
+always), and then reads committed at progress 0, which a read during validation also returns from Android 13. So
+neither a recovered session nor one of unknown state is committed, whatever it reads.
 
-A session under validation can read the same pair. From Android 13 a read takes progress ahead of the session's
-lock, which validation holds up to the mark, so a read that waits returns the mark with the progress from before
-it (through 12L it takes both under the lock). That tap stays quiet too, and it costs nothing: the next tap reads
-0.8 and goes on as usual.
+Each session names its target in Android's own record of it. `SessionParams.setReferrerUri`, set before
+`createSession`, carries `alpha-update://<package>/<versionCode>/<sha256>/<signer>/<boot>`, and the session's id is the
+record that holds it. Read from AOSP 10 to 17: Android writes the referrer into its session file with the rest of the
+session, and it writes that file at sealing, so a session that comes back sealed comes back bound, after a process
+kill or a reboot alike. `SessionInfo.getReferrerUri` returns it unscrubbed to the session's owner, through
+`getMySessions` and `getSessionInfo`. It goes with the session, so there is no store to reconcile. App storage fails
+what this needs: `SharedPreferencesImpl` logs a read error and starts from an empty map, so a corrupt journal reads
+as no journal, and a journal can outlive a session or miss one. In the session, service and verification code at
+each tag its only other use is to reach the package verifier as `EXTRA_REFERRER`, so a verifier sees these fields,
+none of them secret. The system installer does not show it, and Android 17 caps it at 2048 characters; the binding
+is about 190.
 
-Otherwise the tap opens the confirmation Alpha kept from Android, the same request a second commit would make
-Android send, and Android's count stays true. That is how the owner answers one left with no status, when the
-confirmation activity is destroyed without finishing (Home or Alpha's own `singleTask` relaunch can do it).
+A binding counts only if it matches that one shape whole and names this package and the installed signer. Anything
+else, a part of one or none at all, is unknown: the session fences, no status reconnects it, and no installed version
+clears it. `<boot>` is `Settings.Global.BOOT_COUNT`, public and readable at 29 to 37, which `PowerManagerService`
+moves at every system_server start, ahead of third-party apps, so a runtime restart counts where `elapsedRealtime`
+would not. Android keeps a session's status receiver in memory only, so a status belongs to the count it was committed
+under. After a restart or the owner's destroy, the first surface to hear a status for a session bound to this boot
+becomes its owner, and a pending request opens as usual. That is the one way a process with no owner reaches a
+confirmation: nothing asks for one.
 
-A surface waiting on its own commit's status commits nothing more, however late the status: no time bounds
-validation or the queue behind it, and a second commit lowers Android's count for the session's life and brings
-a second status. A session not yet marked committed and created this boot is under validation, whoever asks;
-Android never moves a non-staged session's `getUpdatedMillis`, so that reads its creation time against the boot.
-With no live owner, after a restart or the owner's destroy, a process holds no confirmation and can get one only
-by committing a session marked at 0.8 again. Android documents that after a reboot; after a restart alone it is
-outside the documented cases, and the only public route. It costs that session its active reading, and progress
-then fences its install. From Android 12 (API 31) it also writes the mark, so a reboot before that session ends
-brings it back committed, the first entry under what can hold a session fenced, where it would have come back
-unmarked for a tap to commit. The staged build may be older than the manifest's offer, because Android lists no
-version, and cancelling it frees the next tap for the new one.
+What is installed settles a bound session. At or below the installed versionCode, on the signer it names, it fences
+no more: Android drops a finished session in a posted step ahead of its write, so a reboot between them restores a
+session whose install landed. It is not abandoned. It stays until Android expires it, and a later update installs
+beside it. At or below, not equal, so a session left for 8 does not fence again once 9 lands. A lower install, or
+another signer, clears nothing.
 
-What can still hold a session fenced, read from AOSP and not run on a device. Android expires a session at
-boot after three days and, from Android 12L (API 32), after eight hours once storage runs low, and its count
-has no link to a dead client:
+A session staged by the published `2bdb15408b` has no binding, so it is unknown. That build abandoned only the session
+it remembered in memory, so a session behind a restart stays sealed. If that session installs the new build, it ends
+as any other. If the new build arrives another way, it fences: no tap commits, abandons or clears it, taps stay quiet,
+and only Android ends it, by the expiry below.
 
-- A session a reboot restored committed stays until Android ends it: at the first boot three days or more after
-  its creation by the wall clock, or from 12L at a low-storage sweep past eight hours. Neither has a schedule, so
-  with no such boot and no low storage it has no time limit, and its staged copy (up to `sizeBytes`) stays on
-  disk. On Android 10 every committed session left at a reboot comes back this way. Each entry below that ends at
-  a reboot ends here instead if its session comes back committed.
-- A status that never reaches a live process leaves its owner waiting, so taps stay quiet until the process
-  ends or that surface closes. The launcher flavor's process lives long, so this can last until a reboot.
-- A process killed between commit and closing the session leaves it reading active until a reboot, which
-  resets the count. A tap then commits it.
-- A session restored uncommitted reads as under validation if its creation time is not before the boot Alpha
-  computes from the wall clock: after that clock moves back past it, or after a restart of system_server without
-  a reboot, which keeps `elapsedRealtime`. A clock stepped forward does the reverse: a session of this boot reads
-  as restored, which fences nothing and is under the windows below. Taps stay quiet until a reboot: any reboot
-  after that restart, and after a clock moved back, one that boots later than the creation time. Neither case
-  needs the three-day expiry at boot, which measures age on the same clock and so comes only at a boot that
-  frees the session anyway. The case that needs that expiry is the session restored committed, above.
-- A confirmation opened on a surface that stays in the background, such as the assistant behind Home, holds
-  taps on the other surface until the first resumes or closes, or the process ends.
+A tap opens the confirmation Alpha kept from Android, the one thing it does while a session fences, and how the owner
+answers one left with no status, when the confirmation activity is destroyed without finishing (Home or Alpha's own
+`singleTask` relaunch can do it). A second confirmation can end an install, because cancelling one destroys the
+session, so a kept confirmation stays shut when Android is past asking: the session's progress is above 0.8, which
+only an accepted session reaches, or it reads active. `isActive` alone is not enough, because an accepted session
+reads active only from Android 14. It also stays shut for three seconds after Alpha's last exchange with Android (a
+status in flight, a start not yet covering Alpha, usually an accept not yet listed), until the surface that opened a
+confirmation resumes, and while another surface owes a confirmation it kept. A start Android dropped holds nothing past
+those three seconds, and a kept confirmation opens only if Android still lists the session and is not past asking.
+
+What can still hold a session fenced, read from AOSP and not run on a device. Android's expiry is the last bound on
+all of them: it ends a session at the first boot three days or more after its creation by the wall clock, and from
+Android 12L (API 32) at a low-storage sweep past eight hours. Neither has a schedule, so with no such boot and no low
+storage a session has no time limit, and its staged copy (up to `sizeBytes`) stays on disk. Taps stay quiet throughout,
+and the current version keeps showing.
+
+- A sealed session whose status was lost, as when a confirmation is dismissed and the process then dies: Android's
+  expiry, or its target installed some other way. Android sends nothing more without a commit, and none comes. The
+  launcher flavor's process lives long, but one that is killed in this state leaves it here.
+- A status that never reaches a live process: the same. The owner waits, and its process's end changes nothing.
+- A session a reboot restored, marked or not: the same, because no status receiver crosses a boot. Android 11 and
+  later do not validate a marked one again, and its commit fails, read from AOSP: system_server dies on 11, nothing
+  shows and no status comes on 12 and 13, and on 14 to 17 the confirmation shows and its accept fails, or on 14 can
+  kill system_server. Android 10 validates it at boot, and that install reads 0.1 and idle.
+- No binding, or a corrupt one: Android's expiry alone. No installed version ends it.
+- A commit that threw, sealed: Android's status if it comes, otherwise the same. On Android 10 a validation I/O error
+  seals a session with no mark and no status, so it stays until the expiry.
+- A commit that threw, reading unsealed: until Android lists it no more or the process ends.
+- A confirmation opened on a surface that stays in the background, such as the assistant behind Home, holds a reopen
+  from the other surface until the first resumes or closes, or the process ends.
 - A developer-verification request (Android 17, with `verification_service` on and a verifier present) comes
   on a session that stays active and can be dismissed with no status. A tap reopens it, but a process that
-  restarted holds no copy, so taps stay quiet until a reboot.
+  restarted holds no copy, so it joins the first entry.
 - A surface destroyed in the instant between its worker's last check and taking ownership stays named as owner,
-  which holds every other surface's tap until the process ends.
+  which holds a reopen on every other surface until the process ends.
 - `DISALLOW_INSTALL_APPS` makes `createSession` refuse, so each tap downloads and then fails quietly, staging
   nothing. A tap asks for the download only when the owner does, so this stays. The unknown-sources
   restrictions make `canRequestPackageInstalls` false, so only Android's page opens. A session staged before
   a restriction ends at a policy abort on Android 17; on 16 and older it aborts with no status and stays
   until it expires, and nothing could install it meanwhile.
 
-Narrow windows stay open. After an accept Android reads a session idle at 0.8 on every version until its one
-install thread, which all sessions share, reaches it; `isActive` follows from Android 14, and progress after
-that. That is a queue, not a time, so the three seconds only usually cover it. Past them a kept confirmation can
-reopen on any version, and cancelling it ends the accepted install. A process with no live owner, after a
-restart or destroy in that gap, commits instead: that ends the install on Android 10 to 13, stops at a guard on
-14 and 15, and on 16 and 17 fails it only if the stage directory is already in use. A session committed twice
-reads idle after its accept, so on Android 17 a tap during a developer verification that outlasts the three
-seconds, while progress is still 0.8, can open a second confirmation. A process that restarted cannot see a
-confirmation still up in another of its tasks, so its commit can open a second one. One that restarted while
-Android validates a session a reboot restored uncommitted cannot tell that from a session left behind, and
-commits it a second time. A wall clock stepped forward puts the computed boot after a session of this boot, so
-with no live owner a read from before validation starts commits that session a second time too. That costs a
-second status and lowers Android's count by one, and the install goes on.
+One narrow window stays open. After an accept Android reads a session idle at 0.8 on every version until its one
+install thread, which all sessions share, reaches it; `isActive` follows from Android 14, and progress after that.
+That is a queue, not a time, so the three seconds only usually cover it. Past them a kept confirmation can reopen on
+any version, and cancelling it ends the accepted install.
 
-### Proposal: recovering a restored committed session
+### Recovering a session that stays fenced
 
-For Root's review, not built. Today that session stays fenced, the first entry under what can hold a session
-fenced, and Android's list is the only end Alpha acts on. Alpha's own commit at 0.8 leads there: from Android 12
-(API 31) it writes the mark, so a session a reboot would have restored unmarked, which a tap commits, comes back
-committed instead. No tap gives that session up, so that commit's cost belongs in this decision. Signals an app has, read from AOSP 10 to 17:
+The binding, the status that reconnects it and the installed-target check above are built. A way for the owner to
+leave a fence is not: every entry above ends only with Android, and no tap gives a sealed session up. Signals an app
+has, read from AOSP 10 to 17:
 
 | Signal | SDK | What it can prove |
 | --- | --- | --- |
 | Session gone from `getMySessions`, `getSessionInfo` null | 29 to 37 | Terminal. Built: this is the fence. |
-| Sealed, committed, progress, active | 29 to 37 | Nothing terminal. Committed at 0 reads after a reboot, and on 33 to 37 during validation. Only a read after one that showed the mark separates them. |
+| Referrer, read back | 29 to 37 | What the session holds, for a session Alpha bound. Built. A build before the binding wrote none. |
+| Sealed, committed, progress, active | 29 to 37 | Nothing terminal, and not whether an owner's accept is queued. Committed at 0 reads after a reboot, and on 33 to 37 during validation. |
 | `getUpdatedMillis`, from 30 `getCreatedMillis` | 29 to 37 | Age against a boot computed from the wall clock, so only as true as that clock. |
 | `SessionCallback.onFinished` | 29 to 37 | An end while the callback is registered. No more than the list, and nothing across a restart. |
-| Installed versionCode and signer | 29 to 37 | What is installed, not what a session holds. Nothing public names a session's version: `getSize` is the nearest, and equal sizes prove nothing. |
+| Installed versionCode and signer | 29 to 37 | With a binding, that the target landed or was passed. Built. Without one, nothing: `getSize` is the nearest public fact about a session, and equal sizes prove nothing. |
 | `lastUpdateTime`, `ACTION_MY_PACKAGE_REPLACED` | 29 to 37 | That some install landed, not this one. |
 | Staged-session state | 29 to 37 | Nothing here: Alpha's sessions are not staged. |
 | Historical sessions | none | Not public at any tag. |
 
-Installed version and signer cannot settle it yet, because they need the session's target. An offer is always
-above the installed build, so comparing the two proves nothing, and Android drops a finished session in a posted
-step ahead of its write, so a reboot between them can restore a session whose install landed. The smallest source
-of a target is the session itself: `SessionParams.setReferrerUri`, read back by `SessionInfo.getReferrerUri`, public,
-persisted and readable by the owner at 29 to 37. It adds no Alpha store and goes with the session, but covers only
-sessions staged after it ships, and its effect on installs is unread.
-
-A cancellation path, before any fresh session, would have to prove no outcome is pending:
+A cancellation path, before any fresh session, would have to prove no outcome is pending. It is for Root's review and
+goes against the standing rule that no tap abandons a sealed session, so it stays unbuilt:
 
 1. It is not under validation: a read taken after one that showed the mark still reads committed at 0.
 2. No commit reached it this boot, since a confirmation and an install each need one, and Android writes no status
-   receiver across a boot. Android shows no commit count, and on 10 such a commit also reads 0, so this rests on
-   no published build committing a session that reads committed at progress 0. It holds only while that stays
-   true.
+   receiver across a boot. Android shows no commit count, and on 10 such a commit also reads 0. A bound session can
+   answer this, because a build that binds commits once, in the boot it names. An unbound session cannot, and stays out.
 3. Its end is Android's: at 29 to 37 `abandonSession` returns before Android drops the session from its list, so
    a fresh session waits for a read that no longer lists it. 17 also posts the destroy.
 
