@@ -1,3 +1,5 @@
+import {isInferenceTraceId} from '../vendor/eliza/packages/core/src/inference-trace.ts';
+import {readAllowedServerTiming} from '../vendor/eliza/plugins/plugin-elizacloud/src/utils/server-timing.ts';
 import {productionCloud, stagingCloud, cloudStorageNamespace} from '../apps/app/src/runtime/cloud-deployment.generated.ts';
 import {createCloudResidentHost} from './cloud-resident-host.mjs';
 import {startManagedGoogleAgentHost} from '../backend/native-google-agent-host.ts';
@@ -16,15 +18,27 @@ export const BROWSER_CLOUD_BRIDGE_PATH='/__alpha-browser-cloud';
 const UUID=/^[0-9a-f-]{36}$/i,REFERENCE=/^browser-cloud-reference:[0-9a-f-]{36}$/i;
 const authorities={production:productionCloud.api,staging:stagingCloud.api};
 type Environment=keyof typeof authorities;
+type AgentReadClock={fetchStart?:number;headersAt?:number};
+type AgentReadTiming={ordinal:number;totalMs:number|null;fetchToHeadersMs:number|null;bodyMs:number|null;serverTiming?:{cloud_worker?:number};traceId?:string};
+type BrowserCloudDiagnostic={environment:Environment;operation:string;status:number;code?:string;timing?:AgentReadTiming};
+const agentReadRouteNames:Readonly<Record<string,string>>={
+ '/api/v1/user':'identity','/api/v1/eliza/google/accounts':'accounts',
+ '/api/v1/eliza/google/calendar/calendars':'calendar-catalog','/api/v1/eliza/google/calendar/feed':'calendar-feed',
+ '/api/v1/eliza/google/gmail/search':'gmail-search','/api/v1/eliza/google/gmail/read':'gmail-read',
+};
+const diagnosticNow=():number=>{try{return performance.now();}catch{return Number.NaN;}};
+const timingDuration=(start:number|undefined,end:number|undefined):number|null=>
+ start!==undefined&&end!==undefined&&Number.isFinite(start)&&Number.isFinite(end)&&end>=start&&end-start<=600000?Math.round((end-start)*1000)/1000:null;
 type Credential={credentialReference:string;credentialId:string;userId:string;organizationId:string;email?:string;expiresAt?:number;token?:string;credentialFile?:string;credentialSha256?:string};
 const publicCredential=(c:Credential)=>({credentialReference:c.credentialReference,credentialId:c.credentialId,userId:c.userId,organizationId:c.organizationId,...(c.expiresAt===undefined?{}:{expiresAt:c.expiresAt})});
 function environment(value:unknown):Environment{if(value!=='production'&&value!=='staging')throw Error('Unsupported Cloud environment');return value;}
 function refusal(status:number,code:string){return Object.assign(Error(code),{status,code});}
 function requestId(value:unknown):string{if(typeof value!=='string'||!UUID.test(value))throw Error('Invalid request identity');return value;}
 /** DEV transport only. Canonical Cloud owns login, identity, plan entitlement and speech authorization. */
-export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:{environment:Environment;operation:string;status:number;code?:string})=>void;resident?:{selectOwn?:(input:{apiKey:string;cartesiaKey?:string},signal?:AbortSignal)=>Promise<unknown>;selectCloud?:(signal?:AbortSignal)=>Promise<unknown>;bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
+export function createBrowserCloudDevHandler(options:{profile:string;request?:typeof fetch;environment?:Environment;diagnostic?:(event:BrowserCloudDiagnostic)=>void;resident?:{selectOwn?:(input:{apiKey:string;cartesiaKey?:string},signal?:AbortSignal)=>Promise<unknown>;selectCloud?:(signal?:AbortSignal)=>Promise<unknown>;bind:(credential:{token:string;credentialId:string;reference:string;expiresAt?:number})=>Promise<unknown>;clear:()=>Promise<unknown>;status:(id?:string)=>unknown;ready:(signal:AbortSignal)=>Promise<unknown>}}){
  const profile=path.resolve(options.profile,cloudStorageNamespace.replaceAll(':','-')),stateFile=path.join(profile,'credentials.json'),initialFile=path.join(profile,'initial-credential.json'),fetchCloud=options.request??fetch;
  let queue:Promise<unknown>=Promise.resolve();
+ let agentReadOrdinal=0;
  const pending=new Map<string,{environment:Environment;expiresAt:number;previousReference:string|null}>();
  const claims=new Map<string,{environment:Environment;previousReference:string|null;expiresAt:number;credential:Credential}>();
  const active=new Map<string,{controller:AbortController;environment:Environment;credentialId?:string}>();
@@ -45,7 +59,7 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
  async function admitted(env:Environment,reference:unknown,id?:unknown){const c=(await load())[env];if(!c)throw refusal(401,'credentials-missing');if(c.credentialReference!==reference||id!==undefined&&c.credentialId!==id)throw refusal(409,'account-changed');if(c.expiresAt!==undefined&&c.expiresAt<=Date.now())throw refusal(401,'expired');return c;}
  async function current(env:Environment,c:Credential,signal:AbortSignal){signal.throwIfAborted();await admitted(env,c.credentialReference,c.credentialId);await keyFor(c);signal.throwIfAborted();}
  function retire(env:Environment){for(const row of active.values())if(row.environment===env)row.controller.abort(new DOMException('Cloud account changed','AbortError'));for(const [id,login]of pending)if(login.environment===env)pending.delete(id);for(const [ref,claim]of claims)if(claim.environment===env)claims.delete(ref);}
- async function canonical(env:Environment,route:string,signal:AbortSignal,init:RequestInit={},credential?:Credential){const headers=new Headers(init.headers);headers.set('Accept','application/json');headers.set('User-Agent','AlphaPhone-Browser-Cloud/1');if(credential)headers.set('Authorization','Bearer '+await keyFor(credential));const result=await fetchCloud(authorities[env]+route,{...init,headers,redirect:'error',signal});signal.throwIfAborted();return result;}
+ async function canonical(env:Environment,route:string,signal:AbortSignal,init:RequestInit={},credential?:Credential,clock?:AgentReadClock){const headers=new Headers(init.headers);headers.set('Accept','application/json');headers.set('User-Agent','AlphaPhone-Browser-Cloud/1');if(credential)headers.set('Authorization','Bearer '+await keyFor(credential));if(clock)clock.fetchStart=diagnosticNow();const result=await fetchCloud(authorities[env]+route,{...init,headers,redirect:'error',signal});if(clock)clock.headersAt=diagnosticNow();signal.throwIfAborted();return result;}
  // Browser-host sign-in: email stays in app; Google uses canonical hosted OAuth, not Android App Links. The same Steward and mobile App Auth contracts as AlphaCloudSignInPlugin; the Steward
  // session, PKCE material and the minted key stay in this process and the private profile file.
  type SignInAttempt={controller:AbortController;id:string;environment:Environment;email:string;verifier:string;expiresAt:number;resendAt:number;busy:boolean;failed:number;mfa?:{type:string;challengeId:string}};
@@ -320,10 +334,21 @@ export function createBrowserCloudDevHandler(options:{profile:string;request?:ty
  const agentRead=async(input:{url:string;method:string;body?:unknown;credentialReference?:string;signal:AbortSignal})=>{
    const url=new URL(input.url);
    if(url.origin!==authorities.production||url.username||url.password||url.hash||url.port||input.method!=='GET'||input.body!==undefined||!(url.pathname==='/api/v1/user'&&!url.search||['/api/v1/eliza/google/accounts','/api/v1/eliza/google/gmail/search','/api/v1/eliza/google/gmail/read','/api/v1/eliza/google/calendar/calendars','/api/v1/eliza/google/calendar/feed'].includes(url.pathname)&&managedGoogleRequest(url,'GET',undefined)))throw refusal(403,'agent-read-route-refused');
-   const c=await admitted('production',input.credentialReference);
-   const response=await canonical('production',url.pathname+url.search,input.signal,{},c);
-   const data=await boundedServiceJson(response);await current('production',c,input.signal);
-   return {status:response.status,data};
+   const started=diagnosticNow(),ordinal=agentReadOrdinal=agentReadOrdinal%1000000+1,clock:AgentReadClock={};
+   let status=0,bodyMs:number|null=null,returned=false,serverTiming:AgentReadTiming['serverTiming'],traceId:string|undefined;
+   try{
+    const c=await admitted('production',input.credentialReference);
+    const response=await canonical('production',url.pathname+url.search,input.signal,{},c,clock);status=response.status;
+    try{serverTiming=readAllowedServerTiming(response.headers.get('Server-Timing'),['cloud_worker'] as const);const trace=response.headers.get('X-Eliza-Trace-Id');if(isInferenceTraceId(trace))traceId=trace;}catch{/* Optional diagnostics never change transport behavior. */}
+    const bodyStart=diagnosticNow();let data:Awaited<ReturnType<typeof boundedServiceJson>>;
+    try{data=await boundedServiceJson(response);}finally{bodyMs=timingDuration(bodyStart,diagnosticNow());}
+    await current('production',c,input.signal);returned=true;return {status:response.status,data};
+   }finally{
+    // Fixed route labels and bounded numbers only. Never publish this on the model/return-data surface.
+    try{const event:BrowserCloudDiagnostic={environment:'production',operation:'agent-read.'+agentReadRouteNames[url.pathname],status:Number.isInteger(status)&&status>=100&&status<=599?status:0,code:returned?'returned':'threw',timing:{ordinal,totalMs:timingDuration(started,diagnosticNow()),fetchToHeadersMs:timingDuration(clock.fetchStart,clock.headersAt),bodyMs,...(serverTiming?{serverTiming}:{}),...(traceId?{traceId}:{})}};
+     if(options.diagnostic)options.diagnostic(event);else console.info('[alpha-cloud-agent-read]',JSON.stringify(event));
+    }catch{/* A diagnostic sink cannot replace a result or original failure. */}
+   }
   };
  const agentCalendarOperation=async(input:Parameters<typeof agentRead>[0])=>{
    const url=new URL(input.url),body=input.body===undefined?undefined:JSON.stringify(input.body);
