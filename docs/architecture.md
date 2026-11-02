@@ -406,8 +406,9 @@ reviewed source overrides for `scripts/stage-aosp.mjs`; `apk-release-record.mjs`
 release row's blockers for `scripts/release-blockers.mjs` (Alpha supplies the release-signer
 admission and the font-licence switch; open-source licence flags never block, P-09) and holds
 the in-place update checks `scripts/pilot-update.mjs` uses; `aosp-ota-update.mjs` owns the
-operator update, fallback, stock-recovery and known-good retention commands. The read-only
-update-channel client is upstream and registered off in Alpha. Alpha's remaining staging code is
+operator update, fallback, stock-recovery and known-good retention commands. The on-device
+update client (`android/updater`) and channel manifest writer are upstream, and Alpha supplies
+only `updater` values in its product descriptor. Alpha's remaining staging code is
 its product policy (descriptor, listener, provisioning, capability and Pixel 10a/Cuttlefish
 bindings). The shared mobile agent build excludes the browser wallet-connector graph (wagmi,
 RainbowKit, `@metamask/*`) from the Android resident bundle.

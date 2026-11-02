@@ -224,10 +224,10 @@ update and recovery gates below.
    command) archives and hash-records a verified signed image and its target-files, refusing
    placeholders, test-keys builds and inputs that differ from the release record;
    `aosp-ota-update.mjs stock-archive --known-good DIR` re-verifies that archive and offers
-   its reflash plan beside the stock plan. The shared read-only update-channel client
-   (`packages/os/scripts/android/update-channel-client.mjs`) is registered off in Alpha
-   (`updateChannelCheckEnabled`); only a development build shows its state in About. No
-   release key, signed image, applied OTA, interrupted-update, rollback, known-good or
+   its reflash plan beside the stock plan. The on-device update client and its channel
+   manifest are upstream (`packages/os/android/updater`,
+   `packages/os/scripts/android/channel-manifest.mjs`; see
+   [OS updates](runbooks/ota-updates.md)). No release key, signed image, applied OTA, interrupted-update, rollback, known-good or
    stock-recovery drill exists yet, and `scripts/pilot-update.mjs` (shared signer-equal,
    higher-versionCode and per-domain readback checks) still refuses a lower APK versionCode.
 

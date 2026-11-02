@@ -57,8 +57,6 @@ export const DENYLIST = Object.freeze([
   'Browser sign-in (diagnostic)', 'staging.eliza.app/alphaphone',
   ...RETIRED_SIGN_IN_HAND_OFF_TEXT,
   'Browser calendar (development)',
-  // The read-only OS update-channel check is registered off; its About row is development only.
-  'Update channel (development)',
   // Internal project scope is never user copy (owner decision 2026-10-30): unavailable apps and
   // actions say they are not available on this phone yet.
   'deferred from the MVP',

@@ -18,11 +18,6 @@ test('updates are never reported as checked, available or current',()=>{
  for(const at of [undefined,null,0,-5,'1760000000000',1.5])assert.deepEqual(m.installedRows(at,format),[]);
  // No dead-end Updates row either: Alpha does not check, so About says nothing about updates.
  assert.doesNotMatch(source,/Alpha does not check for updates|updateRows/);
- // The OS update-channel check is registered off; only the Developer gate (both About pages)
- // shows its state, and the production bundle audit denies the row.
- assert.match(readFileSync('apps/app/src/build-flags.ts','utf8'),/export const updateChannelCheckEnabled = false as boolean;/);
- assert.equal((source.match(/\.\.\.\(developerTools\?\[info\('Update channel \(development\)',updateChannelCheckEnabled\?'Read-only check on · never downloads or installs':'Off'\)\]:\[\]\)/g)??[]).length,2);
- assert.match(readFileSync('scripts/audit-production-bundle.mjs','utf8'),/'Update channel \(development\)'/);
  // Neither the adapter nor the native plugin carries an update-check claim.
  assert.doesNotMatch(source,/Up to date|Update available|Check for updates/);
  assert.doesNotMatch(java,/Up to date|Update available/);
@@ -96,7 +91,7 @@ test('one Developer gate: a development server build opened with ?tools=1, never
  assert.match(profile,/const devSurfacesEnabled:boolean=import\.meta\.env!==undefined&&import\.meta\.env\.DEV===true&&/);
  // Every developer-only Settings row reads the same gate, not a test-mocks or dev-surface flag alone.
  for(const row of ["if(developerTools&&!Capacitor.isNativePlatform())groups.push({...group([{kNav:true,label:'Calendar backups'","if(developerTools)page.groups.push(group([{kNav:true,label:'Try mock mode'","if(developerTools&&recovery.length)page.groups.push(group([info('Saved data needs recovery'","if(developerTools)agentRows.push(action('Details',","if(native&&developerTools&&state.page==='agent-recovery-details')"])assert.ok(source.includes(row),row);
- assert.doesNotMatch(source,/(testMocksEnabled|devSurfacesEnabled)[^;\n]{0,40}(Calendar backups|Try mock mode|Saved data needs recovery|Update channel)/);
+ assert.doesNotMatch(source,/(testMocksEnabled|devSurfacesEnabled)[^;\n]{0,40}(Calendar backups|Try mock mode|Saved data needs recovery)/);
 });
 test('explicit developer surfaces retain Developer navigation and route',()=>{
  const rows=[{label:'Developer'},{label:'About'}];

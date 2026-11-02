@@ -91,7 +91,7 @@ test('production Settings controls act or explain the current Calendar authority
 /** Rows the Settings cleanup removed or put behind the Developer gate; a product build shows none of them. */
 const removedRows:Record<string,RegExp[]>={
  '':[/^Developer$/,/^Try mock mode$/,/^Saved data needs recovery$/,/^Last change$/],
- 'About':[/^Update channel \(development\)$/,/^Updates$/,/^Alpha does not check for updates$/,/^Runtime$/],
+ 'About':[/^Updates$/,/^Alpha does not check for updates$/,/^Runtime$/],
  'Calendar':[/^Calendar backups$/,/^Display only$/],
  'Connections':[/^Other connectors$/,/^Not available in this version$/,/^Last change$/],
  'Notifications':[/^Delivery timing$/],

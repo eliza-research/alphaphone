@@ -2,7 +2,7 @@ import { externalVoiceInvocationEnabled } from '../runtime/voice-entry-policy';
 import {residentRecoveryCopy} from '../runtime/resident-recovery';
 import {cloudServiceName} from '../runtime/cloud-protocol';
 import {browserDevProfile as devProfileQuery,developerTools} from '../browser/dev-profile';
-import {cloudRuntimeEnabled,testMocksEnabled,devSurfacesEnabled,updateChannelCheckEnabled} from '../build-flags';
+import {cloudRuntimeEnabled,testMocksEnabled,devSurfacesEnabled} from '../build-flags';
 import {openCalendarRecovery} from '../browser/calendar-recovery';
 import {openNotificationRecovery} from '../browser/notification-recovery';
 import {openAlertSoundRecovery,openDevicePreferencesRecovery,openDeviceRolesRecovery} from '../browser/preference-recovery';
@@ -688,7 +688,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
       } else if (page.title === 'About') {
         page.hero = { ...page.hero, big: facts.model || 'This phone', sub: facts.manufacturer || 'Device information unavailable' };
         page.groups = [group([
-          info('Alpha Phone', versionLabel(facts.appVersion || buildVersion, facts.appVersionCode)), ...installedRows(facts.appUpdatedAt).map(([label, val]) => info(label, val)), ...(developerTools?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]), info('Android', facts.androidRelease || 'Unavailable'),
+          info('Alpha Phone', versionLabel(facts.appVersion || buildVersion, facts.appVersionCode)), ...installedRows(facts.appUpdatedAt).map(([label, val]) => info(label, val)), info('Android', facts.androidRelease || 'Unavailable'),
           info('Build', facts.build || 'Unavailable'), info('Security patch', facts.securityPatch || 'Unavailable'),
           info('Agent execution', runtimeLocation), info('Agent', target), info('Inference model', inferenceModel),
         ]), group([problemsRow(), diagnosticsRow()]), group([nav('Android device information', 'about')]), group([licensesRow()])];
@@ -793,7 +793,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     }
     if(!Capacitor.isNativePlatform()) {
       for(const page of out.stack){
-        if(page.title==='About')page.groups=[group([info('Alpha Phone',buildVersion),...(developerTools?[info('Update channel (development)',updateChannelCheckEnabled?'Read-only check on · never downloads or installs':'Off')]:[]),info('Agent execution',runtimeLocation),info('Agent',target),info('Inference model',inferenceModel),info('Storage','App storage')]),group([problemsRow(),diagnosticsRow()]),group([licensesRow()])];
+        if(page.title==='About')page.groups=[group([info('Alpha Phone',buildVersion),info('Agent execution',runtimeLocation),info('Agent',target),info('Inference model',inferenceModel),info('Storage','App storage')]),group([problemsRow(),diagnosticsRow()]),group([licensesRow()])];
       }
       const browserLabels=(value:any):any=>{if(typeof value==='string')return value.replaceAll('Manage brightness in Android','Brightness').replaceAll('Manage sound in Android','Sound settings').replaceAll('Manage in Android','App settings').replaceAll('Device accounts in Android','System accounts').replaceAll('Wi-Fi transport · network names stay in Android settings','Network names stay in system settings').replaceAll('in Android','in system settings').replaceAll('Android settings','System settings').replaceAll('Android Calendar','App calendar').replaceAll('Android device information','System information').replaceAll('Android developer settings','App development settings').replaceAll('On this phone','In this app').replaceAll('on this phone','in this app').replaceAll('Android access not granted','Development event access off').replaceAll('Waiting for Android listener','Waiting for local events').replaceAll('Selected apps connected','Selected development apps connected').replaceAll('Native setting unavailable','Managed by your system');if(Array.isArray(value))return value.map(browserLabels);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,browserLabels(v)]));return value;};
       return browserLabels(out);
