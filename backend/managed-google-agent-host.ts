@@ -22,13 +22,17 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
  // One Calendar read lists sources, then reads each feed. Without this the feed verifies the owner and lists calendars
  // again. A feed reuses the source step's lookups for seconds, and concurrent reads join one lookup. Source lists only
  // ever join a lookup still in flight, never a finished one, and every read ends with a fresh grant check.
- const shared=new Map<string,{expires:number;pending:boolean;value:Promise<unknown>}>();
+ const shared=new Map<string,{monotonic:number;wall:number;pending:boolean;value:Promise<unknown>}>();
+ let sharedOwner:string|undefined;
  async function sharedLookup<T>(key:string,read:()=>Promise<T>,reuseFinished:boolean):Promise<T>{
   const entry=shared.get(key);
+  // Age takes the larger clock: the wall clock counts a suspended phone, the monotonic clock a corrected wall clock.
+  const young=entry&&Math.max(performance.now()-entry.monotonic,Date.now()-entry.wall)<CALENDAR_READ_STEP_MS;
   // A failed lookup belongs to its caller, whose request may have ended: a joiner reads for itself.
-  if(entry&&entry.expires>performance.now()&&(entry.pending||reuseFinished))return (entry.value as Promise<T>).catch(read);
-  const value=read(),next={expires:performance.now()+CALENDAR_READ_STEP_MS,pending:true,value};shared.set(key,next);
-  value.then(()=>{next.pending=false;},()=>{if(shared.get(key)===next)shared.delete(key);});
+  if(entry&&young&&(entry.pending||reuseFinished))return (entry.value as Promise<T>).catch(read);
+  const value=read(),next={monotonic:performance.now(),wall:Date.now(),pending:true,value};shared.set(key,next);
+  const drop=()=>{if(shared.get(key)===next)shared.delete(key);};
+  value.then(()=>{next.pending=false;setTimeout(drop,CALENDAR_READ_STEP_MS).unref?.();},drop);
   return value;
  }
  const googleCalendars=(client:CloudProtocol,grantId:string,scope:string,signal:AbortSignal,reuseFinished:boolean)=>sharedLookup(`${scope}:calendars`,()=>client.googleCalendars(grantId,signal),reuseFinished);
@@ -50,6 +54,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
    stage='accounts';
    return client.gmailAccounts(signal);
   };
+  if(calendarRead&&sharedOwner!==ownerKey){shared.clear();sharedOwner=ownerKey;}
   const listed=calendarRead?await sharedLookup(ownerKey,listOwned,reuseFinished):await listOwned();
   stage='account-projection';
   const accounts=listed.filter(a=>a.connected&&a.connectionId&&a.grantedCapabilities.includes(capability)).map(account=>({account,grantId:account.connectionId!,scope:createHash('sha256').update(identity+':'+account.connectionId).digest('hex')}));

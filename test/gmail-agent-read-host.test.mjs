@@ -191,6 +191,40 @@ test('A late failed lookup leaves the newer one in place',async()=>{
  }finally{performance.now=now;await f.close();}
 });
 
+test('A feed step counts time the phone slept, and a wall clock moved back cannot extend it',async()=>{
+ const f=await fixture(),wall=Date.now,monotonic=performance.now;let wallClock=wall(),clock=monotonic.call(performance);Date.now=()=>wallClock;performance.now=()=>clock;try{
+  f.setAccounts(()=>[calendarAccount]);const [source]=await f.reader.calendarSources();
+  wallClock+=6000;await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(ownerCalls(f),2,'a suspended phone verifies again though its monotonic clock stood still');
+  await f.reader.calendarSources();const verified=ownerCalls(f);
+  wallClock-=3600000;clock+=6000;await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(ownerCalls(f),verified+1,'a wall clock moved back does not hold the lookup open');
+ }finally{Date.now=wall;performance.now=monotonic;await f.close();}
+});
+
+test('Finished lookups are dropped when their window ends',async()=>{
+ const f=await fixture(),timer=globalThis.setTimeout,drops=[];
+ globalThis.setTimeout=(run,ms,...rest)=>{if(ms===5000){drops.push(run);return {unref(){}};}return timer(run,ms,...rest);};
+ try{
+  f.setAccounts(()=>[calendarAccount]);const [source]=await f.reader.calendarSources();
+  assert.ok(drops.length>=2,'the owner and calendar lookups each schedule their removal');
+  drops.splice(0).forEach(run=>run());
+  const verified=ownerCalls(f);await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(ownerCalls(f),verified+1);
+ }finally{globalThis.setTimeout=timer;await f.close();}
+});
+
+test('Changing the Cloud credential drops every lookup of the old one',async()=>{
+ const f=await fixture();try{
+  f.setAccounts(()=>[calendarAccount]);const [source]=await f.reader.calendarSources();
+  const original=f.credential.credentialId;
+  f.credential.credentialId='66666666-6666-4666-8666-666666666666';await f.save();await f.reader.calendarSources();
+  f.credential.credentialId=original;await f.save();
+  const verified=ownerCalls(f);await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(ownerCalls(f),verified+1,'returning to the old credential verifies again');
+ }finally{await f.close();}
+});
+
 test('Concurrent Calendar reads share one lookup, and a joiner reads for itself when the leader ends',async()=>{
  const f=await fixture();try{
   f.setAccounts(()=>[calendarAccount]);
