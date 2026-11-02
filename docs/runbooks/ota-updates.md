@@ -87,6 +87,7 @@ adb -s "$SERIAL" shell getprop ro.build.fingerprint     # .../eng.builde:userdeb
 adb -s "$SERIAL" shell getprop | grep -E 'ro\.([a-z_]+\.)?build\.date\.utc'   # the new build must be newer on every partition
 adb -s "$SERIAL" shell getprop ro.boot.slot_suffix      # note it (_a or _b)
 adb -s "$SERIAL" shell getprop ro.virtual_ab.enabled    # true
+adb -s "$SERIAL" shell 'command -v update_engine_client'  # required by steps 6 and 7
 adb -s "$SERIAL" shell getprop zygote.critical_window.minute                  # record it, empty or not
 adb -s "$SERIAL" shell 'su 0 sh -c "grep -h checkpoint= /vendor/etc/fstab.*"'  # record it: the /data line
 adb -s "$SERIAL" shell df -h /data                      # several GB free for the snapshot copy-on-write
@@ -111,7 +112,10 @@ owner before step 6.
 Tonight's Alpha APK and SDK pin stay unchanged, so this is by hand. A composed build appends the same
 two make lines from the product's `updater` block, after checking the channel key and URL. If the
 updater does not compile, remove the two make lines and `rm -rf vendor/alphaphone/updater`: Soong
-parses every `Android.bp` in the tree, so the make lines alone do not take it out of the build.
+parses every `Android.bp` in the tree, so the make lines alone do not take it out of the build. That
+build can still go on by cable, but it takes no remote updates: skip the updater rows of step 3, the
+channel steps at the end of step 4 and the updater rows of step 7, and record that it shipped without
+the client.
 
 The parentheses make the guard stop a pasted block: at an interactive prompt it would otherwise print
 its error and the next line would still run.
@@ -169,6 +173,7 @@ sha256sum "$TF"
 
 ```sh
 unzip -p "$TF" META/misc_info.txt | grep -E '^(ab_update|virtual_ab|default_system_dev_certificate)='
+unzip -p "$TF" META/ab_partitions.txt    # what the OTA writes; record it, and stop to review bootloader, abl or modem rows
 unzip -p "$TF" SYSTEM/build.prop | grep -E '^ro\.system\.build\.fingerprint='
 unzip -p "$TF" SYSTEM/build.prop VENDOR/build.prop '*/etc/build.prop' | grep -E '^ro\.([a-z_]+\.)?build\.date\.utc='
 unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
@@ -249,8 +254,9 @@ openssl pkeyutl -verify -rawin -pubin -inkey "$OTA_DIR/p.pub" -in "$OTA_DIR/m.js
 ```
 
 Stop before step 5 unless both downloads succeed and this prints `Signature Verified Successfully`.
-Step 3 already tied these two values to the image. A wrong value means fixing the input and repeating
-steps 2a to 4.
+Step 3 already tied these two values to the image. A wrong value means correcting it in
+`vendor/alphaphone/updater/res/values/channel.xml` and repeating steps 2 to 4; never re-run 2a, which
+would nest the module and double the make lines.
 
 ### 5. Serve over adb reverse (on the host the phone is attached to)
 
