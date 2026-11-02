@@ -17,12 +17,14 @@ public class PackageInstaller {
  public boolean validating;
  /** Runs while a session's bytes reach the disk, to destroy a bridge at that moment. */
  public Runnable staging=()->{};
+ /** Runs as the status PendingIntent is made, past the worker's last check and ahead of its taking ownership. */
+ public Runnable sending=()->{};
  /** Runs inside commit, once the session has its owner, to hold or fail it there. */
  public Runnable committing=()->{};
  /** Runs as Android answers getMySessions, while each read waits on its session's lock: to destroy a bridge at that moment, or to let validation end. */
  public volatile Runnable listing=()->{};
  public boolean listDown,infoDown,abandonDown;
- /** The phase that throws next, once: open, write, fsync, stream (its close), sender (the status PendingIntent), reply (commit's, lost once Android has done its work) or close (the session's, after it). */
+ /** The phase that throws next, once: open, write, fsync, stream (its close), sender (the status PendingIntent), reply (commit's, lost once Android has done its work), kill (the process, ahead of a session's close, which then never lands) or close (the session's, after it lands). */
  public String failAt="";
  public void phase(String name){if(name.equals(failAt)){failAt="";throw new RuntimeException("DeadSystemException");}}
  private int next=40;
@@ -70,7 +72,7 @@ public class PackageInstaller {
    }
    phase("reply");
   }
-  @Override public void close(){internals.get(id).active--;phase("close");}
+  @Override public void close(){phase("kill");internals.get(id).active--;phase("close");}
  }
  /** streamValidateAndCommit, which does nothing for a session already committed. */
  public void validate(int id){Internal session=internals.get(id);if(session.validated)return;session.validated=true;session.active++;session.progress=0.8f;}

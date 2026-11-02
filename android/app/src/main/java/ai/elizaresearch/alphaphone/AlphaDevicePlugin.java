@@ -414,6 +414,8 @@ public final class AlphaDevicePlugin extends Plugin {
        // a commit can succeed ahead of a lost reply and the close after it can throw, and no exception class means the same on
        // every Android, so the session and its owner stay, and what happened comes from Android's status or list.
        updateOwner=this;updateSession=id;updateConfirm=null;updateDue=false;updateOpen=false;updateAsked=System.nanoTime();
+       // A destroy past the last check cannot stop this commit, and a dead owner would keep every live receiver from its status. handleOnDestroy interrupts ahead of reading updateOwner, so one side always sees the other.
+       if(Thread.currentThread().isInterrupted())updateOwner=null;
        commitAttempted=true;
        session.commit(status);
        updatesCommitted.incrementAndGet();

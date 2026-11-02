@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
@@ -1240,6 +1241,66 @@ public final class UpdateFlowTest {
   Intent confirm=confirmation(context,pending);
   check(other.activity.started.equals(List.of(confirm))&&owner.activity.started.isEmpty(),"Android's own status reconnects that bridge and opens there");
  }
+ /** A tap whose bridge another thread destroys while its worker is held in the gap. The hold ignores the interrupt, as a Binder call does. */
+ private static PluginCall tapDestroyedAt(AlphaDevicePlugin plugin,Consumer<Runnable> gap)throws Exception{
+  CountDownLatch reached=new CountDownLatch(1),destroyed=new CountDownLatch(1);
+  gap.accept(()->{reached.countDown();while(destroyed.getCount()>0)Thread.onSpinWait();});
+  PluginCall call=offered();plugin.installUpdate(call);
+  check(reached.await(20,TimeUnit.SECONDS),"the worker is past its last check");
+  stop(plugin);plugin.handleOnDestroy();destroyed.countDown();
+  call.awaitAnswer();
+  return call;
+ }
+ /** A destroy past the last check cannot stop the commit. Named as owner, a dead bridge would keep every live receiver from Android's status, and nothing commits again. */
+ private static void aBridgeDestroyedPastItsLastCheckNamesNoOwner(File cache)throws Exception{
+  for(int owned=0;owned<=1;owned++){
+   String run=owned==0?" ahead of taking ownership":" after it";
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   AlphaDevicePlugin live=bridge(context,Lifecycle.State.RESUMED),dying=bridge(context,Lifecycle.State.RESUMED);
+   check(tapDestroyedAt(dying,owned==0?held->installer.sending=held:held->installer.committing=held).resolved.get()==1&&installer.abandoned.isEmpty(),"the commit goes on and settles quietly:"+run);
+   int pending=committed(context);
+   Intent confirm=confirmation(context,pending);
+   check(live.activity.started.equals(List.of(confirm))&&dying.activity.started.isEmpty(),"its status reaches the live bridge, and opens there once:"+run);
+   dismissed(live);
+   check(tap(live).resolved.get()==1&&live.activity.started.equals(List.of(confirm,confirm))&&installer.committed.equals(List.of(pending)),"which then holds what a tap reopens:"+run);
+  }
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  tapDestroyedAt(bridge(context,Lifecycle.State.RESUMED),held->installer.sending=held);
+  int pending=committed(context);
+  installer.sendConfirmation(pending);
+  AlphaDevicePlugin next=bridge(context,Lifecycle.State.RESUMED);
+  connections.clear();
+  settled();
+  check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.equals(List.of(pending))&&installer.abandoned.isEmpty()&&next.activity.started.isEmpty(),"with no bridge alive at its status that status is lost, and a later surface asks for nothing");
+  ended(context,pending,PackageInstaller.STATUS_FAILURE_ABORTED);
+  check(tap(next).resolved.get()==1&&committed(context)!=pending,"until Android's end of it frees the next tap");
+ }
+ /** Only a client's close lowers Android's count for it, and Android keeps no death link on a client: this reads active, which no read separates from an accepted install. */
+ private static void aProcessKilledAheadOfItsCloseStaysFenced(File cache)throws Exception{
+  for(int sdk=29;sdk<=37;sdk++)for(int front=0;front<=1;front++){
+   String run=" sdk "+sdk+", in front "+front;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   installer.failAt="kill";
+   tap(bridge(context,Lifecycle.State.RESUMED));
+   int pending=committed(context);
+   AlphaDevicePlugin next=restarted(context);
+   if(front==0)stop(next);
+   Intent confirm=confirmation(context,pending);
+   check(installer.getSessionInfo(pending).isActive(),"it reads active past its confirmation:"+run);
+   if(front==0)resume(next);
+   check(next.activity.started.equals(front==1?List.of(confirm):List.of()),"its status reconnects, and only a surface in front opens it:"+run);
+   dismissed(next);
+   connections.clear();
+   check(tap(next).resolved.get()==1&&connections.isEmpty()&&next.activity.started.size()==front,"a tap reopens and downloads nothing:"+run);
+   check(installer.committed.equals(List.of(pending))&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(pending)),"and commits and gives up nothing:"+run);
+   ended(context,pending,PackageInstaller.STATUS_FAILURE_ABORTED);
+   check(tap(next).resolved.get()==1&&connections.size()==1&&committed(context)!=pending,"until Android's end of it frees the next tap:"+run);
+  }
+ }
  private static void aTapTakenBeforeACommitStaysQuietPastTheWindow(File cache)throws Exception{
   Context context=installing(cache);
   PackageInstaller installer=context.packages.installer;
@@ -1399,6 +1460,8 @@ public final class UpdateFlowTest {
    aDeveloperVerificationRequestStaysAnswerable(cache);
    anIdleBridgesDestroyLeavesTheOwnersKeptConfirmation(cache);
    aDestroyedOwnersStatusReachesALiveBridge(cache);
+   aBridgeDestroyedPastItsLastCheckNamesNoOwner(cache);
+   aProcessKilledAheadOfItsCloseStaysFenced(cache);
    aTapTakenBeforeACommitStaysQuietPastTheWindow(cache);
    aStatusInsideCommitReachesItsOwner(cache);
    aTerminalStatusWithAnIntentDropsAKeptConfirmation(cache);

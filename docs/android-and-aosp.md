@@ -428,6 +428,11 @@ and the current version keeps showing.
   expiry, or its target installed some other way. Android sends nothing more without a commit, and none comes. The
   launcher flavor's process lives long, but one that is killed in this state leaves it here.
 - A status that never reaches a live process: the same. The owner waits, and its process's end changes nothing.
+- A process killed after `commit` returned and before its `close` reached Android: the same. Android keeps no death
+  link on a session's client, so that close never lands and the session reads active until a reboot. A later process's
+  status still reconnects, but its confirmation reads as past asking: kept for a surface away from the front it is
+  dropped at the resume, and in front it opens once and no tap reopens it. Nothing an app reads separates this from an
+  accepted install, so it stays shut.
 - A session a reboot restored, marked or not: the same, because no status receiver crosses a boot. Android 11 and
   later do not validate a marked one again, and its commit fails, read from AOSP: system_server dies on 11, nothing
   shows and no status comes on 12 and 13, and on 14 to 17 the confirmation shows and its accept fails, or on 14 can
@@ -441,8 +446,12 @@ and the current version keeps showing.
 - A developer-verification request (Android 17, with `verification_service` on and a verifier present) comes
   on a session that stays active and can be dismissed with no status. A tap reopens it, but a process that
   restarted holds no copy, so it joins the first entry.
-- A surface destroyed in the instant between its worker's last check and taking ownership stays named as owner,
-  which holds a reopen on every other surface until the process ends.
+- A surface destroyed past its worker's last check, a commit on its way: no check can stop that commit, so the session
+  goes to Android. No dead surface stays named as owner, since `handleOnDestroy` interrupts the worker ahead of reading
+  the owner and the worker reads that interrupt after naming itself, so a live surface takes up the status and opens
+  there. With no surface alive when the status comes, it is lost, and the session joins the status entry above.
+- A surface destroyed in the instant between its worker's last check and reopening a kept confirmation stays named as
+  owner, which holds a reopen on every other surface until the process ends.
 - `DISALLOW_INSTALL_APPS` makes `createSession` refuse, so each tap downloads and then fails quietly, staging
   nothing. A tap asks for the download only when the owner does, so this stays. The unknown-sources
   restrictions make `canRequestPackageInstalls` false, so only Android's page opens. A session staged before
