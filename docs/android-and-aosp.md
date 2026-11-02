@@ -428,7 +428,7 @@ and the current version keeps showing.
   expiry, or its target installed some other way. Android sends nothing more without a commit, and none comes. The
   launcher flavor's process lives long, but one that is killed in this state leaves it here.
 - A status that never reaches a live process: the same. The owner waits, and its process's end changes nothing.
-- A process killed after `commit` returned and before its `close` reached Android: the same. Android keeps no death
+- A process killed during `commit`, or after it and before its `close` reached Android: the same. Android keeps no death
   link on a session's client, so that close never lands and the session reads active until a reboot. A later process's
   status still reconnects, but its confirmation reads as past asking: kept for a surface away from the front it is
   dropped at the resume, and in front it opens once and no tap reopens it. Nothing an app reads separates this from an

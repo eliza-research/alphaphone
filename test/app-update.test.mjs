@@ -69,7 +69,7 @@ test('Android installs only the offered newer build of this package, and only wh
  // A check of 404 is an answer, not a failure.
  assert.match(plugin,/if\(status==404\)\{call\.resolve\(new JSObject\(\)\);return;\}\s*if\(status!=200\)throw/);
  assert.match(plugin,/updateConnection\(BuildConfig\.ALPHA_UPDATE_MANIFEST_URL\)/);
- assert.match(plugin,/handleOnDestroy\(\)\{[^}]*getContext\(\)\.unregisterReceiver\(updateStatus\);/);
+ assert.match(plugin,/handleOnDestroy\(\)\{[^}]*updateWorker\.shutdownNow\(\);[^}]*getContext\(\)\.unregisterReceiver\(updateStatus\);[^}]*if\(updateOwner==this\)/);
  assert.doesNotMatch(plugin,/setRequireUserAction|INSTALL_PACKAGES"|toast|Toast/);
 });
 
