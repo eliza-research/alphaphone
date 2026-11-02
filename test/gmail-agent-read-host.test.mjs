@@ -98,9 +98,9 @@ test('Calendar reads bind the current grant and refuse a revoked source before r
 
 const calendarAccount={...account,label:'owned@example.invalid',grantedCapabilities:['google.calendar.read']};
 const calendarInput=grantId=>({grantId,calendarId:'primary',timeMin:'2026-10-14T00:00:00Z',timeMax:'2026-10-16T00:00:00Z',timeZone:'UTC'});
-/** One normal read: the service lists sources, then reads each feed. */
 const until=async ready=>{while(!ready())await new Promise(resolve=>setTimeout(resolve,1));};
 const ownerCalls=f=>f.calls.filter(u=>u.pathname==='/api/v1/user').length;
+/** One normal read: the service lists sources, then reads each feed. */
 async function calendarTurn(f){const sources=await f.reader.calendarSources();await f.reader.calendarFeed(calendarInput(sources[0].grantId));return sources;}
 
 test('One Calendar read checks the owner once, and every read of sources is fresh',async()=>{
@@ -177,6 +177,17 @@ test('A read cannot join an owner check older than the step window',async()=>{
   clock+=6000;f.setBeforeOwner(async()=>{});await f.reader.calendarSources();
   assert.equal(ownerCalls(f),2);
   release();await slow;
+ }finally{performance.now=now;await f.close();}
+});
+
+test('A late failed lookup leaves the newer one in place',async()=>{
+ const f=await fixture(),now=performance.now;let clock=now.call(performance),fail;performance.now=()=>clock;try{
+  f.setAccounts(()=>[calendarAccount]);f.setBeforeOwner(()=>new Promise((_,reject)=>{fail=reject;}));
+  const stale=f.reader.calendarSources();await until(()=>fail);
+  clock+=6000;f.setBeforeOwner(async()=>{});const [source]=await f.reader.calendarSources();
+  fail(Error('Lost'));await assert.rejects(stale);
+  const verified=ownerCalls(f);await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(ownerCalls(f),verified);
  }finally{performance.now=now;await f.close();}
 });
 
