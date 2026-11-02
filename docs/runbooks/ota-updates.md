@@ -147,15 +147,16 @@ lunch alpha_stallion_phone-cp2a-userdebug
 get_build_var SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS   # must list vendor/alphaphone/updater/sepolicy/private
 ```
 
-If `get_build_var` does not list it, the two policy rules are silently absent and the updater never
-updates. Then add the line beside `SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS` in the stallion `BoardConfig.mk`
+If `get_build_var` does not list it, the updater's SELinux domain is silently absent, the updater runs
+in stock `priv_app` and never updates. Then add the line beside `SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS` in the stallion `BoardConfig.mk`
 (the hunk of `devices/pixel10a/patches/enforce-selinux.patch`).
 
 ### 2. Build the target-files on the existing builder
 
 `BUILD_NUMBER` must be unique. Android runs default permission grants only when the fingerprint
-changes, so with an unchanged `eng.` fingerprint the updater gets no `POST_NOTIFICATIONS` and
-"Update ready" never appears; Alpha's own default-permission changes have the same issue. It also
+changes, so with an unchanged `eng.` fingerprint the updater gets no `POST_NOTIFICATIONS`, so
+"Update ready" never appears, and no `READ_PHONE_STATE`, so **Restart** does nothing; Alpha's own
+default-permission changes have the same issue. It also
 makes later incrementals unambiguous: `channel-manifest.mjs` refuses to start one from an `eng.` build.
 
 ```sh
@@ -180,9 +181,13 @@ unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
 diff <(unzip -p tf-otacerts.zip | openssl x509 -noout -fingerprint -sha256) \
      <(unzip -p /abs/device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
 unzip -l "$TF" | grep -E 'SYSTEM_EXT/priv-app/ElizaOsUpdater/|SYSTEM_EXT/etc/(permissions/ElizaOsUpdater|default-permissions/default-permissions-ai.elizaos.updater|sysconfig/ElizaOsUpdater-sysconfig)'
-unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service   # confirm this path on the first target-files
+unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service | grep -v neverallow   # eliza_updater, never priv_app; confirm this path on the first target-files
+unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_seapp_contexts | grep ai.elizaos.updater   # domain=eliza_updater
+unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_mac_permissions.xml \
+  | grep -o 'signature="[0-9a-f]*"><package name="ai.elizaos.updater"' \
+  | sed 's/.*signature="\([0-9a-f]*\)".*/\1/' | xxd -r -p | sha256sum   # the updater signer's digest below
 unzip -p "$TF" SYSTEM_EXT/priv-app/ElizaOsUpdater/ElizaOsUpdater.apk > /abs/image-updater.apk
-aapt2 dump badging /abs/image-updater.apk | grep targetSdkVersion   # SDK build-tools or $ANDROID_HOST_OUT/bin
+apksigner verify --print-certs /abs/image-updater.apk    # SDK build-tools or $ANDROID_HOST_OUT/bin
 aapt2 dump strings /abs/image-updater.apk | grep -F "${CHANNEL_KEY:?}"
 aapt2 dump strings /abs/image-updater.apk | grep -F "${CHANNEL_MANIFEST_URL:?}"
 unzip -p "$TF" PRODUCT/app/AlphaPhone/AlphaPhone.apk > /abs/image-alpha.apk
@@ -191,8 +196,10 @@ apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-
 ```
 
 Stop unless: the updater's APK, allowlist, default-permissions and sysconfig files are all listed;
-the compiled system_ext policy holds the `update_engine_service` rule; the updater's
-`targetSdkVersion` is 37, because a lower one runs it in `priv_app_36`, which the grant does not cover;
+the compiled system_ext policy gives `update_engine_service` to `eliza_updater` and no `priv_app`
+domain; `system_ext_seapp_contexts` maps `ai.elizaos.updater` to `eliza_updater`; the certificate
+digest in `system_ext_mac_permissions.xml` equals the updater APK's signer digest, because a mismatch
+leaves the updater in `priv_app` with no `update_engine`;
 the updater APK holds this `CHANNEL_KEY` and `CHANNEL_MANIFEST_URL`; `ab_update=true` and `virtual_ab=true`; the fingerprint carries this build's `BUILD_NUMBER`; every `ro.<partition>.build.date.utc` (system,
 vendor, product, system_ext, odm, where present) is **greater** than the device's, because
 `update_engine` checks each partition (the 2026-10-24 evidence records an incremental build that kept an earlier timestamp; then
@@ -331,7 +338,7 @@ schedules the updater's job, so before it the job checks below find nothing.
 ```sh
 adb -s "$SERIAL" shell getprop ro.control_privapp_permissions
 adb -s "$SERIAL" shell pm path ai.elizaos.updater         # /system_ext/priv-app/ElizaOsUpdater/...
-adb -s "$SERIAL" shell dumpsys package ai.elizaos.updater | grep -E 'android.permission.(REBOOT|READ_PRIVILEGED_PHONE_STATE|POST_NOTIFICATIONS): granted=true'
+adb -s "$SERIAL" shell dumpsys package ai.elizaos.updater | grep -E 'android.permission.(REBOOT|READ_PHONE_STATE|POST_NOTIFICATIONS): granted=true'
 adb -s "$SERIAL" shell dumpsys jobscheduler | grep -A3 ai.elizaos.updater
 adb -s "$SERIAL" shell ls /system/etc/security/cacerts | wc -l
 ```
@@ -343,21 +350,25 @@ that reaches the channel; at rollout 0 it applies nothing:
 
 ```sh
 adb -s "$SERIAL" shell cmd jobscheduler run -f ai.elizaos.updater 1
-adb -s "$SERIAL" shell ps -AZ | grep ai.elizaos.updater   # u:r:priv_app:..., never priv_app_36
+adb -s "$SERIAL" shell ps -AZ | grep ai.elizaos.updater   # u:r:eliza_updater:..., never priv_app or priv_app_36
 sleep 20                                                  # the check reaches the channel
-adb -s "$SERIAL" logcat -d | grep -E 'avc: denied.*update_engine|ElizaOsUpdater'   # no denial, no "Update run ended early"
+adb -s "$SERIAL" logcat -d | grep -E 'avc: denied.*(update_engine|eliza_updater)|ElizaOsUpdater'   # no denial, no "Update run ended early"
 adb -s "$SERIAL" shell su 0 content call --uri content://ai.elizaos.updater.status --method status   # state=up-to-date
+adb -s "$SERIAL" exec-out su 0 cat /sys/fs/selinux/policy > /abs/device-policy
+m sepolicy-analyze   # in "$AOSP_SOURCE"; no output and exit 0 means no other privileged app reaches update_engine
+"$ANDROID_HOST_OUT/bin/sepolicy-analyze" /abs/device-policy neverallow -n 'neverallow { priv_app priv_app_36 } update_engine_service:service_manager find; neverallow { priv_app priv_app_36 } update_engine:binder call;'
 ```
 
 Pass: the other slot, the new date and fingerprint, Alpha is HOME with the owner still signed in and
 their data present, `--merge` exited 0, the three updater permissions granted, a `cacerts` count above
-0, `priv_app`, no `update_engine` denial, no `Update run ended early`, and `state=up-to-date`. After
+0, `eliza_updater`, no `update_engine` or `eliza_updater` denial, no `Update run ended early`,
+`state=up-to-date`, and `sepolicy-analyze` silent with exit 0. After
 `--merge`, that state proves the signature, the embedded key, TLS on the job's network and the JSON
 parsing on the phone; during a merge the job writes it without reading the channel. Anything else
 means the key, the URL or the policy is wrong, and only another cable OTA corrects them, so fix it
 before the cable comes off.
 
-The payload path stays unproven until step 9. Rollout 0 returns before `applyPayload` from `priv_app`,
+The payload path stays unproven until step 9. Rollout 0 returns before `applyPayload` from `eliza_updater`,
 `NETWORK_ID` and `update_engine`'s own HTTPS fetch, which reads `/system/etc/security/cacerts` itself
 and is separate from the TLS the job proves. Keep the cable available for the first remote update.
 
@@ -543,13 +554,13 @@ module.
 | Property | Decision |
 | --- | --- |
 | Package | `ai.elizaos.updater`, a separate small app, never part of `:app`. The Alpha app stays nonprivileged (P-75). |
-| Build | Soong `android_app` from source in the image build, `sdk_version: system_current`, because `UpdateEngine` is `@SystemApi` and a Gradle profile targeting 36 would run in `priv_app_36`. The build's default certificate signs it. |
+| Build | Soong `android_app` from source in the image build, `sdk_version: system_current`, because `UpdateEngine` is `@SystemApi`. `certificate: "testkey"` signs it, the same certificate the policy's `keys.conf` names; release signing moves both to `releasekey` (Open point 7). |
 | Partition | `/system_ext/priv-app/ElizaOsUpdater`, installed for the system user only. This is the image's second privileged package, after the listener. |
-| Privileged permissions | `REBOOT` and `READ_PRIVILEGED_PHONE_STATE` only (`privapp_allowlist`). |
-| Other permissions | `INTERNET`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, and `POST_NOTIFICATIONS` from a default-permissions file (`fixed="false"`). |
-| Never | `READ_PHONE_STATE` (a refused app-op makes `isInCall` return false, which reads as no call), `RECOVERY`, `ACCESS_CACHE_FILESYSTEM` or `/data/ota_package` (the payload streams by URL), `INSTALL_PACKAGES`, `WRITE_SECURE_SETTINGS`. |
-| SELinux | Stock `priv_app` cannot reach `update_engine`: only `gmscore_app`, `system_app` (the stable service) and `system_server` can, and `update_engine` checks no caller itself. Two rules in system_ext private policy: `allow priv_app update_engine_service:service_manager find;` and `binder_call(priv_app, update_engine)`. On test keys that adds nothing, because the platform key and test key are public. Before release keys, move to a dedicated domain through system_ext `seapp_contexts` and drop this grant (the G7 pattern). |
-| Platform API | `android.os.UpdateEngine`: `bind`, `applyPayload(url, offset, size, headers)`, `unbind`. `TelecomManager.isInCall`. |
+| Privileged permissions | `REBOOT` only (`privapp_allowlist`). |
+| Other permissions | `INTERNET`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, and the runtime permissions `POST_NOTIFICATIONS` and `READ_PHONE_STATE`. `DefaultPermissionGrantPolicy` grants those two from `/system_ext/etc/default-permissions` (`fixed="false"`) when the fingerprint changes, so nothing prompts; the app has no screen to prompt from. It has no launcher entry, so permission hibernation exempts it. If the owner revokes `READ_PHONE_STATE` in Settings, **Restart** does nothing until it is granted again. |
+| Never | `READ_PRIVILEGED_PHONE_STATE` (it also exposes persistent device identifiers, which this client never reads), `RECOVERY`, `ACCESS_CACHE_FILESYSTEM` or `/data/ota_package` (the payload streams by URL), `INSTALL_PACKAGES`, `WRITE_SECURE_SETTINGS`. |
+| SELinux | `update_engine` checks no caller itself and stock `priv_app` cannot reach it, so the updater has its own domain, `eliza_updater`, in system_ext private policy. It is `app_domain`, `net_domain` and `app_api_service`, the shape of stock `adservices`, plus `update_engine_service` and Binder both ways; it inherits none of `priv_app_all`. `mac_permissions.xml` gives the seinfo to the one package under its signer, and `seapp_contexts` maps name, seinfo and `isPrivApp` to the domain, ahead of every target-SDK row. Two `neverallow priv_app_all` rules run in `sepolicy_neverallows` at every image build, so the generic grant cannot return. |
+| Platform API | `android.os.UpdateEngine`: `bind`, `applyPayload(url, offset, size, headers)`, `unbind`. `TelecomManager.isInCall`, `AppOpsManager.checkOpNoThrow`. |
 | Status | `content://ai.elizaos.updater.status`, `call("status")`, guarded by `ai.elizaos.updater.permission.READ_STATUS` (`signature\|knownSigner`, bound to the launcher certificate) and re-checked in `call()`. |
 
 Behaviour:
@@ -559,14 +570,17 @@ Behaviour:
    reports its status at once.
 2. **Manifest** (idle only): fetch at most 64 KiB and `<url>.sig` on the job's network. Verify the
    Ed25519 signature over the exact bytes before parsing, against the key in this image. Accept only
-   schema 1, this channel, `Build.DEVICE`, and a `sequence` at or above the highest accepted (stored
-   when higher, even when halted). Then offer only inside the rollout bucket, with `buildDateUtc`
+   schema 1, this channel, `Build.DEVICE`, a `sequence` at or above the highest accepted and a
+   `rolloutPercent` from 0 to 100. The sequence is on disk (`commit`, checked) before anything acts on
+   the manifest, even when halted, so a halt read once outlives a power cut. Then offer only inside the rollout bucket, with `buildDateUtc`
    newer than `ro.build.date.utc`, and with the same brand, product, device, type and tags as the
    booted fingerprint, so test-keys goes only to test-keys. Pick the incremental whose `from` is
-   `Build.FINGERPRINT`, otherwise the full package; its URL must be https.
+   `Build.FINGERPRINT`, otherwise the full package; its URL must be https, its offset and size in
+   range and `FILE_SIZE` equal to its size.
 3. **Download**: `applyPayload` with exactly `FILE_HASH`, `FILE_SIZE`, `METADATA_HASH` and
    `METADATA_SIZE` and the client's own `NETWORK_ID`, which keeps the transfer off cellular. Nothing
    else passes, because `update_engine` would obey `POWERWASH`, `SPL_DOWNGRADE` and other headers.
+   A job stopped during the channel check never calls `applyPayload`; its next run does.
    `update_engine` takes no wake lock, so the job stays open until `onPayloadApplicationComplete`
    or `onStopJob`, and JobScheduler's wake lock keeps the CPU up. A job run lasts 10 to 30 min
    (10 after three timeouts in 24 h); then a gap of 15 min times the attempts, to 5 h at most, has no
@@ -581,7 +595,11 @@ Behaviour:
    before rebooting. Only no call in any state and `MODE_NORMAL` restart; anything else does nothing
    and leaves the notification. `isInCall` is required because Telecom sets `MODE_RINGTONE` only when
    the ringer takes audio focus, so a call ringing on a silenced phone stays in `MODE_NORMAL`. The
-   audio mode covers communication sessions Telecom does not know.
+   audio mode covers communication sessions Telecom does not know. An unknown call state never
+   restarts: with `READ_PHONE_STATE` alone `isInCall` throws when the permission is revoked and reads
+   false when its app-op is refused, so the permission and the app-op are checked first, and a missing
+   `TelecomManager` stops here too. `isInCall` also reads false on a Binder failure, which no public
+   API tells apart; Telecom runs inside `system_server`, whose death ends this process as well.
 6. **No error text**: no failure toast, dialog or notification anywhere. A failed run ends quietly
    and the next one retries. Status is state only: up-to-date, downloading or ready, and the booted
    build's version.
@@ -597,7 +615,7 @@ direct-boot aware (Alpha's agent, reminders) cannot run. Resume on Reboot
 reboot-escrow provider exists, which must be verified on stallion without Google services. Until it
 is, the "Update ready" notification is the only restart path.
 
-Deferred until after the demo: the dedicated SELinux domain; a kill switch that acts on work already
+Deferred until after the demo: a kill switch that acts on work already
 started; skipping a payload that failed permanently (today each failure retries on the 15-minute
 linear backoff, to 5 h at most, until a run finishes without rescheduling);
 `suspend()` on a low battery; overnight restart; publishing incrementals; the Settings status row.
@@ -627,7 +645,9 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
 1. Unverified on stallion: that the target-files carries `SYSTEM/etc/security/otacerts.zip` with the
    test key's certificate (generate-ota.sh refuses otherwise). The whole updater is unverified on a
    device: Soong build, policy, grants, `update_engine` calls, the notification and how far a
-   screen-off transfer gets between job runs (step 9).
+   screen-off transfer gets between job runs (step 9). The `eliza_updater` policy has passed
+   `checkpolicy`, `checkseapp` and `insertkeys` on a host against the android-17.0.0_r1 platform
+   policy only, without stallion's vendor policy.
 2. A build whose date is not newer than the device's is refused by `update_engine`; the fix is a
    rebuild, never `--downgrade`.
 3. generate-ota.sh signs incrementals with key files only; managed signing needs a payload signer
@@ -637,9 +657,14 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
    host and lab key exist; a composed build stages no updater before that.
 5. Manifests carry a `sequence` but no expiry. A replay of the current manifest can withhold a newer
    one, and a device that never read a halt still accepts an earlier manifest, so a CDN that withholds
-   the halt can serve the withdrawn release. An enforced `expiresAt` needs scheduled re-signing.
-6. Resume on Reboot and the updater's dedicated SELinux domain need stallion verification before
-   overnight restarts.
-7. Whether the APK lane's `alpha-update/v1` duplicates upstream's plugin-native-agent updater and
+   the halt can serve the withdrawn release. An enforced `expiresAt` needs scheduled re-signing and
+   a trusted clock. Every signed change takes a new sequence: the client does not bind a sequence to
+   the first manifest's bytes.
+6. Resume on Reboot needs stallion verification before overnight restarts.
+7. `sign_target_files_apks` rewrites `*mac_permissions.xml` from dev certificates it reads relative to
+   its working directory and skips a missing one silently, so run release signing from the AOSP tree
+   and repeat the step 3 digest check on the signed target-files. A skipped rewrite leaves the
+   updater out of its domain, with no `update_engine`.
+8. Whether the APK lane's `alpha-update/v1` duplicates upstream's plugin-native-agent updater and
    ota-trust APK descriptors is a separate owner decision. The APK lane cannot share a fetch helper
    with this client: it runs in Alpha's process, built by Gradle, and this is a separate Soong app.
