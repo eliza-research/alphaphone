@@ -145,7 +145,8 @@ test('Notes: a held recorder is asked again on a timer, and nothing paid or new 
   f.captureCancelError=Error('Recorder stop refused');f.rec().discard();await f.clock.flush();
   const asked=f.recordingCancels.length;await f.clock.advance(3000);assert.equal(f.recordingCancels.length,asked+1);
   await f.clock.advance(3000);assert.equal(f.recordingCancels.length,asked+2);assert.equal(f.rec().state,'stopping');
-  f.captureCancelError=undefined;await f.clock.advance(3000);
+  const painted=f.shell.notes.nativeVoiceRevision;f.captureCancelError=undefined;await f.clock.advance(3000);
+  assert.notEqual(f.shell.notes.nativeVoiceRevision,painted,'Notes repaints without the line');
   assert.equal(f.activeRecording,null,'its answer closed it');assert.equal(f.rec(),undefined);
   const done=f.recordingCancels.length;await f.clock.advance(20000);assert.equal(f.recordingCancels.length,done,'a confirmed owner is asked nothing more');
   assert.equal(f.starts,1);assert.equal(f.uploads,0);assert.equal(f.cloudSpeech,0);assert.equal(f.sends,0);
@@ -171,6 +172,16 @@ test('a capture still starting holds no false proof: its cancel waits for it, pa
   assert.equal(f.recordingCancels[0],'late-clip','the waiting ask found it open and stopped it');assert.equal(f.activeRecording,null);
   await f.clock.advance(3000);assert.equal(f.rec(),undefined,'a fresh answer ends the hold');
  }finally{f.close();await f.clock.advance(3000);}
+});
+test('stopping saved audio still starting waits for that start, so it cannot play on past the stop',async()=>{
+ const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,clock,holdSavedStart:true});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null});
+ Object.assign(f.shell.notes,{list:[{id:'note',title:'Saved',audio:{audioId:'saved-audio'}}],open:'note'});
+ try{
+  f.render().vo.play();await clock.flush();assert.equal(f.savedAudioStarts,1);
+  f.render().vo.play();await clock.flush();assert.equal(f.savedAudioStops||0,0,'nothing answers for audio still starting');
+  f.releaseSavedStart();await clock.flush();assert.equal(f.savedAudioStops,1);assert.equal(f.activeSavedAudio,null);
+ }finally{f.close();await clock.advance(11000);}
 });
 test('a held panel is asked again on a timer, and only a confirmation ends it',async()=>{
  const clock=voiceFakeClock(),f=session({native:true,platform:'android',clock});
