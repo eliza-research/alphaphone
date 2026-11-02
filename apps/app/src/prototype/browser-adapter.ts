@@ -117,7 +117,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     if(reading||disposed||state()?.cur!==id||tabs.revision(id)!==revision)return;
     const voice=createNativeReadingVoice(), binding=voice?.binding;
     if(!voice || !binding){if(!connectionController.getSnapshot().session)report(new Error(agentPendingText()));return;}
-    if(!info?.committed || info.loading || info.error){report(new Error('Load an HTTPS page before reading.'));return;}
+    if(!info?.committed || info.loading || info.error || !info.url?.startsWith('https://')){report(new Error('Load an HTTPS page before reading.'));return;}
     const controller=new AbortController();reading=controller;
     const valid=()=>{controller.signal.throwIfAborted();if(disposed||document.hidden||shell.S().view!=='browser'||state()?.cur!==id||tabs.revision(id)!==revision||!voice.isCurrent()||connectionController.getSnapshot().open)throw new DOMException('Reading cancelled','AbortError');};
     const unsubscribe=connectionController.subscribe(()=>{try{valid();}catch{stopReading();}});

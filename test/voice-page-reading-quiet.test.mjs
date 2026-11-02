@@ -41,6 +41,7 @@ test(`phone Browser: the page refusal ${code} keeps its line`,async()=>{
 });
 test('phone Browser: a page that is not loaded keeps its refusal, and no agent keeps its line',async()=>{
  const unloaded=reader({page:{loading:true}});await unloaded.readPage();assert.deepEqual(unloaded.toasts,['Load an HTTPS page before reading.']);
+ const plain=reader({page:{committed:true,url:'http://example.test/',navigation:1}});await plain.readPage();assert.deepEqual(plain.toasts,['Load an HTTPS page before reading.']);
  const absent=reader({voice:()=>null,session:false});await absent.readPage();assert.deepEqual(absent.toasts,['Your agent is starting.']);
 });
 test('phone Browser: a reading that plays speaks the reviewed token with its status unchanged',async()=>{

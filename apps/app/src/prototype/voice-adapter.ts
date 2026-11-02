@@ -277,7 +277,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         const token = generation, controller = new AbortController(); readiness = controller;
         const selected = pairedVoice;
         void (async () => {
-          await stopping;
+          await mediaSettled().catch(()=>{});
           if (token !== generation || controller.signal.aborted) return;
           try { const ready = await selected.ready(controller.signal); if (token === generation && !controller.signal.aborted) { pairedReady = ready; refresh(); } } catch { /* TTS and ASR are separate capabilities. */ }
           if (token !== generation || controller.signal.aborted) return;
