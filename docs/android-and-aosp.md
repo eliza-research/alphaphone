@@ -371,16 +371,17 @@ surface that opened a confirmation resumes, and while another surface owes a con
 Android dropped holds nothing past those three seconds, and a kept confirmation opens only if Android still
 lists the session and is not past asking. What a tap cannot see is under the windows below.
 
-A reboot can leave a session Android will not install. Android saves neither progress nor its active count,
-and from Android 11 it writes a session at sealing, before marking the commit, so a session comes back committed
-only if a later write recorded the mark (Android 10 marks first, so always). It then reads committed at progress
-0, because staging counts only in the hold that marks a commit (AOSP 10 to 17). Android 11 and later do not
-validate such a session again, and its commit fails, read from AOSP: system_server dies on 11, nothing shows and
-no status comes on 12 and 13, and on 14 to 17 the confirmation shows and its accept fails, or on 14 can kill
-system_server. Android 10 validates it at boot and its confirmation works, but that install reads 0.1 and idle,
-which nothing fences. So no tap commits it. Nor does a tap give it up: a restored mark is not a terminal receipt,
-so the session stays fenced, with no download and no session beside it, until Android lists it no more. A session
-restored uncommitted is the case `Session.commit` documents: a tap commits it, and Android validates it as new.
+A reboot can leave a session Android will not install. Android saves neither progress nor its active count, and
+from Android 11 it writes a session at sealing, before marking the commit, so a session comes back committed only
+if a later write recorded the mark (Android 10 marks first, so always; from Android 12, API 31, a second commit
+writes it, as Alpha's own commit at 0.8 below does). It then reads committed at progress 0, because staging counts
+only in the hold that marks a commit (AOSP 10 to 17). Android 11 and later do not validate such a session again,
+and its commit fails, read from AOSP: system_server dies on 11, nothing shows and no status comes on 12 and 13, and
+on 14 to 17 the confirmation shows and its accept fails, or on 14 can kill system_server. Android 10 validates it
+at boot and its confirmation works, but that install reads 0.1 and idle, which nothing fences. So no tap commits
+it. Nor does a tap give it up: a restored mark is not a terminal receipt, so the session stays fenced, with no
+download and no session beside it, until Android lists it no more. A session restored uncommitted is the case
+`Session.commit` documents: a tap commits it, and Android validates it as new.
 
 A session under validation can read the same pair. From Android 13 a read takes progress ahead of the session's
 lock, which validation holds up to the mark, so a read that waits returns the mark with the progress from before
@@ -398,7 +399,9 @@ Android never moves a non-staged session's `getUpdatedMillis`, so that reads its
 With no live owner, after a restart or the owner's destroy, a process holds no confirmation and can get one only
 by committing a session marked at 0.8 again. Android documents that after a reboot; after a restart alone it is
 outside the documented cases, and the only public route. It costs that session its active reading, and progress
-then fences its install. The staged build may be older than the manifest's offer, because Android lists no
+then fences its install. From Android 12 (API 31) it also writes the mark, so a reboot before that session ends
+brings it back committed, the first entry under what can hold a session fenced, where it would have come back
+unmarked for a tap to commit. The staged build may be older than the manifest's offer, because Android lists no
 version, and cancelling it frees the next tap for the new one.
 
 What can still hold a session fenced, read from AOSP and not run on a device. Android expires a session at
@@ -451,7 +454,10 @@ second status and lowers Android's count by one, and the install goes on.
 ### Proposal: recovering a restored committed session
 
 For Root's review, not built. Today that session stays fenced, the first entry under what can hold a session
-fenced, and Android's list is the only end Alpha acts on. Signals an app has, read from AOSP 10 to 17:
+fenced, and Android's list is the only end Alpha acts on. Alpha's own commit at 0.8 leads there: from Android 12
+(API 31) it writes the mark, so a session a reboot would have restored unmarked, which a tap commits, comes back
+committed instead. A tap could once give that session up and no longer can, so that commit's cost belongs in this
+decision. Signals an app has, read from AOSP 10 to 17:
 
 | Signal | SDK | What it can prove |
 | --- | --- | --- |
@@ -476,9 +482,10 @@ A cancellation path, before any fresh session, would have to prove no outcome is
 1. It is not under validation: a read taken after one that showed the mark still reads committed at 0.
 2. No commit reached it this boot, since a confirmation and an install each need one, and Android writes no status
    receiver across a boot. Android shows no commit count, and on 10 such a commit also reads 0, so this rests on
-   no published build committing a listed session. It holds only while that stays true.
-3. Its end is Android's: on 17 `abandonSession` returns ahead of a posted destroy, so a fresh session waits for a
-   read that no longer lists it.
+   no published build committing a session that reads committed at progress 0. It holds only while that stays
+   true.
+3. Its end is Android's: at 29 to 37 `abandonSession` returns before Android drops the session from its list, so
+   a fresh session waits for a read that no longer lists it. 17 also posts the destroy.
 
 Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
 installed versionCode and signing it with the installed app's key, then upload the APK before the

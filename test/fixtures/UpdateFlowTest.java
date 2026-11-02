@@ -667,6 +667,24 @@ public final class UpdateFlowTest {
   installer.destroy(one);installer.destroy(two);
   check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(left)),"and a session a tap can still ask for goes on once Android ends those");
  }
+ /** Named in docs/android-and-aosp.md: a second commit writes the mark from Android 12, so a session committed again at 0.8 and left at a reboot comes back fenced, and on 11 it still comes back for a tap to commit. */
+ private static void aCommitAt08WritesTheMarkFromAndroid12(File cache)throws Exception{
+  for(int sdk=30;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   tap(bridge(context,Lifecycle.State.RESUMED));
+   int pending=committed(context);
+   installer.sendConfirmation(pending);
+   check(tap(restarted(context)).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"a process with no owner commits a session marked at 0.8:"+run);
+   installer.reboot();
+   check(installer.getSessionInfo(pending).isCommitted()==(sdk>=31)&&installer.getSessionInfo(pending).getProgress()==0f,"only from sdk 31 does that commit's write bring the mark back:"+run);
+   AlphaDevicePlugin next=restarted(context);
+   connections.clear();
+   check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(pending))&&installer.committed.size()==(sdk>=31?2:3),"so a tap leaves it from sdk 31, and commits it on 30:"+run);
+  }
+ }
  /** A self-update kills Alpha before its status, and Android forgets the session whatever its result. */
  private static void aStatusLostToADeadProcessFreesTheNextTap(File cache)throws Exception{
   Context context=installing(cache);
@@ -1217,6 +1235,7 @@ public final class UpdateFlowTest {
    aRestartRebuildsTheFenceFromAndroid(cache);
    aSessionARebootRestoredUncommittedIsCommittedAgain(cache);
    aSessionARebootRestoredCommittedStaysFenced(cache);
+   aCommitAt08WritesTheMarkFromAndroid12(cache);
    aStatusLostToADeadProcessFreesTheNextTap(cache);
    aLaterUpdateInstalls(cache);
    aTerminalStatusAllowsANewTap(cache);
