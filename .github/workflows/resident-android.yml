@@ -1,540 +1,72 @@
-name: Resident Android exact source
+name: Resident Android embedding component only
+run-name: cc8 ARM64 component only - ${{ github.ref_name }} - ${{ github.run_id }}
 on:
   workflow_dispatch:
-    inputs:
-      runtime_profile:
-        description: Resident runtime profile (Cloud builds skip native qualification campaigns)
-        type: choice
-        required: true
-        default: native
-        options:
-          - native
-          - cloud
-      build_version_code:
-        description: Cloud regression versionCode (25..2100000000; native ignores this input)
-        type: string
-        required: true
-        default: '26'
-  # Optional automatic PACKAGED qualification. Both triggers are inert unless the
-  # repository variable ELIZA_RESIDENT_QUALIFICATION is "push" (every main commit)
-  # or "nightly" (once a day, default branch only). See docs/ci-cost-policy.md.
-  push:
-    branches: [main, develop]
-  schedule:
-    - cron: "23 6 * * *"
 permissions:
   contents: read
 concurrency:
-  # Dispatches on one ref supersede each other. Push and nightly runs (mostly skipped
-  # when the opt-in variable is unset) get their own group, so they never cancel a
-  # running dispatched qualification.
-  group: resident-${{ github.event_name == 'workflow_dispatch' && github.ref || format('{0}-{1}', github.event_name, github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+  group: alpha-cc8-embedding-component
+  cancel-in-progress: false
 jobs:
-  build:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && vars.ELIZA_RESIDENT_QUALIFICATION == 'push') ||
-      (github.event_name == 'schedule' && vars.ELIZA_RESIDENT_QUALIFICATION == 'nightly')
-    # All consumers select the reviewed NDK before unused image SDKs are removed.
-    env:
-      # Automatic qualification always retains the native profile.
-      ALPHA_RUNTIME_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_profile || 'native' }}
-      ELIZA_ANDROID_BUN_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_profile == 'cloud' && 'android' || 'linux-musl' }}
-      ELIZA_ANDROID_TARGET_ABIS: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_profile == 'cloud' && 'arm64-v8a' || 'arm64-v8a,x86_64' }}
-      ELIZA_BUN_CHANNEL: stable
-      ELIZAOS_VERSION_CODE: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_profile == 'cloud' && inputs.build_version_code || '' }}
-      ANDROID_NDK: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      ANDROID_NDK_LATEST_HOME: /usr/local/lib/android/sdk/ndk/28.2.13676358
-    outputs:
-      artifact_id: ${{ steps.apks.outputs.artifact-id }}
-      source_sha: ${{ github.sha }}
-      manifest_sha256: ${{ steps.freeze.outputs.sha256 }}
+  compile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          submodules: true
+          path: control
           persist-credentials: false
-      # Install the selected toolchain before capacity provisioning authenticates it.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - name: Bind reviewed control bytes
+        run: |
+          echo "865910bb8a7d9fcbd915bed74162f9dd45962e689e8bdaff8eb506027023087e  control/scripts/ci/component-build.py" | sha256sum --check
+          echo "69ea1614298dea35dab352f2e192aee543246255dc25562df6cab230ee0b675b  control/scripts/ci/component-inputs.json" | sha256sum --check
+          echo "c62dfb24991aefac9d397d040d40cf971e02531ec14cf836796367c05217ff08  control/scripts/ci/owned-linux-supervisor.py" | sha256sum --check
+          echo "4a793608a4c548aec77a3ec1da5c2bea7975e7b2ee1fc1bfaf696f6a6e282ac6  control/scripts/ci/test-owned-linux-supervisor.py" | sha256sum --check
+          echo "f686d836cfdeab9e7c4c7e4c262eb9111cb2c1ce2ad12d58dbf6b1abf46b53e5  control/scripts/ci/check_source.py" | sha256sum --check
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
-          distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+          node-version: 24.15.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - name: Install pinned Android native toolchain
-        run: |
-          python3 scripts/ci/resident-phase.py --name android-toolchain --seconds 1200 sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'build-tools;36.0.0' 'ndk;28.2.13676358'
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-          # The fused engine wrappers (prepare-embedding-host) require the CMake release of the qualified build.
-          python3 -m pip install cmake==4.0.3
-          test "$(cmake --version | head -1)" = "cmake version 4.0.3"
-      # Fresh hosted image provisioning only. Never prune source, dependency
-      # caches, selected Android tools or generated artifacts during a running phase.
-      - name: Provision build capacity on the disposable hosted runner
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          test "$RUNNER_ENVIRONMENT" = "github-hosted"
-          test "$ANDROID_NDK_HOME" = /usr/local/lib/android/sdk/ndk/28.2.13676358
-          test "$ANDROID_NDK" = "$ANDROID_NDK_HOME"
-          test "$ANDROID_NDK_ROOT" = "$ANDROID_NDK_HOME"
-          test "$ANDROID_NDK_LATEST_HOME" = "$ANDROID_NDK_HOME"
-          test "$(realpath "$ANDROID_NDK_HOME")" = "$ANDROID_NDK_HOME"
-          grep -Eq '^Pkg.Revision *= *28\.2\.13676358[[:space:]]*$' "$ANDROID_NDK_HOME/source.properties"
-          # AGP 8.13 defaults to 35.0.0; APK inspection explicitly uses 36.0.0.
-          # Authenticate retained tools before any fresh-image cleanup.
-          for revision in 35.0.0 36.0.0; do
-            selected="/usr/local/lib/android/sdk/build-tools/$revision"
-            test -d "$selected"
-            test ! -L "$selected"
-            test "$(realpath "$selected")" = "$selected"
-            actual=$(sed -n 's/^Pkg.Revision *= *//p' "$selected/source.properties" | tr -d '\r')
-            test "$actual" = "$revision"
-          done
-          # Validate the complete fixed removal set before deleting any of it.
-          # Other versions and all platforms, sources and artifacts are preserved.
-          for revision in 34.0.0 35.0.1 36.1.0 37.0.0; do
-            unused="/usr/local/lib/android/sdk/build-tools/$revision"
-            test ! -L "$unused"
-            if [ -e "$unused" ]; then
-              test -d "$unused"
-              test "$(realpath "$unused")" = "$unused"
-              actual=$(sed -n 's/^Pkg.Revision *= *//p' "$unused/source.properties" | tr -d '\r')
-              test "$actual" = "$revision"
-            fi
-          done
-          python3 -c 'import shutil; print("freshCapacityBeforeBytes="+str(shutil.disk_usage(".").free))'
-          df -h "$GITHUB_WORKSPACE"
-          for unused in /usr/share/dotnet /usr/local/.ghcup /usr/local/swift /usr/share/swift /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
-            if [ -e "$unused" ]; then
-              test "$(realpath "$unused")" = "$unused"
-              sudo du -sh "$unused"
-              sudo rm -rf -- "$unused"
-            fi
-          done
-          df -h "$GITHUB_WORKSPACE"
-          # Exact preinstalled image versions only; neither is the selected 28.2 NDK.
-          for revision in 27.3.13750724 29.0.14206865; do
-            unused="/usr/local/lib/android/sdk/ndk/$revision"
-            if [ -e "$unused" ]; then
-              test "$unused" != "$ANDROID_NDK_HOME"
-              test "$(realpath "$unused")" = "$unused"
-              actual=$(sed -n 's/^Pkg.Revision *= *//p' "$unused/source.properties" | tr -d '\r')
-              test "$actual" = "$revision"
-              sudo du -sh "$unused"
-              sudo rm -rf -- "$unused"
-            fi
-          done
-          # Exact unused build-tools revisions from ubuntu24/20260927.320 only.
-          for revision in 34.0.0 35.0.1 36.1.0 37.0.0; do
-            unused="/usr/local/lib/android/sdk/build-tools/$revision"
-            if [ -e "$unused" ]; then
-              sudo du -sh "$unused"
-              sudo rm -rf -- "$unused"
-            fi
-          done
-          grep -Eq '^Pkg.Revision *= *28\.2\.13676358[[:space:]]*$' "$ANDROID_NDK_HOME/source.properties"
-          python3 -c 'import shutil; free=shutil.disk_usage(".").free; print("freshCapacityAfterBytes="+str(free)); assert free >= 32*1024**3, "Fresh runner needs at least 32GiB for resident archive headroom"'
-          df -h "$GITHUB_WORKSPACE"
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.4.2"
-      - name: Validate Cloud regression build version
-        if: env.ALPHA_RUNTIME_PROFILE == 'cloud'
-        run: |
-          python3 - <<'PYCODE'
-          import os, re
-          value = os.environ['ELIZAOS_VERSION_CODE']
-          assert re.fullmatch(r'[1-9][0-9]{0,9}', value) and 25 <= int(value) <= 2100000000, 'Cloud candidate requires versionCode > retained V24'
-          PYCODE
-      - name: Verify acquisition target and transport contracts
-        run: python3 -B scripts/ci/test-acquire-resident-bun.py
-      - name: Admit exact tools and fresh source paths
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(node --version)" = "v24.15.0"
-          test "$(bun --version)" = "1.4.2"
-          python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 10*1024**3'
-          mkdir -p test-results/resident-ci
-          python3 - <<'PYCODE'
-          import json, os
-          from pathlib import Path
-          limits = {}
-          for file in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
-              path = Path(file)
-              if path.is_file():
-                  limits[file] = path.read_text().strip()
-          Path('test-results/resident-ci/host-resources.json').write_text(json.dumps({'hostMemoryBytes': os.sysconf('SC_PHYS_PAGES') * os.sysconf('SC_PAGE_SIZE'), 'cpuCount': os.cpu_count(), 'kernelMemoryLimits': limits, 'phaseEntryGiB': 10, 'phaseStopGiB': 4, 'PGIDRSSCap': None, 'phaseLogByteCap': None, 'nodeHeapMiB': 4096, 'turboConcurrency': 1}, indent=2) + '\n')
-          PYCODE
-          echo "ALPHA_LOCAL_AGENT_SOURCE_DIR=$GITHUB_WORKSPACE/artifacts/resident-ci-92fc" >> "$GITHUB_ENV"
-          echo "ALPHA_WORKFLOW_WORKER_OUTPUT=$GITHUB_WORKSPACE/artifacts/worker-ci-92fc" >> "$GITHUB_ENV"
-      - name: Qualify supervisor on real Linux processes
-        timeout-minutes: 10
-        run: |
-          python3 scripts/ci/test-resident-phase.py
-          python3 test/resident-crash-diagnostic.test.py
-      - run: python3 scripts/ci/resident-phase.py --name product-install --seconds 600 npm ci
-      - name: Verify source metadata and voice contracts before resident preparation
-        timeout-minutes: 5
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-        run: |
-          python3 scripts/ci/resident-phase.py --name source-metadata --seconds 240 \
-            bash -e -c '
-              npm run upstream:prepare-client
-              exec node --test --test-concurrency=1 \
-                test/docs-inventory-consistency.test.mjs \
-                test/docs-requirements-consistency.test.mjs \
-                test/embedding-host-admission.test.mjs \
-                test/upstream-reachability.test.mjs \
-                test/voice-host-record.test.mjs \
-                test/cloud-voice-profile.test.mjs \
-                test/private-preview-cartesia-route.test.mjs
-            '
-      - run: node --test vendor/eliza/packages/os/scripts/__tests__/stage-launcher-overlay.node.test.ts
-      # On-device speech is libelizainference with the shared paradee-voice library only; this archive
-      # stages no voice outputs (local speech reports unavailable). The record is still checked.
-      - name: Verify the on-device voice host record
-        run: node scripts/voice-host.mjs --verify --allow-absent
-      - name: Prepare and qualify fresh resident source with normal hooks
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-          RUN_TURBO_CONCURRENCY: "1"
-        run: |
-          python3 scripts/ci/resident-phase.py --name prepare --seconds 3600 npm run agent:prepare
-      - name: Verify the hydrated Cloud SDK graph with OS-network-denied frozen install
-        if: env.ALPHA_RUNTIME_PROFILE == 'cloud'
-        run: |
-          source="$ALPHA_LOCAL_AGENT_SOURCE_DIR"
-          bun_executable="$(command -v bun)"
-          mkdir -p test-results/resident-ci
-          sha256sum "$source/bun.lock" > test-results/resident-ci/sdk-lock.sha256
-          (cd "$source" && "$bun_executable" --no-env-file pm ls --all) > test-results/resident-ci/sdk-graph-before.txt
-          python3 -c 'from pathlib import Path; assert Path("test-results/resident-ci/sdk-graph-before.txt").stat().st_size <= 16*1024**2'
-          # sudo only creates the fresh network namespace. unshare drops to the
-          # runner UID/GID BEFORE the pinned Bun process; no token is forwarded.
-          python3 scripts/ci/resident-phase.py --name sdk-offline-install --seconds 600 \
-            sudo unshare --net --setgid "$(id -g)" --setuid "$(id -u)" -- \
-            env -i HOME="$HOME" PATH="$PATH" TMPDIR="$RUNNER_TEMP" NO_COLOR=1 \
-            BUN_INSTALL_CACHE_DIR="${BUN_INSTALL_CACHE_DIR:-$HOME/.bun/install/cache}" \
-            BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 \
-            /bin/sh -c 'cd "$1" && shift && exec "$@"' sh "$source" \
-            "$bun_executable" --no-env-file install --offline --frozen-lockfile --ignore-scripts
-          sha256sum --check test-results/resident-ci/sdk-lock.sha256
-          (cd "$source" && "$bun_executable" --no-env-file pm ls --all) > test-results/resident-ci/sdk-graph-after.txt
-          cmp test-results/resident-ci/sdk-graph-before.txt test-results/resident-ci/sdk-graph-after.txt
-          node scripts/prepare-local-agent.mjs --source-only
-      - name: Qualify the prepared resident source
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-          RUN_TURBO_CONCURRENCY: "1"
-        run: |
-          python3 scripts/ci/resident-phase.py --name device-timing-flow --seconds 600 npm run agent:test-device-timing
-          python3 scripts/ci/resident-phase.py --name worker-build --seconds 900 npm run agent:build-workflow-worker
-          python3 scripts/ci/resident-phase.py --name native-cloud-routing --seconds 300 node scripts/test-native-cloud-runtime-config.mjs
-          python3 scripts/ci/resident-phase.py --name compiler-flow --seconds 600 npm run agent:test-workflow-compiler
-          python3 scripts/ci/resident-phase.py --name worker-flow --seconds 600 npm run agent:test-workflow-worker
-      - name: Acquire hash-pinned Android Bun with step-only authentication
+      - name: Prepare exact compiler and source inputs
         timeout-minutes: 12
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci/resident-phase.py --name bun-downloads --seconds 600 python3 scripts/ci/acquire-resident-bun.py
-      - name: Prepare pinned JSON dependency for host contract tests
-        shell: bash
-        run: bash scripts/ci/prepare-host-test-json.sh
-      - name: Stage and archive qualified resident runtime
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-          RUN_TURBO_CONCURRENCY: "1"
         run: |
-          case "$ALPHA_RUNTIME_PROFILE" in
-            native)
-              python3 scripts/ci/resident-phase.py --name runtime-stage --seconds 1800 npm run agent:stage-android
-              ;;
-            cloud)
-              python3 scripts/ci/resident-phase.py --name runtime-stage --seconds 1800 npm run agent:stage-android -- --runtime-profile=cloud
-              ;;
-            *) echo "Unsupported runtime profile" >&2; exit 2 ;;
-          esac
-          python3 scripts/ci/resident-phase.py --name mobile-bundle --seconds 300 npm run agent:test-mobile-workflow-bundle
-          # Fresh native artifacts and the runtime pin are inputs to shipped notices.
-          python3 scripts/ci/resident-phase.py --name license-notices --seconds 120 node scripts/generate-licenses.mjs --packaged-runtime
-          # Gate distribution on exactly the npm set the staged payload ships (A-4).
-          python3 scripts/ci/resident-phase.py --name packaged-dependency-audit --seconds 180 node scripts/dependency-audit.mjs --resident --notices apps/app/public/licenses/third-party-notices.json
-          if [ "$ALPHA_RUNTIME_PROFILE" = cloud ]; then
-            node scripts/prepare-local-agent.mjs --source-only
-            export ALPHA_CLOUD_COLLECTOR_SOURCE="$ALPHA_LOCAL_AGENT_SOURCE_DIR"
-            export ALPHA_BUN="$(command -v bun)"
-            test "$("$ALPHA_BUN" --version)" = "1.4.2"
-            # Genuine Cloud resident, all four APKs, test mocks off. No provider calls.
-            python3 scripts/ci/resident-phase.py --name cloud-archive --seconds 3000 node scripts/build-archive.mjs --runtime-profile=cloud test-results/resident-ci-cloud
-          else
-            # Flag-off distribution: release verification requires the PACKAGED runtime.
-            python3 scripts/ci/resident-phase.py --name distribution-archive --seconds 3000 node scripts/build-archive.mjs test-results/resident-ci-distribution
-            # The native suites need the private peer fixture, a debug-only test hook
-            # that exists only in the separate, never-distributable test-mocks build.
-            python3 scripts/ci/resident-phase.py --name archive --seconds 3000 node scripts/build-archive.mjs --test-mocks test-results/resident-ci-archive
-          fi
-      - name: Retain bounded Cloud producer evidence for local QA signing
-        if: env.ALPHA_RUNTIME_PROFILE == 'cloud'
+          sdkmanager 'ndk;28.2.13676358'
+          python3 -m pip install cmake==4.0.3
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config autoconf automake libtool gperf
+          git init product
+          git -C product -c core.hooksPath=/dev/null -c gc.auto=0 -c core.fsmonitor=false fetch --filter=blob:none --no-tags https://github.com/eliza-research/alphaphone.git f8d31f6d4c84b10ad7d1e1cd45043427399f2ff6
+          git -C product -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+          git init product/vendor/eliza
+          git -C product/vendor/eliza -c core.hooksPath=/dev/null -c gc.auto=0 -c core.fsmonitor=false fetch --filter=blob:none --no-tags https://github.com/elizaOS/eliza.git d38e4ec7fad5952fdf4f40d4c809240d639792ac
+          git -C product/vendor/eliza -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+          git init product/vendor/eliza/plugins/plugin-local-inference/native/llama.cpp
+          git -C product/vendor/eliza/plugins/plugin-local-inference/native/llama.cpp -c core.hooksPath=/dev/null -c gc.auto=0 -c core.fsmonitor=false fetch --filter=blob:none --no-tags https://github.com/elizaOS/llama.cpp.git cc8c979157e1f577448d8b8c6ff598b7cfc3d661
+          git -C product/vendor/eliza/plugins/plugin-local-inference/native/llama.cpp -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+          git -C product/vendor/eliza/plugins/plugin-local-inference/native/llama.cpp -c core.hooksPath=/dev/null submodule update --init --recursive
+      - name: Qualify Linux process ownership on inert fixtures
+        timeout-minutes: 2
+        run: python3 control/scripts/ci/test-owned-linux-supervisor.py
+      - name: Compile current ARM64 component only
+        env:
+          ELIZA_NDK_VERSION: 28.2.13676358
+          CMAKE_BUILD_PARALLEL_LEVEL: '2'
         run: |
-          node scripts/runtime-profile.mjs --verify-cloud
-          node scripts/prepare-local-agent.mjs --source-only
-          sha256sum --check test-results/resident-ci/sdk-lock.sha256
-          (cd "$ALPHA_LOCAL_AGENT_SOURCE_DIR" && bun --no-env-file pm ls --all) > test-results/resident-ci/sdk-graph-final.txt
-          cmp test-results/resident-ci/sdk-graph-before.txt test-results/resident-ci/sdk-graph-final.txt
-          python3 - <<'PYCODE'
-          import hashlib, json, os, shutil, stat
-          from pathlib import Path
-          root = Path.cwd().resolve()
-          out = root / 'test-results/resident-ci-cloud/producer-evidence'
-          out.mkdir(mode=0o700, exist_ok=False)
-          inputs = [
-              ('artifacts/build-config.json', 'artifacts/build-config.json'),
-              ('artifacts/apk-manifest.json', 'artifacts/apk-manifest.json'),
-              ('artifacts/sbom', 'artifacts/sbom'),
-              ('apps/app/public/licenses', 'apps/app/public/licenses'),
-              ('licenses', 'licenses'),
-              ('android/app/src/main/assets/agent', 'android/app/src/main/assets/agent'),
-              ('android/app/src/main/jniLibs', 'android/app/src/main/jniLibs'),
-              ('android/app/build/generated/local-agent/source-manifest.json', 'native-source-manifest.json'),
-              (str(Path(os.environ['ALPHA_LOCAL_AGENT_SOURCE_DIR']) / '.alpha-runtime-source.json'), 'prepared-source-stamp.json'),
-              (str(Path(os.environ['ALPHA_WORKFLOW_WORKER_OUTPUT']) / 'manifest.json'), 'worker-manifest.json'),
-          ]
-          files, total = {}, 0
-          for source, destination in inputs:
-              source = root / source
-              assert source.exists() and not source.is_symlink() and source.resolve().is_relative_to(root), 'Missing/outside/symlink producer evidence'
-              paths = sorted(source.rglob('*')) if source.is_dir() else [source]
-              for file in paths:
-                  info = file.lstat()
-                  assert not stat.S_ISLNK(info.st_mode), 'Evidence symlink'
-                  if stat.S_ISDIR(info.st_mode):
-                      continue
-                  assert stat.S_ISREG(info.st_mode), 'Evidence special file'
-                  relative = Path(destination) / file.relative_to(source) if source.is_dir() else Path(destination)
-                  assert str(relative) not in files, 'Duplicate producer evidence'
-                  total += info.st_size
-                  assert total <= 512 * 1024**2 and len(files) < 4096, 'Producer evidence bound exceeded'
-                  target = out / relative
-                  target.parent.mkdir(parents=True, exist_ok=True)
-                  with file.open('rb') as src, target.open('xb') as dst:
-                      shutil.copyfileobj(src, dst)
-                  digest = hashlib.sha256(target.read_bytes()).hexdigest()
-                  assert digest == hashlib.sha256(file.read_bytes()).hexdigest(), 'Evidence changed during retention'
-                  files[str(relative)] = {'bytes': info.st_size, 'sha256': digest}
-          (out / 'manifest.json').write_text(json.dumps({'source': os.environ['GITHUB_SHA'], 'runtimeProfile': 'cloud', 'versionCode': int(os.environ['ELIZAOS_VERSION_CODE']), 'bytes': total, 'files': files}, indent=2) + '\n')
-          PYCODE
-      - name: Build and anchor private endpoint helper
-        if: env.ALPHA_RUNTIME_PROFILE == 'native'
-        run: python3 scripts/ci/build-private-peer.py
-      - name: Preserve native generated provenance
-        if: env.ALPHA_RUNTIME_PROFILE == 'native'
-        run: cp android/app/build/generated/local-agent/source-manifest.json test-results/resident-ci-archive/native-generated-source-manifest.json
-      - name: Anchor exact archive manifest
-        if: env.ALPHA_RUNTIME_PROFILE == 'native'
-        id: freeze
-        run: echo "sha256=$(sha256sum test-results/resident-ci-archive/apk-manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-      # build-archive.mjs retains each release R8 mapping (<variant>-release-mapping.txt,
-      # hashed in release-mappings.json) beside the APKs, so both archives carry them.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        id: apks
+          python3 control/scripts/ci/owned-linux-supervisor.py --manifest "$GITHUB_WORKSPACE/control/scripts/ci/component-inputs.json" --output "$GITHUB_WORKSPACE/component-monitor" --write-root "$GITHUB_WORKSPACE/component-output" -- python3 control/scripts/ci/component-build.py --source "$GITHUB_WORKSPACE/product" --manifest "$GITHUB_WORKSPACE/control/scripts/ci/component-inputs.json" --output "$GITHUB_WORKSPACE/component-output"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
         with:
-          name: ${{ env.ALPHA_RUNTIME_PROFILE == 'cloud' && 'resident-cloud-archive' || 'resident-archive' }}-${{ github.sha }}-${{ github.run_id }}
-          path: ${{ env.ALPHA_RUNTIME_PROFILE == 'cloud' && 'test-results/resident-ci-cloud/' || 'test-results/resident-ci-archive/' }}
+          name: cc8-arm64-embedding-component-${{ github.run_id }}
           retention-days: 3
           if-no-files-found: error
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          retention-days: 3
-          name: resident-build-evidence-${{ github.run_id }}
           path: |
-            test-results/resident-ci-supervisor/
-            test-results/resident-ci/
-            test-results/resident-ci-distribution/
-            test-results/resident-ci-cloud/*.log
-            test-results/resident-ci-cloud/*.json
-            android/app/build/reports/
-  native:
-    needs: build
-    if: github.event_name != 'workflow_dispatch' || inputs.runtime_profile != 'cloud'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 100
-    env:
-      ALPHA_RESIDENT_MANIFEST_SHA256: ${{ needs.build.outputs.manifest_sha256 }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.build.outputs.source_sha }}
-          submodules: true
-      # Fresh native job has its own stock hosted image; build-job cleanup does
-      # not carry over. Provision before tools, artifacts or the AVD are created.
-      - name: Provision native capacity on the disposable hosted runner
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          test "$RUNNER_ENVIRONMENT" = "github-hosted"
-          # Fixed unused language installations only; preserve every Android SDK,
-          # source checkout, dependency cache and downloaded build artifact.
-          for unused in /usr/share/dotnet /usr/local/.ghcup /usr/local/swift /usr/share/swift /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
-            test ! -L "$unused"
-            if [ -e "$unused" ]; then
-              test -d "$unused"
-              test "$(realpath "$unused")" = "$unused"
-            fi
-          done
-          python3 -c 'import shutil; print("nativeFreshCapacityBeforeBytes="+str(shutil.disk_usage(".").free))'
-          for unused in /usr/share/dotnet /usr/local/.ghcup /usr/local/swift /usr/share/swift /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
-            if [ -e "$unused" ]; then
-              sudo du -sh "$unused"
-              sudo rm -rf -- "$unused"
-            fi
-          done
-          python3 -c 'import shutil; free=shutil.disk_usage(".").free; print("nativeFreshCapacityAfterBytes="+str(free)); assert free >= 24*1024**3, "Fresh native runner needs 24GiB before SDK, archive and AVD provisioning"'
-          # Existing 10GiB admission and 4GiB runtime floor remain unchanged.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
-        with:
-          packages: platform-tools build-tools;36.0.0
-          log-accepted-android-sdk-licenses: false
-      - name: Install exact APK inspection tools
-        run: sdkmanager "build-tools;36.0.0"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          artifact-ids: ${{ needs.build.outputs.artifact_id }}
-          path: test-results/resident-ci-archive
-          merge-multiple: true
-      - name: Require fresh capacity and KVM
-        run: |
-          python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 10*1024**3'
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 35
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          ram-size: 4096M
-          disk-size: 4096M
-          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            ANDROID_SERIAL=emulator-5554 python3 scripts/ci/resident-phase.py --name prepare-phone --seconds 300 node scripts/prepare-ci-emulator.mjs
-            ANDROID_SERIAL=emulator-5554 ALPHA_RESIDENT_DISPOSABLE_CI=1 python3 scripts/ci/resident-phase.py --name native --seconds 5400 python3 scripts/ci/resident-native.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          retention-days: 3
-          name: resident-native-evidence-${{ github.run_id }}
-          path: |
-            test-results/resident-ci-supervisor/
-            test-results/resident-ci/
-            test-results/resident-ci-native/
-
-  recovery-ui:
-    needs: build
-    if: github.event_name != 'workflow_dispatch' || inputs.runtime_profile != 'cloud'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 55
-    env:
-      ALPHA_RESIDENT_MANIFEST_SHA256: ${{ needs.build.outputs.manifest_sha256 }}
-      ALPHA_RECOVERY_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.build.outputs.source_sha }}
-          submodules: true
-      # Fresh native job has its own stock hosted image; build-job cleanup does
-      # not carry over. Provision before tools, artifacts or the AVD are created.
-      - name: Provision native capacity on the disposable hosted runner
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          test "$RUNNER_ENVIRONMENT" = "github-hosted"
-          # Fixed unused language installations only; preserve every Android SDK,
-          # source checkout, dependency cache and downloaded build artifact.
-          for unused in /usr/share/dotnet /usr/local/.ghcup /usr/local/swift /usr/share/swift /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
-            test ! -L "$unused"
-            if [ -e "$unused" ]; then
-              test -d "$unused"
-              test "$(realpath "$unused")" = "$unused"
-            fi
-          done
-          python3 -c 'import shutil; print("nativeFreshCapacityBeforeBytes="+str(shutil.disk_usage(".").free))'
-          for unused in /usr/share/dotnet /usr/local/.ghcup /usr/local/swift /usr/share/swift /opt/ghc /usr/local/share/powershell /opt/hostedtoolcache/CodeQL; do
-            if [ -e "$unused" ]; then
-              sudo du -sh "$unused"
-              sudo rm -rf -- "$unused"
-            fi
-          done
-          python3 -c 'import shutil; free=shutil.disk_usage(".").free; print("nativeFreshCapacityAfterBytes="+str(free)); assert free >= 24*1024**3, "Fresh native runner needs 24GiB before SDK, archive and AVD provisioning"'
-          # Existing 10GiB admission and 4GiB runtime floor remain unchanged.
-      - name: Qualify owned secondary recovery guards
-        run: |
-          python3 scripts/ci/test-recovery-ui-guard.py
-          python3 scripts/ci/test-pending-recovery-phases.py
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
-        with:
-          packages: platform-tools build-tools;36.0.0
-          log-accepted-android-sdk-licenses: false
-      - name: Install exact APK inspection tools
-        run: sdkmanager "build-tools;36.0.0"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          artifact-ids: ${{ needs.build.outputs.artifact_id }}
-          path: test-results/resident-ci-archive
-          merge-multiple: true
-      - name: Require fresh capacity and KVM
-        run: |
-          python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 10*1024**3'
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 35
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          disk-size: 4096M
-          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            ANDROID_SERIAL=emulator-5554 python3 scripts/ci/resident-phase.py --name prepare-phone --seconds 300 node scripts/prepare-ci-emulator.mjs
-            ANDROID_SERIAL=emulator-5554 ALPHA_RESIDENT_DISPOSABLE_CI=1 python3 scripts/ci/resident-phase.py --name pending-recovery-ui --seconds 2400 python3 scripts/ci/pending-recovery-ui.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          retention-days: 3
-          name: pending-recovery-ui-evidence-${{ github.run_id }}
-          path: |
-            test-results/resident-ci-supervisor/
-            test-results/resident-ci/
-            test-results/pending-recovery-ui-native/
+            component-output/export/
+            component-monitor/
+            LINUX-SUPERVISOR-FIXTURES.json
+            component-output/INTENT.json

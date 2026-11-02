@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "Alpha": "f8d31f6d4c84b10ad7d1e1cd45043427399f2ff6",
+  "SDK": "d38e4ec7fad5952fdf4f40d4c809240d639792ac",
+  "native": "cc8c979157e1f577448d8b8c6ff598b7cfc3d661",
+  "identity": "ai.elizaresearch.alphaphone",
+  "abi": "arm64-v8a",
+  "productFiles": [
+    {
+      "path": "scripts/prepare-embedding-host.mjs",
+      "sha256": "0fb977dc717933596e3612836a848c8625df70cc59b0f421417dff54782330d4",
+      "bytes": 10678
+    },
+    {
+      "path": "scripts/embedding-native-contract.mjs",
+      "sha256": "d59650dcd1042dac4c4cac834eb482968c49af83ba99c8cce246c715fec6bdb4",
+      "bytes": 4221
+    },
+    {
+      "path": "scripts/embedding-build-remap.mjs",
+      "sha256": "39bf6e926fa6637cb652e3d45071aa0d281fbabf4b62d2387aab5f15defed86c",
+      "bytes": 4504
+    },
+    {
+      "path": "upstream.lock.json",
+      "sha256": "dc0d9e9726b050a5f37c6349a0f09983a31c82eaac025ce47c316ad841592fab",
+      "bytes": 224
+    },
+    {
+      "path": "app.config.json",
+      "sha256": "ccc7865cc9e03f3b2b7c72b2ffde8d6c72352effed8ef43f6ccfc42eb4fd8c97",
+      "bytes": 201
+    }
+  ],
+  "sdkFiles": [
+    {
+      "path": "package.json",
+      "bytes": 20647,
+      "sha256": "fd04e2ad8574cd0055627138466b8eec77404863e2bc546a866bace10c6d732b"
+    },
+    {
+      "path": "packages/agent/package.json",
+      "bytes": 14323,
+      "sha256": "1082dc34ec6894e19a43003528fd5701ebe53621f77c37d1bec37662bd822554"
+    },
+    {
+      "path": "packages/app/package.json",
+      "bytes": 33281,
+      "sha256": "1ee43697b88c28dd2e95a64c7113c936fe13dc923482305a904f073e52bfe23a"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni/CMakeLists.txt",
+      "bytes": 6515,
+      "sha256": "a956ce2fb2ccc5610d9108eb168c2418b50083b4981288c917f2a9ed1686e281"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/elizavoice-jni/elizavoice-jni.cpp",
+      "bytes": 106547,
+      "sha256": "128c4e7306479ecf80130028a79d3537552fbc93c2ab13a821cf0b5213efd94f"
+    },
+    {
+      "path": "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java",
+      "bytes": 18590,
+      "sha256": "328c96c067aabdae17adcc6534b41abfb6befd9d598a1d44b30ffc20a5157c87"
+    },
+    {
+      "path": "packages/app/scripts/aosp/compile-libllama-paths.ts",
+      "bytes": 4278,
+      "sha256": "c484bd46cb7f8cf308f449840f491f1e8d380c1c66a75b2a57a02867a09a8a3c"
+    },
+    {
+      "path": "packages/app/scripts/aosp/compile-libllama.ts",
+      "bytes": 96597,
+      "sha256": "81de4affc63f07f662679d34a01cea7f4f720fc705ef1ac5c5b501021070e1fd"
+    },
+    {
+      "path": "packages/app/scripts/aosp/compile-shim.ts",
+      "bytes": 16116,
+      "sha256": "c7765557fafa6cc39090590c3e52a3b8bc1f03e6cedb7170492512a45bcbe15b"
+    },
+    {
+      "path": "packages/app/scripts/aosp/vulkan-source-contract.ts",
+      "bytes": 4285,
+      "sha256": "8b1d173b222ab7017b1cc7d18d4125392cafda022ac6c49cfc6c38f31549a73b"
+    },
+    {
+      "path": "packages/app/scripts/aosp/zig-toolchain.ts",
+      "bytes": 11180,
+      "sha256": "5d7ad034f9fbbce9fc241c7d7ba64b4bfece2b0aa6c7a699c761df8c8ac36959"
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/arm64-simd.ts",
+      "bytes": 4362,
+      "sha256": "b5291bb3c31f2b284691ff7c465de31c7564ea1c1c22e726309661e64a47aee2"
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/omnivoice-merged.ts",
+      "bytes": 3549,
+      "sha256": "4192c42fd54940ff0039bbb452aadb6e39cb286b732baaaf76513411c7adc4fe"
+    },
+    {
+      "path": "packages/app/scripts/build-helpers/verify-fused-symbols.ts",
+      "bytes": 33836,
+      "sha256": "a7706e5f2526e20a7685825b19e9bdd7115f61d2791d921ba55af4fe3e73baa1"
+    },
+    {
+      "path": "packages/app/scripts/lib/repo-root.ts",
+      "bytes": 3979,
+      "sha256": "9e75776f57d7fa219993cb454d33102fe80a9276c576d299b42a0b284f2980ba"
+    },
+    {
+      "path": "packages/app/scripts/stage-elizavoice-lib.ts",
+      "bytes": 25718,
+      "sha256": "7c36788b0886de46bde06f84a50c54a3ace7f2aa59468f811864e47134be4309"
+    }
+  ],
+  "limits": {
+    "seconds": 1800,
+    "rssBytes": 6442450944,
+    "logBytes": 16777216,
+    "entryFreeBytes": 34359738368,
+    "stopFreeBytes": 8589934592,
+    "growthBytes": 12884901888
+  },
+  "NDK": "28.2.13676358",
+  "CMake": "4.0.3",
+  "node": "v24.15.0",
+  "compileOnly": true,
+  "driverSHA256": "865910bb8a7d9fcbd915bed74162f9dd45962e689e8bdaff8eb506027023087e",
+  "sourceGuard": {
+    "path": "check_source.py",
+    "sha256": "f686d836cfdeab9e7c4c7e4c262eb9111cb2c1ce2ad12d58dbf6b1abf46b53e5",
+    "policy": "Exactexistingknown-incidentguard; notgenericmalwareaudit"
+  },
+  "bootstrap": {
+    "productFetch": "no-tags exactSHA/fullselectedancestry, no broadrefs/no shallow",
+    "SDKFetch": "no-tags exact77efSHA",
+    "nativeFetch": "no-tags exactcc8SHA; nestedsubmodulesfixedgitlinks"
+  },
+  "requireExplicitNinjaJobs": true
+}
