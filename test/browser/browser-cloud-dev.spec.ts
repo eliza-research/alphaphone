@@ -124,12 +124,12 @@ test('flag-off real resident reads Notes through its owner-bound verified Cloud 
    const {connectionController:c}=await import('/src/runtime/connection-ui.tsx'),{LocalAgentProtocol}=await import('/src/runtime/local-agent.ts'),{bindBrowserSpeechConnection}=await import('/src/browser/agent-speech.ts');
    const agent=new LocalAgentProtocol();await agent.connect(new AbortController().signal);c.getBrowserSpeechAgent=()=>agent;c.getCloudEnvironment=()=> 'production';const binding={sessionId:'closed-cloud-session',credentialId:'closed-cloud-generation'}as any;c.getCloudClient=()=>binding;const snapshot={...c.getSnapshot(),open:false};c.getSnapshot=()=>snapshot;bindBrowserSpeechConnection(c);
    const proof=(window as any).residentSpeech={plays:0,outcome:null};Object.defineProperty(window,'Audio',{configurable:true,value:class{src:string;volume=1;paused=true;onended=null;onerror=null;constructor(src:string){this.src=src;}play(){this.paused=false;proof.plays++;return Promise.resolve();}pause(){this.paused=true;}removeAttribute(){this.src='';}load(){}}});
-   const {speakNote}=await import('/src/prototype/local-speech-playback.ts');void speakNote('QA test note. The recovery test phrase is silver maple.').then(outcome=>proof.outcome=outcome);
+   const {speakNote}=await import('/src/prototype/local-speech-playback.ts');void speakNote('QA test note. The recovery test phrase is silver maple.').then(()=>proof.outcome='settled');
   });
   await expect.poll(()=>page.evaluate(()=>(window as any).residentSpeech.plays)).toBe(1);expect(calls.filter(p=>p==='/api/tts/cloud')).toHaveLength(1);
   await expect.poll(()=>page.evaluate(async()=>(await import('/src/prototype/local-speech-playback.ts')).currentNoteReading()?.state)).toBe('reading');
-  await page.evaluate(async()=>(await import('/src/prototype/local-speech-playback.ts')).stopSpeaking());await expect.poll(()=>page.evaluate(()=>(window as any).residentSpeech.outcome)).toBe('stopped');
-  provider='wrong-provider';await page.evaluate(async()=>{(window as any).residentSpeech.outcome=await(await import('/src/prototype/local-speech-playback.ts')).speakNote('QA test note. The recovery test phrase is silver maple.');});expect(await page.evaluate(()=>(window as any).residentSpeech.outcome)).toBe('failed');expect(await page.evaluate(()=>(window as any).residentSpeech.plays)).toBe(1);expect(calls.filter(p=>p==='/api/tts/cloud')).toHaveLength(2);expect(foreign).toEqual([]);
+  await page.evaluate(async()=>(await import('/src/prototype/local-speech-playback.ts')).stopSpeaking());await expect.poll(()=>page.evaluate(()=>(window as any).residentSpeech.outcome)).toBe('settled');
+  provider='wrong-provider';await page.evaluate(async()=>{await(await import('/src/prototype/local-speech-playback.ts')).speakNote('QA test note. The recovery test phrase is silver maple.');});expect(await page.evaluate(()=>(window as any).residentSpeech.plays)).toBe(1);expect(calls.filter(p=>p==='/api/tts/cloud')).toHaveLength(2);expect(foreign).toEqual([]);
  }finally{handler.closeVoice();await server.close();await rm(directory,{recursive:true,force:true});}
 });
 

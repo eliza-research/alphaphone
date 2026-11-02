@@ -6,8 +6,8 @@ import {stripTypeScriptTypes} from 'node:module';
 
 // Real playback, selection and timing sources; the speech engine boundary is a fixture.
 function load(file, name, box) {
-  const source = fs.readFileSync('apps/app/src/' + file, 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export function', 'function').replaceAll('export const', 'const').replaceAll('export type', 'type');
-  vm.runInNewContext('{' + stripTypeScriptTypes(source, {mode: 'transform'}) + '\nglobalThis.' + name + '=' + name + ';}', box);
+  const source = fs.readFileSync('apps/app/src/' + file, 'utf8').replace(/^import .*;\n/gm, '').replaceAll('export async function', 'async function').replaceAll('export function', 'function').replaceAll('export const', 'const').replaceAll('export type', 'type');
+  vm.runInNewContext('{' + stripTypeScriptTypes(source, {mode: 'transform'}) + [name].flat().map(item => '\nglobalThis.' + item + '=' + item + ';').join('') + '}', box);
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 function fixture({native = true} = {}) {
@@ -34,7 +34,7 @@ function fixture({native = true} = {}) {
     },
   };
   // voice-timing.ts configures the shared recorder projected from the pin, evaluated in this realm.
-  for (const [file, name] of [['../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts', 'createVoiceTurnTiming'], ['runtime/voice-selection.ts', 'selectVoiceRoute'], ['runtime/voice-timing.ts', 'markVoiceTiming'], ['prototype/local-speech-playback.ts', 'installLocalSpeechPlayback']]) load(file, name, box);
+  for (const [file, name] of [['../../../.eliza/client-features/packages/voice/src/voice-turn-timing.ts', 'createVoiceTurnTiming'], ['runtime/voice-selection.ts', 'selectVoiceRoute'], ['runtime/voice-timing.ts', 'markVoiceTiming'], ['prototype/local-speech-playback.ts', ['installLocalSpeechPlayback', 'speakNote']]]) load(file, name, box);
   class Shell {
     constructor() { this.state = {chat: 'sheet', msgs: []}; this.live = true; }
     S() { return this.state; }
@@ -150,18 +150,21 @@ test('note read-aloud uses only the local route, reports state and stops on requ
   assert.deepEqual(JSON.parse(JSON.stringify(f.box.currentNoteReading())), {noteId: 'note-1', text: 'Groceries. Milk and eggs', state: 'preparing'});
   assert.deepEqual(f.spoken, [{text: 'Groceries. Milk and eggs', execution: 'device'}]);
   f.box.stopSpeaking();
-  assert.equal(await reading, 'stopped');
+  await reading;
   assert.equal(f.signals[0].aborted, true);
   assert.equal(f.box.currentNoteReading(), null);
   assert.ok(f.events.includes('alpha:note-reading'));
   f.hold = false;
-  assert.equal(await f.box.speakNote('Done reading', {noteId: 'note-2'}), 'finished');
-  assert.equal(await f.box.speakNote('Smile 🙂'), 'unsupported', 'unsupported native text is refused before audio');
-  assert.equal(await f.box.speakNote('   '), 'unsupported');
+  await f.box.speakNote('Done reading', {noteId: 'note-2'});
+  assert.equal(f.spoken.length, 2);
+  await f.box.speakNote('Smile 🙂');
+  assert.equal(f.spoken.length, 2, 'unsupported native text is refused before audio');
+  await f.box.speakNote('   ');
   f.box.createOnDeviceVoice = () => ({ready: async () => true, playbackReady: async () => false});
-  assert.equal(await f.box.speakNote('Playback not ready'), 'unavailable', 'read-aloud follows playback readiness, not recognition readiness');
+  await f.box.speakNote('Playback not ready');
+  assert.equal(f.box.currentNoteReading(), null, 'read-aloud follows playback readiness, not recognition readiness');
   f.box.createOnDeviceVoice = () => null;
-  assert.equal(await f.box.speakNote('No engine'), 'unavailable');
+  await f.box.speakNote('No engine');
   assert.equal(f.spoken.length, 2);
 });
 
@@ -169,10 +172,10 @@ test('browser note read-aloud applies the Listen preflight before any audio or l
   const f = fixture({native: false});
   const screened = [];
   f.box.planLocalSpeech = text => { screened.push(text); if (/password|https?:/i.test(text)) throw Error('Refused'); return [text]; };
-  assert.equal(await f.box.speakNote('Wifi. password: hunter2', {noteId: 'secret'}), 'unsupported');
-  assert.equal(await f.box.speakNote('Read https://example.test later', {noteId: 'link'}), 'unsupported');
+  await f.box.speakNote('Wifi. password: hunter2', {noteId: 'secret'});
+  await f.box.speakNote('Read https://example.test later', {noteId: 'link'});
   assert.equal(f.spoken.length, 0, 'refused text never reaches the speech engine');
-  assert.equal(await f.box.speakNote('Groceries. Milk and eggs', {noteId: 'ok'}), 'finished');
+  await f.box.speakNote('Groceries. Milk and eggs', {noteId: 'ok'});
   assert.deepEqual(f.spoken, [{text: 'Groceries. Milk and eggs', execution: 'browser'}]);
   assert.equal(screened.length, 3);
 });
@@ -182,8 +185,10 @@ test('starting another reading or message playback stops note read-aloud', async
   const first = f.box.speakNote('First note', {noteId: 'a'});
   await tick(); await tick();
   const second = f.box.speakNote('Second note', {noteId: 'b'});
-  assert.equal(await first, 'stopped');
+  await first;
+  assert.equal(f.signals[0].aborted, true);
   await tick(); await tick();
   f.box.stopLocalSpeechPlayback();
-  assert.equal(await second, 'stopped');
+  await second;
+  assert.equal(f.signals[1].aborted, true);
 });

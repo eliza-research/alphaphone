@@ -57,3 +57,98 @@ test('Notes: a storage conflict keeps its line: it is about the note, not voice'
   f.storageReady=false;await tap(f);assert.match(rec(f).lines[0].t,/pending or unconfirmed save/);
  }finally{f.close();await f.tick();}
 });
+
+const settle=async f=>{for(let count=0;count<20;count++)await f.tick();};
+async function toReview(f){await tap(f);await tap(f);await tap(f);assert.equal(rec(f).state,'review');}
+const unconfirmed=()=>Object.assign(Error('PRIVATE_PLUGIN_TEXT'),{code:'speech-cleanup-unconfirmed'});
+function failingListen(f,failure){const real=f.box.createCloudVoice;f.box.createCloudVoice=(...input)=>({...real(...input),speak:async()=>{throw failure;}});}
+function saved(f){assert.equal(f.render().rec,undefined,'the recorder closed');assert.equal(f.shell.notes.list.length,1);assert.equal(f.shell.notes.list[0].kind,'voice');assert.equal(f.shell.notes.list[0].body,'Synthetic Cloud transcript');assert.deepEqual(f.shell.messages,[]);}
+
+for(const platform of [{native:true,platform:'android'},{native:false,platform:'web'}]){
+ test(`Notes ${platform.platform}: Listen with an unconfirmed cleanup stops playback only, and Save still saves the kept recording`,async()=>{
+  const f=cloudVoiceViewFixture({cloudProfile:true,...platform});failingListen(f,unconfirmed());
+  try{
+   f.render().record();await f.tick();await toReview(f);const asked=f.recordingCancels.length;
+   rec(f).toggle();await settle(f);
+   assert.equal(f.recordingCancels.length,asked,'cancelRecording deletes the kept file on Android');
+   assert.equal(f.native?f.stopPlaybackInputs.filter(input=>input===undefined).length:f.pluginCancels,1,'the plugin was asked to stop playback');
+   assert.equal(rec(f).state,'review');assert.equal(rec(f).failed,false);assert.deepEqual(f.shell.messages,[]);
+   await tap(f);assert.equal(f.audioSaves,1);saved(f);
+  }finally{f.close();await f.tick();}
+ });
+}
+
+test('Notes: Listen that plays normally forces no plugin stop, and Save saves',async()=>{
+ const f=await opened();
+ try{
+  await toReview(f);const asked=f.recordingCancels.length;
+  rec(f).toggle();await settle(f);assert.equal(f.cloudSpeech,1);assert.equal(f.recordingCancels.length,asked);assert.equal((f.stopPlaybackInputs||[]).filter(input=>input===undefined).length,0);
+  await tap(f);saved(f);
+ }finally{f.close();await f.tick();}
+});
+
+test('Notes: a provider refusal during Listen forces no plugin stop and keeps the review',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true});failingListen(f,Object.assign(Error('PRIVATE_PROVIDER_BODY'),{code:'voice-http-503'}));
+ try{
+  f.render().record();await f.tick();await toReview(f);
+  rec(f).toggle();await settle(f);assert.equal(rec(f).state,'review');assert.equal((f.stopPlaybackInputs||[]).filter(input=>input===undefined).length,0);assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await f.tick();}
+});
+
+test('Notes: a live recording whose stop fails still gets the forced stop; Record again still discards a kept one',async()=>{
+ const f=await opened();
+ try{
+  await tap(f);assert.equal(rec(f).state,'recording');f.captureCancelError=Error('Plugin stop refused');const before=f.recordingCancels.length;
+  rec(f).discard();await settle(f);assert.equal(f.recordingCancels.length,before+2,'the stop, then the forced stop');
+  f.captureCancelError=null;f.render().record();await settle(f);await toReview(f);const kept=f.recordingCancels.length;
+  rec(f).discard();await settle(f);assert.equal(f.recordingCancels.length,kept+1,'an explicit discard deletes it');
+ }finally{f.close();await f.tick();}
+});
+
+const RETAINED=/^The note save is unconfirmed\. The recording and transcript are retained; inspect saved Notes before saving again\.$/;
+for(const [name,arrange] of [
+ ['the recording store refuses',f=>{const save=f.driver.saveRecording;f.driver.saveRecording=async()=>{throw Error('PRIVATE_PLUGIN_TEXT');};return ()=>{f.driver.saveRecording=save;};}],
+ ['the note store rejects',f=>{const save=f.shell.vset;f.shell.vset=async()=>{throw Error('PRIVATE_PLUGIN_TEXT');};return ()=>{f.shell.vset=save;};}],
+ ['the note store does not confirm',f=>{f.shell.failPersistence=true;return ()=>{f.shell.failPersistence=false;};}],
+ ['Notes storage goes unconfirmed during the save',f=>{const save=f.driver.saveRecording;f.driver.saveRecording=async input=>{f.storageReady=false;return save(input);};return ()=>{f.driver.saveRecording=save;f.storageReady=true;};}],
+ ['the note changes during the save',f=>{const save=f.driver.saveRecording;f.driver.saveRecording=async input=>{f.shell.notes.list=[{id:input.noteId}];return save(input);};return ()=>{f.driver.saveRecording=save;f.shell.notes.list=[];};}],
+])test(`Notes: when ${name} Save keeps the review with its line, and Save works again`,async()=>{
+ const f=await opened();
+ try{
+  await toReview(f);const undo=arrange(f);
+  await tap(f);const view=rec(f);
+  assert.equal(view.state,'review');assert.equal(view.failed,true);assert.equal(view.transcript,'Synthetic Cloud transcript');assert.match(view.lines[0].t,RETAINED);assert.deepEqual(f.shell.messages,[]);
+  undo();await tap(f);saved(f);
+ }finally{f.close();await f.tick();}
+});
+
+test('Notes: a dictation into a note keeps its own line when the save fails, and applies once it works',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true});Object.assign(f.shell.notes,{list:[{id:'note',kind:'text',title:'Plan',body:'Milk'}],open:'note'});
+ try{
+  f.render().ed.dictate();await f.tick();await toReview(f);
+  f.shell.failPersistence=true;await tap(f);assert.equal(rec(f).state,'review');assert.match(rec(f).lines[0].t,/^The note save is unconfirmed\. Your transcript is retained; inspect saved Notes before applying again\.$/);
+  f.shell.failPersistence=false;await tap(f);assert.equal(f.render().rec,undefined);assert.equal(f.shell.notes.list[0].body,'MilkSynthetic Cloud transcript');assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await f.tick();}
+});
+
+for(const [surface,name] of [['vo','voice note'],['ed','text note']])
+test(`Notes: reading a ${name} aloud that fails ends quietly, and Read aloud plays next`,async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true});Object.assign(f.shell.notes,{list:[{id:'note',kind:surface==='vo'?'voice':'text',title:'Memo',body:'Hello there',...(surface==='vo'?{audio:{audioId:'saved'}}:{})}],open:'note'});
+ try{
+  f.error=Object.assign(Error('PRIVATE_PROVIDER_BODY'),{code:'voice-http-503'});
+  f.render()[surface].readAloud();await settle(f);
+  assert.equal(f.cloudSpeech,1);assert.equal(f.box.currentNoteReading(),null);assert.deepEqual(f.shell.messages,[]);
+  f.error=null;f.render()[surface].readAloud();await settle(f);
+  assert.equal(f.cloudSpeech,2);assert.equal(f.speechInputs.at(-1).text,'Memo. Hello there');assert.equal(f.box.currentNoteReading(),null);assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await f.tick();}
+});
+
+test('Notes: leaving the foreground while recording returns to the normal line, and recording starts again',async()=>{
+ const f=await opened();
+ try{
+  await tap(f);assert.equal(rec(f).state,'recording');
+  f.setHidden(true);await settle(f);f.setHidden(false);await settle(f);
+  assert.equal(rec(f).state,'ready');quiet(f,'ready');
+  await tap(f);assert.equal(rec(f).state,'recording');
+ }finally{f.close();await f.tick();}
+});

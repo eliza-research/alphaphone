@@ -37,6 +37,7 @@ test('accepted SDK final state binds one current voice request; raw text cannot 
   const stubs = new Map([
     ['./connection-ui', 'export const connectionController=globalThis.__voiceRequestFixture.connection;'],
     ['./development-cloud-voice', 'export const developmentCloudRealtimeVoiceEnabled=false;'],
+    ['../build-flags', 'export const devSurfacesEnabled=false;'],
     ['./development-cartesia-flag', 'export const developmentCartesiaVoiceEnabled=true;'],
     ['../browser/device-preferences', 'export async function readDevicePreferences(){return {askBeforeAgentActions:false};}'],
     ['@elizaos/ui/voice/voice-session-client', 'export function createVoiceSessionClient(options){globalThis.__voiceRequestFixture.options=options;return globalThis.__voiceRequestFixture.client;}'],

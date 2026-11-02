@@ -59,7 +59,7 @@ test('actual voice view shows activity while healthy and a failure ends quietly,
   // the same quiet presentation without renaming the state or bypassing any action guard.
   const adapter=fs.readFileSync('apps/app/src/prototype/voice-adapter.ts','utf8');
   assert.match(adapter,/state: failure \|\| stage,\s+failed: Boolean\(error \|\| failure\)/);
-  assert.match(adapter,/recorder\.problem=recorder\.state==='error'\|\|recorder\.failed===true/);
+  assert.match(adapter,/recorder\.problem=recorder\.failed===true/);
   for(const state of ['denied','no-speech','local-agent','recognition','permission-denied']){
    const model={...held,state,failed:true,statusLines:[],lines:[{t:'INTERNAL_FAILURE_DETAIL'}]};
    const legacy=new JSDOM(render({legacyChatRecorder:true,chatRecorder:model})).window.document;

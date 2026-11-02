@@ -115,10 +115,8 @@ for (const mode of ['confirm','transcribed','zone','modal','unknown','receipt-lo
       const voice=page.getByRole('region',{name:'Voice conversation',exact:true});await expect(voice).toHaveAttribute('data-voice-state','listening');
       await page.evaluate(()=>(window as any).recoveryFixture.voicePeak=.25);await page.waitForTimeout(950);await page.evaluate(()=>(window as any).recoveryFixture.voicePeak=0);
       await expect.poll(()=>page.evaluate(()=>(window as any).recoveryFixture.posts)).toBe(1);
-      await expect(voice).toHaveAttribute('data-voice-state','error');
-      expect(await page.evaluate(()=>(window as any).recoveryFixture.effects)).toBe(0);
-      await voice.getByRole('button',{name:'Stop voice conversation',exact:true}).click();
       await expect(voice).toHaveCount(0);
+      expect(await page.evaluate(()=>(window as any).recoveryFixture.effects)).toBe(0);
       await expect(page.getByRole('textbox',{name:'Message Alpha',exact:true})).toBeVisible();
       expect(await page.evaluate(()=>({uploads:(window as any).recoveryFixture.cloudUploads,local:(window as any).recoveryFixture.localProbes,channel:(window as any).calendarSent.channelType}))).toEqual({uploads:1,local:0,channel:'VOICE_DM'});
     }

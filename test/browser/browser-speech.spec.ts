@@ -91,16 +91,16 @@ for(const [code,message] of [
  expect(await page.evaluate(()=>{const f=(window as any).cloudNotesVoice;return {uploads:f.uploads,same:f.requests[0].recordingId===f.requests[1].recordingId&&f.requests[0].recordingId===f.clip};})).toEqual({uploads:2,same:true});await noPhysicalOrLocalVoice(page);expect(f.foreign).toEqual([]);
 });
 
-test('a Cloud speech 429 keeps the clip, shows the retry time and records the account limit',async({page})=>{
+test('a Cloud speech 429 keeps the clip quietly and records the account limit',async({page})=>{
  const f=await cloudNotesVoiceFixture(page);
  await page.evaluate(async()=>{const v=(window as any).cloudNotesVoice;v.failureCode='voice-http-429';v.failureData={retryAfterSeconds:42,limitCode:'rate_limited',message:'PRIVATE_PROVIDER_BODY_SENTINEL'};v.limits=[];
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');c.noteCloudServiceLimit=(limit:any,sessionId:any)=>{v.limits.push({kind:limit?.kind,retryAfterMs:limit?.retryAfterMs,sessionId});return true;};});
  await openNotesRecorder(page);await recordClosedClip(page);
  await notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true}).click();
- await expect(notesRecorder(page)).toContainText("Eliza Cloud voice reached your plan's request limit. Try again in about 42 seconds. Your recording is kept.");
- await expect(notesRecorder(page)).not.toContainText('PRIVATE_PROVIDER_BODY_SENTINEL');await expect(notesRecorder(page)).not.toContainText('PRIVATE_TRANSCRIPTION_SENTINEL');
+ await expect.poll(()=>page.evaluate(()=>(window as any).cloudNotesVoice.limits)).toEqual([{kind:'rate-limited',retryAfterMs:42_000,sessionId:'fixture-account-a'}]);
  await expect(notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true})).toBeEnabled();
- expect(await page.evaluate(()=>(window as any).cloudNotesVoice.limits)).toEqual([{kind:'rate-limited',retryAfterMs:42_000,sessionId:'fixture-account-a'}]);
+ await expect(notesRecorder(page)).toContainText('Microphone is off.');await expect(notesRecorder(page)).not.toContainText('request limit');
+ await expect(notesRecorder(page)).not.toContainText('PRIVATE_PROVIDER_BODY_SENTINEL');await expect(notesRecorder(page)).not.toContainText('PRIVATE_TRANSCRIPTION_SENTINEL');
  // The kept clip is the one an explicit retry uploads.
  await page.evaluate(()=>{const v=(window as any).cloudNotesVoice;v.failureCode=null;v.failureData=null;});await notesRecorder(page).getByRole('button',{name:'Transcribe with Eliza Cloud',exact:true}).click();
  await expect(notesRecorder(page).getByRole('textbox',{name:'Review transcript',exact:true})).toHaveValue('Closed Cloud transcript');

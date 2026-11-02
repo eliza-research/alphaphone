@@ -31,6 +31,7 @@ for(const own of [false,true])test(`the real ${own?'own-key':'development'} adap
   const stubs = new Map([
     ['./connection-ui', 'export const connectionController=globalThis.__alphaVoiceProgressFixture.connection;'],
     ['./development-cloud-voice', 'export const developmentCloudRealtimeVoiceEnabled=false;'],
+    ['../build-flags', 'export const devSurfacesEnabled=false;'],
     ['./development-cartesia-flag', 'export const developmentCartesiaVoiceEnabled=!globalThis.__alphaVoiceProgressFixture.own;'],
     ['../browser/device-preferences', 'export async function readDevicePreferences(){return {askBeforeAgentActions:true};}'],
     ['@elizaos/ui/voice/voice-session-client', 'export function createVoiceSessionClient(options){globalThis.__alphaVoiceProgressFixture.options=options;return globalThis.__alphaVoiceProgressFixture.client;}'],

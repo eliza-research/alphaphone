@@ -1,9 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {stripTypeScriptTypes} from 'node:module';
-import vm from 'node:vm';
-import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
+import {cloudVoiceViewFixture,load} from './fixtures/cloud-voice-view.mjs';
 
 // The actual voice adapter with a synthetic session whose stop can be refused, then the actual
 // realtime conversation module with a synthetic relay. No microphone, provider or account is used.
@@ -95,8 +92,55 @@ test('Talk after an unconfirmed Read aloud cleanup asks the plugin once, then li
  }finally{f.close();await settle(f);}
 });
 
-const realtimeSource=stripTypeScriptTypes(readFileSync('apps/app/src/runtime/development-cartesia-conversation.ts','utf8')
- .replace(/^import .*;\n/gm,'').replace(/^export \{.*\} from .*;\n/gm,'').replace("await import('@elizaos/ui/voice/voice-session-client')",'await loadClient()').replace(/^export /gm,''),{mode:'transform'});
+test('a Notes recording after an unconfirmed Read aloud cleanup asks the plugin first, then records',async()=>{
+ const f=session({native:true,platform:'android'}),rec=()=>f.render().rec;
+ try{
+  let unconfirmed=Object.assign(Error('Read aloud cleanup unconfirmed'),{code:'speech-cleanup-unconfirmed'});
+  f.box.stopLocalSpeechPlayback=()=>{const failure=unconfirmed;unconfirmed=undefined;return failure&&Promise.reject(failure);};
+  f.render().record();await settle(f);rec().stop();await settle(f);
+  assert.equal(rec().state,'recording');assert.equal(f.starts,1);assert.equal(forcedStops(f),1);assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await settle(f);}
+});
+
+function pendingReview(f){
+ const approval=new AbortController(),cancels=[];
+ f.shell.pendingActionApproval=approval;f.shell.pendingActionApprovalProposalId='proposal';f.shell.cancelReadReplyCompletions=id=>cancels.push(id??'all');
+ return {approval,cancels};
+}
+for(const [name,failure] of [['a lost session',Error('Cloud socket lost')],['a rate limit too long to wait out',Object.assign(Error('Limited'),{code:'voice-http-429',data:{retryAfterSeconds:600,limitCode:'rate_limited'}})]])
+test(`${name} ends voice quietly and leaves a pending review to the owner`,async()=>{
+ const f=session({native:true,platform:'android'});
+ try{
+  await f.shell.startVoice();const {approval,cancels}=pendingReview(f);
+  f.batchOptions.onState({phase:'error',error:failure});await settle(f);
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);
+  assert.equal(approval.signal.aborted,false,'a transport failure is not the owner saying no');assert.deepEqual(cancels,[]);
+ }finally{f.close();await settle(f);}
+});
+
+test('Stop on the panel a failure left holding still cancels the pending review',async()=>{
+ const f=session({native:true,platform:'android'});
+ try{
+  await f.shell.startVoice();const {approval,cancels}=pendingReview(f);
+  let release;f.stopGate=new Promise(resolve=>release=resolve);
+  f.batchOptions.onState({phase:'error',error:Error('Cloud socket lost')});await settle(f);
+  assert.equal(f.renderChat().state,'stopping');assert.equal(approval.signal.aborted,false);
+  f.renderChat().stop();assert.equal(approval.signal.aborted,true);assert.deepEqual(cancels,['proposal']);
+  release();await settle(f);assert.equal(f.renderChat(),null);
+ }finally{f.close();await settle(f);}
+});
+
+test('an explicit Stop cancels a pending review; leaving for the keyboard does not',async()=>{
+ for(const [control,cancelled] of [['stop',true],['keyboard',false]]){
+  const f=session({native:true,platform:'android'});
+  try{
+   await f.shell.startVoice();const {approval,cancels}=pendingReview(f);
+   f.renderChat()[control]();await settle(f);
+   assert.equal(approval.signal.aborted,cancelled,control);assert.deepEqual(cancels,cancelled?['all']:[],control);
+  }finally{f.close();await settle(f);}
+ }
+});
+
 /** Realtime Cloud voice through the developer agent; `revoke` answers a ticket retirement through the relay. */
 function realtime(revoke){
  const f=cloudVoiceViewFixture({native:false,platform:'web',account:null});
@@ -113,7 +157,7 @@ function realtime(revoke){
   loadClient:async()=>({createVoiceSessionClient:options=>{const client=++sdk.clients;sdk.options=options;return {
    async start(){sdk.starts++;options.onMinted({sessionId:'session-'+client});options.onState({phase:'listening',traceId:null,finalTranscript:''});},
    async stop(){sdk.stops++;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false,async unlockPlayback(){}};}})});
- vm.runInNewContext(realtimeSource+';globalThis.developmentCartesiaConversation=developmentCartesiaConversation;',f.box);
+ load('runtime/development-cartesia-conversation.ts',f.box,['developmentCartesiaConversation'],source=>source.replace(/^export \{.*\} from .*;\n/gm,'').replace("await import('@elizaos/ui/voice/voice-session-client')",'await loadClient()'));
  return Object.assign(f,{sdk,revokes:()=>calls.filter(path=>path.includes('/revoke'))});
 }
 for(const [name,revoke] of [['refuses',()=>{throw Object.assign(Error('Relay unavailable'),{status:503});}],['never answers',()=>new Promise(()=>{})],['confirms',()=>({revoked:true})]])

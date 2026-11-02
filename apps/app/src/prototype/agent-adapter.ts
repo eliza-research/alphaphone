@@ -1623,13 +1623,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       finally {this.pendingActionApproval=null;this.pendingActionApprovalProposalId=null;if(this.live){context(this);this.setState({});}}
     } else if (card.go) this.openView(card.go.view, card.go.patch);
   };
-  p.startVoice = async function () {
-    try {
-      const result = await DailyApps.perform({ action: 'voice' });
-      if (result.status === 'selected' && result.transcript) this.setState({ chat: 'sheet', draft: result.transcript });
-      else this.toast(result.message || 'Speech recognition is unavailable on this device.');
-    } catch { this.toast('Speech recognition is unavailable on this device.'); }
-  };
   p.stopVoice = function () { this.pendingActionApproval?.abort();this.cancelReadReplyCompletions?.();alphaClient.cancel(); this.setState({ voice: 'off', typing: false }); };
   views.notes.render = function (state: Shell, api: Shell) {
     const out = notesRender({ ...state, record: false }, api);
@@ -1641,18 +1634,7 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     out.browserRecovery=isAndroid?Boolean(failed||activeShell?.notesDraftUnreadable||activeShell?.notesDraftDeferred||activeShell?.notesDraftConflict):Boolean(failed||state.audioDeletionRecoveryFailed||state.audioDeletionPending?.length);
     out.openBrowserRecovery=()=>{const shell=activeShell;if(!shell||shell.notesPending)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();if(isAndroid){openNativeNotesRecovery(shell,controller.signal);return;}openDomainRecovery({capture:async signal=>{const draft=JSON.stringify({...JSON.parse(shell.notesStore?.raw||'{}'),records:shell.vget('notes').list});const saved=await browserNotesRecovery.capture(signal);return {...saved,raw:JSON.stringify({saved:saved.raw,draft})};},reset:browserNotesRecovery.reset},'Notes','Browser Notes recovery','Download saved Notes and the current editor draft before resetting. Reset starts an empty collection; it does not delete audio files or resolve pending audio deletion. Close other Alpha tabs before continuing.',controller.signal);};
     out.openAudioRecovery=async()=>{const shell=activeShell;if(!shell)return;notesRecovery?.abort();const controller=notesRecovery=new AbortController();try{const recovery=await audioDeletionRecovery();if(controller.signal.aborted||activeShell!==shell||!shell.live||shell.S().view!=='notes')return;openDomainRecovery(recovery,'note audio deletion history','Note audio deletion recovery','Download unresolved note/audio deletion records before resetting. Reset forgets recovery records, but does not delete or restore Notes or audio. Check uncertain outcomes before repeating any deletion. Close other Alpha tabs before continuing.',controller.signal);}catch{if(!controller.signal.aborted)api.toast('Audio deletion recovery could not be opened.');}};
-    const dictate = async () => {
-      try {
-        const r = await DailyApps.perform({ action: 'voice' });
-        if (r.transcript) {
-          const latest = api.get('notes');
-          if (latest.open !== state.open) return;
-          api.set({ list: latest.list.map((n: Shell) => n.id === state.open ? { ...n, body: [n.body, r.transcript].filter(Boolean).join('\n') } : n) });
-        } else api.toast(r.message || 'Speech recognition is unavailable.');
-      } catch { api.toast('Speech recognition is unavailable.'); }
-    };
     out.record = () => window.dispatchEvent(new CustomEvent('alpha-record-note'));
-    if (out.ed) out.ed.dictate = dictate;
     if (out.vo) { out.vo.play = () => api.toast('No audio is available for this note.'); out.vo.toCal = () => void DailyApps.perform({ action: 'calendar-create', title: out.vo.title }).catch(() => api.toast('Calendar is unavailable.')); }
     return out;
   };

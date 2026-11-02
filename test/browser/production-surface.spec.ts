@@ -316,12 +316,12 @@ test('production signed-out voice stays on-device with no capture, upload or Clo
   await page.getByRole('button', { name: 'Record and transcribe', exact: true }).click();
   // A browser production build has no local agent here: local speech is unavailable, never Cloud.
   await expect(page.getByText('Local speech needs the local agent on this computer. Connect it, or use the keyboard.',{exact:true})).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'On-device speech unavailable',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Start recording',exact:true})).toBeDisabled();
   await expect(page.getByRole('button',{name:'Cancel recording',exact:true})).toBeEnabled();
-  for(const name of ['Connect Eliza Cloud','Transcribe with Eliza Cloud','Start recording','Record without transcription','Use development voice','Use browser voice','Use on-device voice','Transcribe on this device','Type transcript instead'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0);
+  for(const name of ['Connect Eliza Cloud','Transcribe with Eliza Cloud','Record without transcription','Use development voice','Use browser voice','Use on-device voice','Transcribe on this device','Type transcript instead'])await expect(page.getByRole('button',{name,exact:true})).toHaveCount(0);
   await expect(page.getByText('Sign in to Eliza Cloud to use voice.',{exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Cancel recording',exact:true}).click();
-  await expect(page.getByRole('button',{name:'On-device speech unavailable',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Start recording',exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>(window as any).voiceGate)).toEqual({microphone:0,recorders:0,audio:0,workers:0,playback:0});
   expect(uploads).toEqual([]);expect(engines).toEqual([]);expect(foreign).toEqual([]);
   expect(await violations()).toEqual([]);

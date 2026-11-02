@@ -18,7 +18,7 @@ function retainSpeechRetirement(pending:Promise<void>){
  const drain=Promise.all([previous,pending.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;})]).then(()=>{});
  speechRetirement=drain;void drain.then(()=>{if(speechRetirement===drain)speechRetirement=undefined;},()=>{});return drain;
 }
-/** The next speech waits for this stop. An unconfirmed cleanup is handed to one caller, which answers for it. */
+/** The next speech waits for this stop. An unconfirmed cleanup rejects it once: a voice or recorder start then asks the plugin; a read ends quietly. */
 export function stopLocalSpeechPlayback() { stopSpeaking(); const pending=cancelCurrent?.(); cancelCurrent = undefined; cancelOwner = undefined;const retiring=pending?retainSpeechRetirement(Promise.resolve(pending)):speechRetirement;void retiring?.catch(()=>{if(speechRetirement===retiring)speechRetirement=undefined;});return retiring; }
 type Shell = any;
 type Reading = { id: string; text: string; pending?:Promise<void>;current?:()=>boolean;controller?: AbortController };
@@ -53,29 +53,27 @@ export function stopSpeaking() {
 /**
  * Read note text aloud on the explicit runtime profile. The Cloud profile uploads text
  * to the selected account; its Notes control discloses that before a user starts it. Leaving the note or editing it cancels the reading
- * (the Notes adapter calls stopSpeaking). Resolves with the outcome; never throws.
+ * (the Notes adapter calls stopSpeaking). Never throws.
  */
-export function speakNote(text: string, owner: { noteId?: string } = {}) { return readNote(text, owner); }
-async function readNote(text: string, owner: { noteId?: string }): Promise<'finished' | 'stopped' | 'unavailable' | 'unsupported' | 'failed'> {
+export async function speakNote(text: string, owner: { noteId?: string } = {}) {
   const retirement = stopLocalSpeechPlayback();
   const passage = typeof text === 'string' ? text.trim() : '';
-  if (!passage || passage.length > (cloudRuntimeEnabled ? 5000 : 16000)) return 'unsupported';
+  if (!passage || passage.length > (cloudRuntimeEnabled ? 5000 : 16000)) return;
   // The same preflight as message Listen, on every platform: text with credentials, card
   // numbers, links or unsupported characters is refused before any audio or local-agent
   // request. The browser still speaks the original passage; the native engine speaks its plan.
-  try { planLocalSpeech(passage); } catch { return 'unsupported'; }
-  const voice = (() => { try { return cloudRuntimeEnabled ? createCloudVoice() : createOnDeviceVoice(); } catch { return null; } })(); if (!voice) return 'unavailable';
+  try { planLocalSpeech(passage); } catch { return; }
+  const voice = (() => { try { return cloudRuntimeEnabled ? createCloudVoice() : createOnDeviceVoice(); } catch { return null; } })(); if (!voice) return;
   const reading: NoteReading = { noteId: owner.noteId, text: passage, controller: new AbortController(), state: 'preparing' };
   noteReading = reading; noteReadingChanged();
   const signal = reading.controller.signal;
   try {
     await retirement;
-    if ('playbackReady' in voice && !await voice.playbackReady(signal)) { if (noteReading === reading) { noteReading = undefined; noteReadingChanged(); } return 'unavailable'; }
-    if (noteReading !== reading || signal.aborted) return 'stopped';
+    if ('playbackReady' in voice && !await voice.playbackReady(signal)) return;
+    if (noteReading !== reading || signal.aborted) return;
     const started=() => { if (noteReading === reading) { reading.state = 'reading'; noteReadingChanged(); } };
-    const pending=reading.pending=cloudRuntimeEnabled ? voice.speak(passage, signal, started) : speakOnDevice(passage, signal, started);await pending;
-    return noteReading === reading && !signal.aborted ? 'finished' : 'stopped';
-  } catch { return noteReading !== reading || signal.aborted ? 'stopped' : 'failed'; }
+    await (reading.pending=cloudRuntimeEnabled ? voice.speak(passage, signal, started) : speakOnDevice(passage, signal, started));
+  } catch { /* Failed or stopped, reading ends quietly: the control returns to Read aloud. */ }
   finally { if (noteReading === reading) { noteReading = undefined; noteReadingChanged(); } }
 }
 

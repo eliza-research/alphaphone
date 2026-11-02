@@ -1248,10 +1248,9 @@ async function lateCut({ack,fullDuplex,where,words,firstAudio}){
 }
 for(const ack of [true,false])for(const fullDuplex of [true,false])for(const where of ack?['the ack','its tail']:['its tail'])for(const words of ack?[ECHO,CORRECTION]:[CORRECTION])for(const firstAudio of [300,550,1000]){
  // Keep every ACK/duplex/timing/word combination; all callbacks originate on the closed handle.
- const cut=false; // The capture is closed before send: neither a timer nor a stale final can cut this reply.
- const correction=false; // Both correction and echo here come from the retired capture.
- test(`closed busy capture, delayed final audio: ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${words===ECHO?'the ack\'s echo':'a correction'} starting ${ack?'in '+where:'as it would in the ack\'s tail'}, the turn answered 300 ms later, the reply's first audio ${firstAudio} ms after the answer: ${cut?'cut before its first audio':'first audio plays'}, ${correction||cut?'the reply is not played out':'the reply plays out'}, ${correction?'the correction is sent':'nothing is sent'}`,async()=>{
-  assert.deepEqual(await lateCut({ack,fullDuplex,where,words,firstAudio}),{cutBeforeFirstAudio:cut,replyPlayedOut:!cut&&!correction,sent:correction?[CORRECTION]:[]});
+ // The capture is closed before send: neither a timer nor a stale final can cut this reply, and both correction and echo here come from the retired capture.
+ test(`closed busy capture, delayed final audio: ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${words===ECHO?'the ack\'s echo':'a correction'} starting ${ack?'in '+where:'as it would in the ack\'s tail'}, the turn answered 300 ms later, the reply's first audio ${firstAudio} ms after the answer: first audio plays, the reply plays out, nothing is sent`,async()=>{
+  assert.deepEqual(await lateCut({ack,fullDuplex,where,words,firstAudio}),{cutBeforeFirstAudio:false,replyPlayedOut:true,sent:[]});
  });
 }
 // At Mute the retired handle reports speech and a delayed final; the manual flag stays off through reply drain.
@@ -1269,9 +1268,9 @@ async function muteCut({ack,fullDuplex,words,finalAt}){
  }finally{await closeLive(f);}
 }
 for(const ack of [true,false])for(const fullDuplex of [true,false])for(const words of ack?[ECHO,CORRECTION]:[CORRECTION])for(const finalAt of [300,550,1000]){
- const cut=false,correction=false; // Mute during a hold cannot revive the retired capture or submit its final.
- test(`closed busy capture at Mute, delayed final: ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${words===CORRECTION?'a correction':'the ack\'s echo'} reported on the closed handle at Mute while the turn is pending, its final ${finalAt} ms after Mute: ${cut?'the turn is cut by time before the final':'the turn waits for the final'}; ${correction?'the correction is sent':cut?'nothing is sent and the turn is lost':'the reply is spoken'}`,async()=>{
-  assert.deepEqual(await muteCut({ack,fullDuplex,words,finalAt}),{cutBeforeFinal:cut,aborted:cut||correction,replied:!cut&&!correction,sent:correction?[CORRECTION]:[]});
+ // Mute during a hold cannot revive the retired capture or submit its final.
+ test(`closed busy capture at Mute, delayed final: ${ack?'with the ack':'with no ack'}${fullDuplex?'':', without echo cancellation'}: ${words===CORRECTION?'a correction':'the ack\'s echo'} reported on the closed handle at Mute while the turn is pending, its final ${finalAt} ms after Mute: the turn waits for the final; the reply is spoken`,async()=>{
+  assert.deepEqual(await muteCut({ack,fullDuplex,words,finalAt}),{cutBeforeFinal:false,aborted:false,replied:true,sent:[]});
  });
 }
 

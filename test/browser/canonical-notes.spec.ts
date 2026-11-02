@@ -66,11 +66,11 @@ test('the header waveform starts one canonical note and dictates into it like ty
  await expect(page.getByRole('button',{name:'Open Call the landlord Friday',exact:true})).toContainText('Bedroom radiator clanks all night.');
  expect((await snapshot(page)).notes).toHaveLength(1);
  // Without speech recognition (this browser build, or a denied microphone) the waveform still opens
- // the new note and shows the editor's own message; an untouched note is dropped on Back.
+ // the new note and ends quietly; an untouched note is dropped on Back.
  await page.evaluate(()=>(window as any).canonicalNotesFixture.dictation=undefined);
  await page.getByRole('button',{name:'Dictate new note',exact:true}).click();
  await expect(title).toHaveValue('');await expect(body).toHaveValue('');
- await expect(page.getByText('Speech recognition is unavailable.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Speech recognition is unavailable.',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Back to notes',exact:true}).click();
  await expect(page.getByRole('button',{name:'Dictate new note',exact:true})).toBeVisible();
  expect((await requests()).length).toBe(2);expect((await snapshot(page)).notes).toHaveLength(1);

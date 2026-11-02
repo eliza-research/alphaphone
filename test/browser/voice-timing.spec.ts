@@ -54,7 +54,7 @@ async function talk(page:Page){await page.getByRole('button',{name:'Talk',exact:
 
 test('a Cloud conversation turn records one entry-sourced record from recording end to final reply, without first audio when playback never started',async({page})=>{
  await setup(page,{playback:'fails'});await talk(page);await utterance(page);
- await expect(voice(page)).toHaveAttribute('data-voice-state','error');
+ await expect(voice(page)).toHaveCount(0);
  const rows=await records(page);expect(rows).toHaveLength(1);
  const [row]=rows;expect(row).toMatchObject({version:1,route:'eliza-cloud',cold:true,entry:'conversation',policy:'auto-send'});expect(row.outcome).toBeUndefined();
  expect(Object.keys(row.marks)).toEqual(['recording-end','transcript-ready','send','first-token','final-reply']);

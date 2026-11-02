@@ -4151,7 +4151,7 @@
       <sc-if value="{{chatRecorder.canMute}}"><button class="ib" aria-label="{{chatRecorder.muteLabel}}" disabled="{{chatRecorder.muteDisabled}}" aria-pressed="{{chatRecorder.muted}}" onClick="{{chatRecorder.toggleMute}}"><span aria-hidden="true" class="mail-toolbar-icon" style="mask-image:url('{{chatRecorder.muteAsset}}');-webkit-mask-image:url('{{chatRecorder.muteAsset}}')"></span></button></sc-if>
       <button class="alpha-voice-primary" aria-label="{{chatRecorder.primaryLabel}}" disabled="{{chatRecorder.primaryDisabled}}" onClick="{{chatRecorder.stop}}"><svg class="i" viewBox="0 0 24 24"><path d="{{chatRecorder.primaryIcon}}"></path></svg></button>
     </section>
-    <sc-if value="{{chatRecorder.voiceDetails}}"><details class="alpha-voice-error"><summary>Voice details</summary><sc-if value="{{chatRecorder.cloudDisclosure}}"><p role="note">{{chatRecorder.cloudDisclosureText}}</p></sc-if><sc-if value="{{chatRecorder.errorDetail}}"><p>{{chatRecorder.errorDetail}}</p></sc-if></details></sc-if>
+    <sc-if value="{{chatRecorder.voiceDetails}}"><details class="alpha-voice-error"><summary>Voice details</summary><sc-if value="{{chatRecorder.cloudDisclosure}}"><p role="note">{{chatRecorder.cloudDisclosureText}}</p></sc-if></details></sc-if>
     <sc-if value="{{chatRecorder.needsPlaybackUnlock}}"><button class="tap alpha-voice-unlock" onClick="{{chatRecorder.unlockPlayback}}">Enable sound</button></sc-if>
   </sc-if>
   <sc-if value="{{panelComposer}}">

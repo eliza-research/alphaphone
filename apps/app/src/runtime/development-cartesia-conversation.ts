@@ -1,5 +1,6 @@
 import {validateUuid} from '../../../../vendor/eliza/packages/core/src/utils/uuid';
 import {readDevicePreferences} from '../browser/device-preferences';
+import {devSurfacesEnabled} from '../build-flags';
 import type { ViewActionHandoff } from "@elizaos/core/view-interaction";
 import {developmentCloudRealtimeVoiceEnabled} from './development-cloud-voice';
 import {developmentCartesiaVoiceEnabled} from './development-cartesia-flag';
@@ -123,7 +124,7 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
  const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();
   // The client's stop releases the microphone and audio, and that is all Stop waits for: each minted
   // ticket is revoked once after it, so a lost relay cannot hold voice stopping.
-  stopPromise=client.stop();void stopPromise.then(()=>{if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');return Promise.all([...minted].map(async id=>{try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}));}).catch(error=>{if(developmentCartesiaVoiceEnabled||developmentCloudRealtimeVoiceEnabled)console.warn('[Alpha voice]',error);});return stopPromise;};
+  stopPromise=client.stop();void stopPromise.then(()=>{if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');return Promise.all([...minted].map(async id=>{try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}));}).catch(error=>{if(devSurfacesEnabled)console.warn('[Alpha voice]',error);});return stopPromise;};
  // Renderer authority is independent of the canonical audio socket. Renew its
  // short, single-use ticket without restarting capture or resetting turn deduplication.
  const renewRenderer=():Promise<void>=>{

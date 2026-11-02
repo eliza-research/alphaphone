@@ -177,11 +177,11 @@ export class CanonicalNotesUi {
    // A new note's first save (a title typed while listening) names its record by now.
    id=this.resolve(id);
    if(!this.controller.current||this.open!==id)return;
-   if(typeof result.transcript!=='string'||!result.transcript){api.toast(result.message||'Speech recognition is unavailable.');return;}
+   if(typeof result.transcript!=='string'||!result.transcript)return;
    const current=this.list.find(row=>row.id===id);if(!current)return;
    const body=current.body===before.body?current.body.slice(0,start)+result.transcript+current.body.slice(end):[current.body,result.transcript].filter(Boolean).join('\n');
    await this.update(id,{body});
-  }catch{api.toast('Speech recognition is unavailable.');}
+  }catch{/* A failed dictation ends quietly; the mic control stays ready. */}
  }
  /** The header waveform: a new note, then the editor's dictation into its body. It saves like typing after +
   * (create, then expectedRevision updates), so it is an ordinary agent note; no audio is kept. */

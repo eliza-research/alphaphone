@@ -61,23 +61,20 @@ test('synthetic pill voice keeps five-bar synth, mute and Stop compact without o
  await pill.getByRole('button',{name:'Stop voice conversation',exact:true}).click();await expect(pill).toHaveCount(0);expect(await page.evaluate(()=>(window as any).voicePresentationFixture.shell.S().chat)).toBe('hidden');await noMediaOrSends(page);
 });
 
-for(const detent of ['sheet','full','hidden'])test(`synthetic voice error keeps a square Stop and truthful disabled mic: ${detent}`,async({page},info)=>{
+for(const detent of ['sheet','full','hidden'])test(`synthetic voice error ends quietly on the same detent: ${detent}`,async({page},info)=>{
  await setup(page);await page.evaluate(detent=>new Promise<void>(resolve=>(window as any).voicePresentationFixture.shell.setState({chat:detent},resolve)),detent);
  await page.getByRole('button',{name:'Talk',exact:true}).click();
  const controls=page.locator(detent==='hidden'?'[data-alpha-pill-voice]':'.alpha-voice-composer');await expect(controls.getByRole('button',{name:'Mute microphone',exact:true})).toBeEnabled();
  await page.evaluate(()=>(window as any).voicePresentationFixture.fail());
- const stop=controls.getByRole('button',{name:'Stop voice conversation',exact:true});await expect(stop).toBeEnabled();await expect(stop.locator('[data-alpha-icon]')).toHaveAttribute('data-alpha-icon','/icons/lucide/square.svg');
- const mic=controls.getByRole('button',{name:'Microphone status unconfirmed',exact:true});await expect(mic).toBeDisabled();await expect(mic).toHaveAttribute('aria-pressed','mixed');
- await expect(controls.getByRole('button',{name:/Connect|Try voice/})).toHaveCount(0);
+ await expect(controls).toHaveCount(0);await expect(page.getByRole('button',{name:/Connect|Try voice/})).toHaveCount(0);
  await page.screenshot({path:info.outputPath('synthetic-voice-error-'+detent+'.png'),animations:'disabled'});
- await stop.click();await expect(controls).toHaveCount(0);expect(await page.evaluate(()=>(window as any).voicePresentationFixture.shell.S().chat)).toBe(detent);await noMediaOrSends(page);
+ expect(await page.evaluate(()=>(window as any).voicePresentationFixture.shell.S().chat)).toBe(detent);await noMediaOrSends(page);
 });
 
-test('synthetic retirement failure keeps Stop guarded and never claims the mic is off',async({page})=>{
+test('synthetic retirement failure ends quietly and starts nothing by itself',async({page})=>{
  await setup(page);await page.getByRole('button',{name:'Talk',exact:true}).click();const controls=page.locator('.alpha-voice-composer');await expect(controls).toHaveAttribute('data-voice-state','listening');
  await page.evaluate(()=>(window as any).voicePresentationFixture.stopFailure=true);await controls.getByRole('button',{name:'Stop voice conversation',exact:true}).click();
- await expect(controls).toHaveAttribute('data-voice-state','error');const mic=controls.getByRole('button',{name:'Microphone status unconfirmed',exact:true});await expect(mic).toBeDisabled();await expect(mic).toHaveAttribute('aria-pressed','mixed');
- await controls.getByRole('button',{name:'Stop voice conversation',exact:true}).click();await expect(controls).toBeVisible();expect(await page.evaluate(()=>(window as any).voicePresentationFixture.starts)).toBe(1);await noMediaOrSends(page);
+ await expect(controls).toHaveCount(0);expect(await page.evaluate(()=>(window as any).voicePresentationFixture.starts)).toBe(1);await noMediaOrSends(page);
 });
 
 test('synthetic pending retirement stays unconfirmed until Stop acknowledgement',async({page})=>{

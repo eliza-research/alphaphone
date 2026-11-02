@@ -24,7 +24,7 @@ async function readAloud(page:Page){
   const raw=await(await import('/src/runtime/browser-notes-document.ts')).readBrowserNotesRaw();
   const note=JSON.parse(raw!).records.find((n:any)=>n.title==='Groceries');
   const {speakNote}=await import('/src/prototype/local-speech-playback.ts');
-  (window as any).voiceFixture.outcome=speakNote('Groceries. Milk and eggs.',{noteId:note.id});
+  void speakNote('Groceries. Milk and eggs.',{noteId:note.id});
  });
 }
 const reading=(page:Page)=>page.evaluate(async()=>(await import('/src/prototype/local-speech-playback.ts')).currentNoteReading());
@@ -38,7 +38,6 @@ test('reads the open note with the local voice and stops when the note is edited
  await page.getByRole('textbox',{name:'Note',exact:true}).fill('Milk, eggs and bread.');
  await expect.poll(()=>reading(page)).toBeNull();
  expect(await page.evaluate(()=>(window as any).voiceFixture.cancels)).toBeGreaterThan(0);
- expect(await page.evaluate(()=>(window as any).voiceFixture.outcome)).toBe('stopped');
  expect(posts).toEqual([]);
 });
 test('leaving the note stops reading; a finished reading reports completion',async({page})=>{
@@ -50,8 +49,7 @@ test('leaving the note stops reading; a finished reading reports completion',asy
  await readAloud(page);
  await expect.poll(async()=>(await reading(page))?.state).toBe('reading');
  await page.evaluate(()=>(window as any).voiceFixture.finish());
- await expect.poll(()=>page.evaluate(()=>(window as any).voiceFixture.outcome)).toBe('finished');
- expect(await reading(page)).toBeNull();
+ await expect.poll(()=>reading(page)).toBeNull();
 });
 test('the editor Read aloud button reads the open note and Stop reading stops it',async({page})=>{
  const posts:string[]=[];page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});
