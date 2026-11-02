@@ -24,7 +24,6 @@ import { retireGmailBackground } from '../runtime/gmail-background';
 import { gmailGrantLabel, googleAccountAccessLabel } from '../runtime/gmail-grants';
 import { clearCrashLog, describeCrashEntry, readCrashLog, recordCloudInferenceFailure, type CrashLog } from '../runtime/crash-log';
 import { buildDiagnostics, diagnosticsFileName, diagnosticsText } from '../runtime/diagnostics-export';
-import { availableUpdate, checkForUpdate, installUpdate } from '../runtime/app-update';
 import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
@@ -106,6 +105,8 @@ const device = registerPlugin<{
   setTextScale(input:{percent:number}):Promise<{textScalePercent:number;effectiveTextZoom:number}>;
   diagnosticsFacts(): Promise<Bag>;
   shareDiagnostics(input: { text: string }): Promise<{ status: string }>;
+  checkForUpdate(): Promise<{ manifest?: string }>;
+  installUpdate(update: AppUpdate): Promise<void>;
 }>('AlphaDevice');
 const notifications = registerPlugin<{status():Promise<Bag>;openAppSettings():Promise<Bag>;openChannelSettings(input:{id:string}):Promise<{status:string}>;crossAppStatus():Promise<Bag>;notificationApps():Promise<{apps:Bag[]}>;setNotificationPolicy(input:Bag):Promise<Bag>;resumeCrossApp(input:{expectedRevision:string}):Promise<Bag>;openNotificationAccess():Promise<Bag>;notificationHistory():Promise<{items:Bag[]}>;clearNotificationHistory():Promise<void>}>('AlphaNotifications');
 const system = registerPlugin<{ getDeviceSettings(): Promise<Bag>; getStatus(): Promise<{ roles?: Bag[] }>; requestRole(input: { role: string }): Promise<{ role: string; held: boolean; resultCode: number }>; getBuildInfo(): Promise<{ launcher?: boolean; version?: string }> }>('ElizaSystem');
@@ -128,6 +129,36 @@ export function versionLabel(version: unknown, code: unknown): string {
 /** Only the install time Android recorded. */
 export function installedRows(updatedAt: unknown, format: (at: number) => string = at => new Date(at).toLocaleDateString()): Array<[string, string]> {
   return Number.isSafeInteger(updatedAt) && (updatedAt as number) > 0 ? [['Installed or last updated', format(updatedAt as number)]] : [];
+}
+/**
+ * Software update manifest (app.config.json updateManifestUrl, fetched by AlphaDevice.checkForUpdate):
+ * {schema: "alpha-update/v1", versionCode, versionName, variant ("launcher" or "standalone"), signerSha256
+ * (the APK's signing certificate, as apksigner prints it), apkUrl (HTTPS), sha256 (64 lowercase hex),
+ * sizeBytes, notes (optional)}.
+ */
+export const UPDATE_SCHEMA = 'alpha-update/v1';
+/** AlphaDevicePlugin.UPDATE_MAX_BYTES, which the native download enforces, is the same bound. */
+export const UPDATE_MAX_BYTES = 1024 * 1024 * 1024;
+export const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+type AppUpdate = {versionCode: number; versionName: string; apkUrl: string; sha256: string; sizeBytes: number; notes: string};
+/**
+ * The update a manifest offers this install, or null unless it is complete and HTTPS, newer than the
+ * installed versionCode, and for this flavor and signer. Android refuses another signer after the whole
+ * download, and the other flavor would silently change what the phone admits (HOME, Phone, SMS).
+ */
+export function parseUpdateManifest(value: unknown, installed: {versionCode: unknown; launcher: unknown; signerSha256: unknown}): AppUpdate | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const {schema, versionCode, versionName, variant, signerSha256, apkUrl, sha256, sizeBytes, notes = ''} = value as Record<string, unknown>;
+  if (schema !== UPDATE_SCHEMA || !Number.isSafeInteger(installed.versionCode) || !Number.isSafeInteger(versionCode) || (versionCode as number) <= (installed.versionCode as number)) return null;
+  if (typeof installed.launcher !== 'boolean' || variant !== (installed.launcher ? 'launcher' : 'standalone') || typeof signerSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(signerSha256) || signerSha256 !== installed.signerSha256) return null;
+  if (typeof versionName !== 'string' || !/^[^\u0000-\u001f\u007f]{1,64}$/.test(versionName) || typeof notes !== 'string' || notes.length > 500) return null;
+  if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256) || !Number.isSafeInteger(sizeBytes) || (sizeBytes as number) <= 0 || (sizeBytes as number) > UPDATE_MAX_BYTES || typeof apkUrl !== 'string' || apkUrl.length > 2048) return null;
+  try { const url = new URL(apkUrl); if (url.protocol !== 'https:' || url.username || url.password) return null; } catch { return null; }
+  return {versionCode: versionCode as number, versionName, apkUrl, sha256, sizeBytes: sizeBytes as number, notes};
+}
+/** A day after the last answered check, or at once when that time is unknown or in the future. */
+export function updateCheckDue(checkedAt: number, now: number): boolean {
+  return !(now >= checkedAt && now - checkedAt < UPDATE_CHECK_INTERVAL_MS);
 }
 /** Cloud QA profile facts replace prototype navigation, not device settings links. */
 export function cloudPrivacyRow(label: string): [string, string] | null {
@@ -155,6 +186,31 @@ const systemScheme = () => { try { return matchMedia('(prefers-color-scheme: dar
 /** The theme a choice draws now; an unreadable system preference draws light. */
 export function resolveAppearance(choice: AppearanceChoice): 'light' | 'dark' {
   return choice === 'system' ? (systemScheme()?.matches ? 'dark' : 'light') : choice;
+}
+
+const UPDATE_KEY = 'alpha.app-update.v1';
+/** The last manifest a check was answered with, and when, so a restart offers it without checking again; and the check in flight. */
+let lastUpdate: {checkedAt: number; manifest: unknown} | undefined, updateCheck: Promise<void> | undefined;
+function savedUpdate() {
+  if (lastUpdate) return lastUpdate;
+  try {
+    const value = JSON.parse(localStorage.getItem(UPDATE_KEY) ?? 'null');
+    if (value && typeof value === 'object' && Number.isFinite(value.checkedAt)) return lastUpdate = {checkedAt: value.checkedAt, manifest: value.manifest};
+  } catch { /* Unreadable storage only means the next check is due. */ }
+  return lastUpdate = {checkedAt: Number.NaN, manifest: null};
+}
+/**
+ * At most one automatic check a day (app start and resume) and one at a time; `force` is the owner's
+ * Check for updates. Only an answer is kept: a 404 withdraws the offer, and a failed check is quiet and
+ * leaves the next start or resume due. Undefined when no check runs.
+ */
+function checkForUpdate(force: boolean): Promise<void> | undefined {
+  if (!updateCheck && Capacitor.isNativePlatform() && (force || updateCheckDue(savedUpdate().checkedAt, Date.now())))
+    updateCheck = device.checkForUpdate().then(({ manifest }) => {
+      lastUpdate = { checkedAt: Date.now(), manifest: typeof manifest === 'string' ? JSON.parse(manifest) : null };
+      try { localStorage.setItem(UPDATE_KEY, JSON.stringify(lastUpdate)); } catch { /* Kept for this session. */ }
+    }).catch(() => { /* Quiet: the next start, resume or tap checks again. */ }).finally(() => { updateCheck = undefined; });
+  return updateCheck;
 }
 
 /** Keep the reference settings components; never present fixture device facts. */
@@ -327,8 +383,8 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     catch { if (owner === instance) api.toast('The problem log could not be cleared.'); }
     finally { crashBusy = false; if (owner === instance) changed(); }
   }
-  /** Software update is quiet (app-update.ts): only the busy label changes while a check or install runs. */
-  async function updateAction(busy: 'check' | 'install', run: () => Promise<void>) {
+  /** Software update is quiet: only the busy label changes while a check or install runs. */
+  async function updateAction(busy: 'check' | 'install', run: () => Promise<void> | undefined) {
     if (updateBusy) return;
     updateBusy = busy; changed();
     try { await run(); } finally { updateBusy = ''; changed(); }
@@ -359,7 +415,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     mount.call(this); owner = this;
     this.mailImagePreferenceChanged=changed;
     window.addEventListener('alpha:device-settings',this.mailImagePreferenceChanged);
-    initializeDevicePreferences(); void refresh(); void refreshCapabilities(); void checkForUpdate(false).then(changed);
+    initializeDevicePreferences(); void refresh(); void refreshCapabilities(); void checkForUpdate(false)?.then(changed);
     this.passwordLifecycle = passwordManagerLifecycle(changed);
     if(!new URLSearchParams(location.search).has('theme')){
       // A read from storage or the system scheme carries a marker, so componentDidUpdate never writes it back.
@@ -384,7 +440,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     });
     this.googleAccountsChanged=()=>void refreshCapabilities();
     window.addEventListener(GOOGLE_ACCOUNTS_CHANGED,this.googleAccountsChanged);
-    this.deviceResume = DailyApps.addListener('appResumed', () => { void refresh(); void refreshCapabilities(); void checkForUpdate(false).then(changed); }).catch(() => null);
+    this.deviceResume = DailyApps.addListener('appResumed', () => { void refresh(); void refreshCapabilities(); void checkForUpdate(false)?.then(changed); }).catch(() => null);
   };
   p.componentDidUpdate = function (previousProps: Bag, previousState: Bag) {
     update?.call(this, previousProps, previousState);
@@ -560,10 +616,10 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           page.groups.push(group([info('Home app',roles?roleValue(home):'Unavailable'),info('Assistant app',roles?roleValue(roles.assistant):'Unavailable'),
             ...(canRequestHome?[{kNav:true,label:'Make Alpha your Home app',lbl:roleBusy?'Waiting for Android…':'Make Alpha your Home app',chev:true,noAB:true,go:()=>void requestHome(api)}]:[]),
             nav('Default apps in Android','default-apps')]));
-          // The installed version, a newer one only when the manifest offers it, and an explicit check. No error or "up to date" claim.
-          const update=availableUpdate(facts.appVersionCode);
-          page.groups.push(group([info('Software update',versionLabel(facts.appVersion||buildVersion,facts.appVersionCode)),
-            ...(update?[{...action(updateBusy==='install'?'Downloading update…':'Install update',()=>void updateAction('install',()=>installUpdate(update))),val:versionLabel(update.versionName,update.versionCode),hasVal:true,sub:update.notes,hasSub:!!update.notes,busy:!!updateBusy}]:[]),
+          // Install update only for the version the last manifest offers this install, and an explicit check. No error or "up to date" claim.
+          const update=parseUpdateManifest(savedUpdate().manifest,{versionCode:facts.appVersionCode,launcher,signerSha256:facts.appSigner});
+          page.groups.push(group([
+            ...(update?[{...action(updateBusy==='install'?'Downloading update…':'Install update',()=>void updateAction('install',()=>device.installUpdate(update).catch(()=>{/* Quiet: the row stays and the next tap retries. */}))),val:versionLabel(update.versionName,update.versionCode),hasVal:true,sub:update.notes,hasSub:!!update.notes,busy:!!updateBusy}]:[]),
             {...action(updateBusy==='check'?'Checking for updates…':'Check for updates',()=>void updateAction('check',()=>checkForUpdate(true))),busy:!!updateBusy}]));
         }
         page.groups.push(group([{kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))}]));

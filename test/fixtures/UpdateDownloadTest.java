@@ -10,13 +10,16 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Random;
 
-/** Host-JVM check of the one-tap update admission. Not Android, PackageInstaller or network evidence. */
-public final class AppUpdateTransferTest {
+/**
+ * Host-JVM check of the one-tap update download admission: AlphaDevicePlugin.copyVerified and hex, compiled
+ * from the plugin source by test/app-update.test.mjs. Not Android, PackageInstaller or network evidence.
+ */
+public final class UpdateDownloadTest {
  private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
  private static String sha256(byte[] bytes)throws Exception{return String.format("%064x",new BigInteger(1,MessageDigest.getInstance("SHA-256").digest(bytes)));}
  private static boolean admitted(InputStream in,byte[] expected,long size,String digest){
   ByteArrayOutputStream out=new ByteArrayOutputStream();
-  try{AppUpdateTransfer.copyVerified(in,out,size,digest);check(Arrays.equals(out.toByteArray(),expected),"admitted bytes are copied unchanged");return true;}
+  try{AlphaDevicePlugin.copyVerified(in,out,size,digest);check(Arrays.equals(out.toByteArray(),expected),"admitted bytes are copied unchanged");return true;}
   catch(IOException refused){return false;}
  }
  private static boolean admitted(byte[] body,long size,String digest){return admitted(new ByteArrayInputStream(body),body,size,digest);}
@@ -32,8 +35,9 @@ public final class AppUpdateTransferTest {
   check(!admitted(new byte[0],0,sha256(new byte[0])),"an empty APK is refused");
   // Refused before any byte is read: an undeclared or oversized APK is never downloaded.
   InputStream unread=new InputStream(){@Override public int read(){throw new AssertionError("read before admission");}};
-  check(!admitted(unread,new byte[0],AppUpdateTransfer.MAX_BYTES+1,digest)&&!admitted(unread,new byte[0],-1,digest),"sizes outside 1..MAX_BYTES are refused");
-  check(AppUpdateTransfer.MAX_BYTES==1024L*1024*1024,"the bound is 1 GiB");
-  System.out.println("PASS app update transfer");
+  check(!admitted(unread,new byte[0],AlphaDevicePlugin.UPDATE_MAX_BYTES+1,digest)&&!admitted(unread,new byte[0],-1,digest),"sizes outside 1..UPDATE_MAX_BYTES are refused");
+  check(AlphaDevicePlugin.UPDATE_MAX_BYTES==1024L*1024*1024,"the bound is 1 GiB");
+  check(AlphaDevicePlugin.hex(new byte[32]).equals("0".repeat(64))&&AlphaDevicePlugin.hex(MessageDigest.getInstance("SHA-256").digest(apk)).equals(digest),"hex keeps leading zeros and matches the digest");
+  System.out.println("PASS update download");
  }
 }

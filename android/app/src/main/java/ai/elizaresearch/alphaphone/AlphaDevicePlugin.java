@@ -7,6 +7,7 @@ import android.Manifest;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.provider.Settings;
@@ -16,7 +17,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-/** Device facts, allowlisted settings, and explicit bounded text handoffs to Android. */
+/** Device facts, allowlisted settings, explicit bounded text handoffs to Android, and the owner's one-tap app update. */
 @CapacitorPlugin(name="AlphaDevice")
 public final class AlphaDevicePlugin extends Plugin {
  /** Explicit bounded text handoff; chooser opening never claims a sent message. */
@@ -83,6 +84,8 @@ public final class AlphaDevicePlugin extends Plugin {
   java.util.Map<String,Object> facts=new java.util.LinkedHashMap<>();
   SystemFacts.fact(facts,"appVersionCode",()->BuildConfig.VERSION_CODE);
   SystemFacts.fact(facts,"appUpdatedAt",()->{long at=context.getPackageManager().getPackageInfo(context.getPackageName(),0).lastUpdateTime;return at>0?at:null;});
+  // SHA-256 of Alpha's one signing certificate (apksigner's digest): an update manifest offers an APK only to installs signed like it.
+  SystemFacts.fact(facts,"appSigner",()->{android.content.pm.Signature[] signers=context.getPackageManager().getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES).signingInfo.getApkContentsSigners();return signers.length==1?hex(java.security.MessageDigest.getInstance("SHA-256").digest(signers[0].toByteArray())):null;});
   for(java.util.Map.Entry<String,Object> fact:facts.entrySet())out.put(fact.getKey(),fact.getValue());
  }
  @PluginMethod public void openPasswordProvider(PluginCall call) {
@@ -179,7 +182,7 @@ public final class AlphaDevicePlugin extends Plugin {
   try(java.io.InputStream in=getContext().getAssets().open(asset)){
    java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");byte[] buffer=new byte[65536];int count;
    while((count=in.read(buffer))!=-1)digest.update(buffer,0,count);
-   StringBuilder hex=new StringBuilder();for(byte b:digest.digest())hex.append(String.format(java.util.Locale.ROOT,"%02x",b));return hex.toString();
+   return hex(digest.digest());
   }catch(Exception absent){return null;}
  }
  /** User-initiated share of already redacted diagnostics. Android's chooser decides the destination. */
@@ -195,5 +198,102 @@ public final class AlphaDevicePlugin extends Plugin {
    }catch(RuntimeException unavailable){call.reject("Sharing is unavailable");}
   });
  }
- @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();super.handleOnDestroy();}
+
+ /** Largest update APK admitted; UPDATE_MAX_BYTES in settings-adapter.ts is the same bound. */
+ static final long UPDATE_MAX_BYTES=1L<<30;
+ /** 64 lowercase hex characters of a SHA-256 digest. */
+ static String hex(byte[] digest){return String.format(java.util.Locale.ROOT,"%064x",new java.math.BigInteger(1,digest));}
+ /** Copies the update download, then throws unless it was exactly sizeBytes long and hashes to sha256. An undeclared size or digest is refused before any byte is read. */
+ static void copyVerified(java.io.InputStream in,java.io.OutputStream out,long sizeBytes,String sha256)throws java.io.IOException{
+  if(sizeBytes<=0||sizeBytes>UPDATE_MAX_BYTES||sha256==null||!sha256.matches("[0-9a-f]{64}"))throw new java.io.IOException("Update not admitted");
+  java.security.MessageDigest digest;
+  try{digest=java.security.MessageDigest.getInstance("SHA-256");}catch(java.security.NoSuchAlgorithmException unavailable){throw new java.io.IOException(unavailable);}
+  byte[] buffer=new byte[65536];long total=0;
+  for(int count;(count=in.read(buffer))!=-1;){
+   total+=count;if(total>sizeBytes)throw new java.io.IOException("Update larger than declared");
+   digest.update(buffer,0,count);out.write(buffer,0,count);
+  }
+  if(total!=sizeBytes||!hex(digest.digest()).equals(sha256))throw new java.io.IOException("Update does not match its manifest");
+ }
+
+ private static final String UPDATE_STATUS="ai.elizaresearch.alphaphone.UPDATE_STATUS";
+ /** Downloads run here, never on the problem-log worker. */
+ private final java.util.concurrent.ExecutorService updateWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+ /** Android's status for an update session: only its request for the owner's confirmation is acted on. */
+ private final android.content.BroadcastReceiver updateStatus=new android.content.BroadcastReceiver(){
+  @Override public void onReceive(Context context,Intent intent){
+   Intent confirm=androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class);android.app.Activity activity=getActivity();
+   if(confirm==null||activity==null||intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)!=PackageInstaller.STATUS_PENDING_USER_ACTION)return;
+   try{activity.startActivity(confirm);}catch(RuntimeException unavailable){/* The next tap starts a fresh session. */}
+  }
+ };
+ @Override public void load(){super.load();androidx.core.content.ContextCompat.registerReceiver(getContext(),updateStatus,new android.content.IntentFilter(UPDATE_STATUS),androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);}
+ /** HTTPS only: a redirect never changes protocol, and the network security config refuses cleartext. */
+ private static javax.net.ssl.HttpsURLConnection updateConnection(String url)throws java.io.IOException{
+  javax.net.ssl.HttpsURLConnection connection=(javax.net.ssl.HttpsURLConnection)new java.net.URL(url).openConnection();
+  connection.setConnectTimeout(20000);connection.setReadTimeout(60000);connection.setUseCaches(false);
+  return connection;
+ }
+ /**
+  * Software update (Settings; policy in settings-adapter.ts): the one configured manifest, app.config.json
+  * updateManifestUrl as BuildConfig. Resolves {manifest} for 200 and {} for 404, which means nothing is
+  * published or the release was withdrawn. Anything else rejects; the next start, resume or tap checks again.
+  */
+ @PluginMethod public void checkForUpdate(PluginCall call){
+  PluginWorkers.submit(updateWorker,()->{
+   try{
+    javax.net.ssl.HttpsURLConnection connection=updateConnection(BuildConfig.ALPHA_UPDATE_MANIFEST_URL);
+    try{
+     int status=connection.getResponseCode();
+     if(status==404){call.resolve(new JSObject());return;}
+     if(status!=200)throw new java.io.IOException("Update unavailable");
+     try(java.io.InputStream in=connection.getInputStream()){call.resolve(new JSObject().put("manifest",new String(ai.eliza.plugins.agent.connection.ConnectionTransport.readBounded(in,64*1024),java.nio.charset.StandardCharsets.UTF_8)));}
+    }finally{connection.disconnect();}
+   }catch(Exception unavailable){call.reject("Update unavailable");}
+  },()->call.reject("Update unavailable"));
+ }
+ /**
+  * From the owner's Install update tap only. Without Android's install-unknown-apps permission for Alpha,
+  * only that Android page opens. Otherwise the HTTPS APK is downloaded to the cache and admitted by size and
+  * SHA-256 (copyVerified), then by Android's reading of the archive: this package at exactly the offered
+  * versionCode, above the installed one. Android shows its own confirmation and installs only an APK signed
+  * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly.
+  */
+ @PluginMethod public void installUpdate(PluginCall call){
+  if(!getContext().getPackageManager().canRequestPackageInstalls()){
+   getActivity().runOnUiThread(()->{
+    try{getActivity().startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,android.net.Uri.parse("package:"+getContext().getPackageName())));call.resolve();}
+    catch(RuntimeException unavailable){call.reject("Update unavailable");}
+   });
+   return;
+  }
+  final String apkUrl=call.getString("apkUrl"),sha256=call.getString("sha256");final long size=call.getData().optLong("sizeBytes"),versionCode=call.getData().optLong("versionCode");
+  PluginWorkers.submit(updateWorker,()->{
+   PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
+   // An earlier session Android never showed the owner (Alpha was in the background, or closed during the
+   // download) would stay staged in /data/app; Alpha creates no other sessions, so each tap starts clean.
+   for(PackageInstaller.SessionInfo stale:installer.getMySessions())try{installer.abandonSession(stale.getSessionId());}catch(RuntimeException finished){/* Already gone. */}
+   java.io.File apk=new java.io.File(getContext().getCacheDir(),"alpha-update.apk");
+   try{
+    javax.net.ssl.HttpsURLConnection connection=updateConnection(apkUrl);
+    try{
+     if(connection.getResponseCode()!=200)throw new java.io.IOException("Update unavailable");
+     try(java.io.InputStream in=connection.getInputStream();java.io.OutputStream out=new java.io.FileOutputStream(apk)){copyVerified(in,out,size,sha256);}
+    }finally{connection.disconnect();}
+    // Android would also accept a same-versionCode reinstall; only the offered, newer build of this package goes on.
+    android.content.pm.PackageInfo archive=getContext().getPackageManager().getPackageArchiveInfo(apk.getPath(),0);
+    if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
+    PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+    params.setAppPackageName(getContext().getPackageName());params.setSize(size);
+    int id=installer.createSession(params);
+    try(PackageInstaller.Session session=installer.openSession(id)){
+     try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
+     session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
+    }catch(Exception failed){installer.abandonSession(id);throw failed;}
+    call.resolve();
+   }catch(Exception unavailable){call.reject("Update unavailable");}
+   finally{apk.delete();}
+  },()->call.reject("Update unavailable"));
+ }
+ @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();getContext().unregisterReceiver(updateStatus);super.handleOnDestroy();}
 }
