@@ -143,6 +143,8 @@ public final class UpdateFlowTest {
  }
  /** Seconds pass after Alpha's last exchange with Android, without a test sleeping through them. */
  private static void settled()throws Exception{plugin("updateAsked",0L);}
+ /** Alpha's last exchange with Android was this long ago, for the tests that measure the wait itself. */
+ private static void aged(long millis)throws Exception{plugin("updateAsked",System.nanoTime()-TimeUnit.MILLISECONDS.toNanos(millis));}
  private static void resume(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.RESUMED;plugin.handleOnResume();}
  private static void stop(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.CREATED;}
  private static Context installing(File cache)throws Exception{forgetProcess();Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
@@ -284,7 +286,7 @@ public final class UpdateFlowTest {
   check(checking.reading.await(20,TimeUnit.SECONDS),"a check holds the other bridge's worker");
   PluginCall queued=offered();other.installUpdate(queued);
   release.countDown();running.awaitAnswer();
-  // Android answers before the queued tap runs, so only the commit it missed tells it to stay quiet.
+  // Android answers before the queued tap runs. The three seconds keep this one quiet too; aTapTakenBeforeACommitStaysQuietPastTheWindow takes them away.
   Intent confirm=confirmation(context,committed(context));
   checking.released.countDown();answer.awaitAnswer();queued.awaitAnswer();body=IN_MEMORY;
   check(queued.resolved.get()==1&&queued.rejected.get()==0&&installer.committed.size()==1,"a tap taken before the commit returned stages nothing on any bridge: committed="+installer.committed);
@@ -467,9 +469,85 @@ public final class UpdateFlowTest {
   check(connections.isEmpty()&&installer.committed.equals(List.of(pending))&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(pending)),"no resume or load retries, replaces or abandons it");
   check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending)),"a tap while that status can still be in flight stays quiet");
   settled();
-  check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"a first status is not assumed: once none came, a tap asks");
+  check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending)),"a late status is not a lost one: a live owner never commits again");
   Intent confirm=confirmation(context,pending);
-  check(owner.activity.started.equals(List.of(confirm))&&later.activity.started.isEmpty(),"and only the bridge that asked opens the answer");
+  check(owner.activity.started.equals(List.of(confirm))&&later.activity.started.isEmpty(),"and when it comes it opens on the bridge that asked");
+ }
+ /** Named in docs/android-and-aosp.md: Android's status is not assumed either way, so only the process's end moves this on. */
+ private static void aStatusALiveProcessNeverHearsWaitsForItsEnd(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  installer.sendConfirmation(pending);
+  for(int again=0;again<3;again++){settled();check(tap(owner).resolved.get()==1,"each tap settles without a failure");}
+  check(installer.committed.equals(List.of(pending))&&installer.internals.get(pending).active==0,"a live owner commits once, and Android's count stays true");
+  AlphaDevicePlugin next=restarted(context);
+  check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"the next process asks");
+  Intent confirm=confirmation(context,pending);
+  check(next.activity.started.equals(List.of(confirm)),"and opens the answer");
+ }
+ /** A large APK validates for longer than any wait Alpha could pick, and its status comes only after that. */
+ private static void aLongValidationDrawsNoSecondCommit(File cache)throws Exception{
+  for(int sdk=30;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+   installer.validating=true;
+   tap(owner);
+   int pending=committed(context);
+   aged(4000);
+   check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending)),"a tap past three seconds of validation commits nothing:"+run);
+   installer.validate(pending);
+   aged(4000);
+   check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending)),"nor while Android works on it:"+run);
+   installer.sendConfirmation(pending);
+   aged(4000);
+   check(tap(owner).resolved.get()==1&&installer.committed.equals(List.of(pending))&&installer.internals.get(pending).active==0,"nor while its status crosses to the main thread, so Android's count stays true:"+run);
+   Intent confirm=confirmation(context,pending);
+   check(owner.activity.started.equals(List.of(confirm)),"and its one status opens one confirmation:"+run);
+  }
+ }
+ /** Marked only once validated: with the owner gone, a tap must not read Android's work as a session left behind. */
+ private static void aSessionUnderValidationIsLeftAloneWhoeverAsks(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  installer.validating=true;
+  tap(owner);
+  int pending=committed(context);
+  owner.handleOnDestroy();
+  settled();
+  check(tap(other).resolved.get()==1&&installer.committed.equals(List.of(pending)),"another bridge leaves it past the window");
+  AlphaDevicePlugin next=restarted(context);
+  check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending))&&installer.abandoned.isEmpty(),"so does a restarted process");
+  installer.validate(pending);installer.sendConfirmation(pending);
+  check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"once Android marks it and waits on the owner, with no owner left, a tap asks");
+  Intent confirm=confirmation(context,pending);
+  check(next.activity.started.equals(List.of(confirm)),"and opens the answer");
+ }
+ private static void theThreeSecondsAreThreeSeconds(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  aged(60000);
+  Intent confirm=confirmation(context,pending);
+  tap(owner);
+  check(owner.activity.started.equals(List.of(confirm)),"opening a confirmation starts them again, however old the commit");
+  aged(30000);
+  stop(owner);resume(owner);
+  tap(owner);
+  check(owner.activity.started.size()==1,"and so does the return from a long dialog");
+  aged(2500);
+  tap(owner);
+  check(owner.activity.started.size()==1,"they are not over at 2.5 s");
+  aged(3100);
+  tap(owner);
+  check(owner.activity.started.equals(List.of(confirm,confirm)),"and are at 3.1 s, with no restart");
  }
  private static void aRestartRebuildsTheFenceFromAndroid(File cache)throws Exception{
   Context context=installing(cache);
@@ -487,14 +565,55 @@ public final class UpdateFlowTest {
   resume(next);
   check(next.activity.started.size()==1,"once");
  }
- private static void aSessionARebootLeftUnvalidatedIsCommittedAgain(File cache)throws Exception{
+ /** The case Session.commit's javadoc allows, from Android 11: only a later write records a commit's mark, so most sessions come back this way. */
+ private static void aSessionARebootRestoredUncommittedIsCommittedAgain(File cache)throws Exception{
+  for(int sdk=30;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   tap(bridge(context,Lifecycle.State.RESUMED));
+   int pending=committed(context);
+   installer.reboot();
+   check(!installer.getSessionInfo(pending).isCommitted()&&installer.getSessionInfo(pending).getProgress()==0f,"it reads like a validation, but for its age:"+run);
+   AlphaDevicePlugin next=restarted(context);
+   connections.clear();
+   check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending,pending))&&installer.abandoned.isEmpty()&&connections.isEmpty(),"no process is waiting on it, and a tap asks:"+run);
+   check(installer.getSessionInfo(pending).getProgress()==0.8f,"which counts its staging as a first commit does:"+run);
+   Intent confirm=confirmation(context,pending);
+   check(next.activity.started.equals(List.of(confirm)),"and the answer opens:"+run);
+  }
+ }
+ /** Android 11 and later cannot install it, and Android 10 installs it reading nothing a tap could fence on. */
+ private static void aSessionARebootRestoredCommittedIsGivenUp(File cache)throws Exception{
+  for(int sdk=29;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   tap(bridge(context,Lifecycle.State.RESUMED));
+   int stale=committed(context);
+   confirmation(context,stale);
+   installer.write();
+   installer.reboot();
+   check(installer.getSessionInfo(stale).isCommitted()&&installer.getSessionInfo(stale).getProgress()==0f,"it comes back committed with nothing counted:"+run);
+   AlphaDevicePlugin next=restarted(context);
+   resume(next);
+   check(installer.abandoned.isEmpty(),"nothing happens without a tap:"+run);
+   connections.clear();
+   check(tap(next).resolved.get()==1&&installer.abandoned.equals(List.of(stale)),"the owner's tap gives it up:"+run);
+   int fresh=committed(context);
+   check(fresh!=stale&&installer.committed.equals(List.of(stale,fresh))&&connections.size()==1&&installer.sessions.equals(List.of(fresh)),"never committing it, and installs afresh in that tap:"+run);
+   Intent confirm=confirmation(context,fresh);
+   check(next.activity.started.equals(List.of(confirm)),"so the new session's confirmation opens:"+run);
+  }
   Context context=installing(cache);
   PackageInstaller installer=context.packages.installer;
-  tap(bridge(context,Lifecycle.State.RESUMED));
-  int pending=committed(context);
-  // A reboot keeps the sealed session and resets Android's count.
-  installer.internals.get(pending).validated=false;installer.internals.get(pending).active=0;
-  check(tap(restarted(context)).resolved.get()==1&&installer.committed.equals(List.of(pending,pending))&&installer.abandoned.isEmpty(),"no process is waiting on it, and Android lets an installer commit it again");
+  int one=installer.createSession(null),two=installer.createSession(null),left=installer.createSession(null);
+  for(int stale:List.of(one,two)){installer.internals.get(stale).sealed=true;installer.validate(stale);}
+  installer.write();installer.reboot();
+  installer.internals.get(left).sealed=true;
+  check(tap(restarted(context)).resolved.get()==1&&installer.abandoned.equals(List.of(one,two))&&installer.committed.equals(List.of(left)),"one tap clears every such session, and a session it can still ask for goes on");
  }
  /** A self-update kills Alpha before its status, and Android forgets the session whatever its result. */
  private static void aStatusLostToADeadProcessFreesTheNextTap(File cache)throws Exception{
@@ -563,10 +682,14 @@ public final class UpdateFlowTest {
   Context context=installing(cache);
   PackageInstaller installer=context.packages.installer;
   int one=installer.createSession(null),two=installer.createSession(null);
-  for(int left:List.of(one,two)){installer.internals.get(left).sealed=true;installer.validate(left);installer.sendConfirmation(left);}
+  for(int left:List.of(one,two))installer.internals.get(left).sealed=true;
+  installer.reboot();
   AlphaDevicePlugin owner=restarted(context);
   tap(owner);
   check(installer.committed.equals(List.of(one)),"one session is asked for at a time");
+  settled();
+  tap(owner);
+  check(installer.committed.equals(List.of(one)),"and the next waits for the first to end");
   ended(context,one,PackageInstaller.STATUS_FAILURE_ABORTED);
   settled();
   tap(owner);
@@ -576,9 +699,9 @@ public final class UpdateFlowTest {
   tap(owner);
   check(installer.committed.size()==3&&installer.abandoned.isEmpty(),"and with none left the tap installs");
  }
- /** The rule the fence exists for: a commit reaching an accepted session whose stage directory is in use destroys it, on every Android but 14 and 15. */
+ /** The rule the fence exists for: a commit reaching an accepted session ends it through Android 13, and from 16 once its stage directory is in use. 14 and 15 stop at a guard. */
  private static void androidDestroysAnAcceptedInstallCommittedAgain(File cache)throws Exception{
-  for(int sdk:new int[]{33,34,35,36,37}){
+  for(int sdk=29;sdk<=37;sdk++)for(int prepared=0;prepared<=1;prepared++){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
    installer.sdk=sdk;
@@ -592,14 +715,15 @@ public final class UpdateFlowTest {
     check(installer.internals.get(id).active==-asked,"each later commit lowers Android's count: sdk "+sdk);
    }
    installer.accept(id);
+   installer.install(id);
    check(installer.getSessionInfo(id).getProgress()==0.8f&&!installer.getSessionInfo(id).isActive(),"so an accept leaves the session reading idle: sdk "+sdk);
-   installer.prepare(id);
+   if(prepared==1)installer.prepare(id);
    installer.openSession(id).commit(null);
-   check(installer.destroyed.equals(sdk==34||sdk==35?List.of():List.of(id)),"and a commit during the install ends it unless Android's guard stops it first: sdk "+sdk);
+   check(installer.destroyed.equals(sdk<=33||sdk>=36&&prepared==1?List.of(id):List.of()),"and a commit during the install ends it unless Android's guard stops it first: sdk "+sdk+", prepared "+prepared);
   }
  }
  private static void aTapDuringAnAcceptedInstallLeavesIt(File cache)throws Exception{
-  for(int sdk:new int[]{33,34,35,36,37})for(int reopened=0;reopened<=1;reopened++){
+  for(int sdk=29;sdk<=37;sdk++)for(int reopened=0;reopened<=1;reopened++){
    String run=" sdk "+sdk+", reopened "+reopened;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
@@ -614,8 +738,10 @@ public final class UpdateFlowTest {
    installer.accept(pending);
    resume(owner);
    check(tap(owner).resolved.get()==1&&tap(other).resolved.get()==1&&owner.activity.started.size()==opened&&other.activity.started.isEmpty(),"a tap just after an accept, which Android may not list yet, opens nothing:"+run);
+   check(!installer.getSessionInfo(pending).isActive(),"an accept alone reads idle on every Android, until its install thread reaches it:"+run);
+   installer.install(pending);
    settled();
-   check(installer.getSessionInfo(pending).isActive()==sdk>=34,"an accepted session reads active from Android 14, reopened or not:"+run);
+   check(installer.getSessionInfo(pending).isActive()==sdk>=34,"from there an accepted session reads active from Android 14, reopened or not:"+run);
    if(sdk>=34)check(tap(owner).resolved.get()==1&&owner.activity.started.size()==opened,"and that alone fences it:"+run);
    installer.prepare(pending);
    check(tap(owner).resolved.get()==1&&tap(other).resolved.get()==1,"taps during the install settle without a failure:"+run);
@@ -627,7 +753,7 @@ public final class UpdateFlowTest {
  }
  /** The one commit left after the first, and the only way Android's count goes wrong: progress still fences the install. */
  private static void aSessionCommittedAgainAfterARestartKeepsItsInstall(File cache)throws Exception{
-  for(int sdk:new int[]{33,34,35,36,37}){
+  for(int sdk=29;sdk<=37;sdk++){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
    installer.sdk=sdk;
@@ -638,11 +764,12 @@ public final class UpdateFlowTest {
    connections.clear();
    tap(next);
    Intent confirm=confirmation(context,pending);
-   check(installer.committed.equals(List.of(pending,pending))&&next.activity.started.equals(List.of(confirm))&&installer.internals.get(pending).active==-1,"the new process asks once, at the cost of Android's count: sdk "+sdk);
+   check(installer.committed.equals(List.of(pending,pending))&&installer.abandoned.isEmpty()&&next.activity.started.equals(List.of(confirm))&&installer.internals.get(pending).active==-1,"the new process asks once, at the cost of Android's count, and gives up nothing: sdk "+sdk);
    dismissed(next);
    check(tap(next).resolved.get()==1&&installer.committed.size()==2&&next.activity.started.equals(List.of(confirm,confirm))&&installer.internals.get(pending).active==-1,"it then holds a confirmation, so no later tap lowers the count again: sdk "+sdk);
    stop(next);
    installer.accept(pending);
+   installer.install(pending);
    resume(next);
    check(!installer.getSessionInfo(pending).isActive(),"the accepted session reads idle: sdk "+sdk);
    installer.prepare(pending);
@@ -715,8 +842,13 @@ public final class UpdateFlowTest {
   dismissed(owner);
   // Android posts the session's removal after its status.
   context.broadcast(new Intent("ai.elizaresearch.alphaphone.UPDATE_STATUS").putExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE).putExtra(PackageInstaller.EXTRA_SESSION_ID,pending));
+  context.packages.installer.internals.get(pending).ended=true;
   tap(owner);
-  check(owner.activity.started.equals(List.of(confirm)),"a tap in that moment opens nothing on an ended session");
+  check(owner.activity.started.equals(List.of(confirm))&&context.packages.installer.committed.equals(List.of(pending)),"a tap in that moment opens and commits nothing on an ended session");
+  AlphaDevicePlugin next=restarted(context);
+  check(tap(next).rejected.get()==1&&next.activity.started.isEmpty()&&context.packages.installer.abandoned.isEmpty(),"a restarted process's commit there is refused, quietly");
+  context.packages.installer.sessions.remove((Integer)pending);
+  check(tap(next).resolved.get()==1&&committed(context)!=pending,"and once Android drops it the next tap installs");
  }
  /** Android forgot a session and its status never reached Alpha: what Alpha held for it must not touch the next one. */
  private static void aLostSessionLeavesNothingToTheNext(File cache)throws Exception{
@@ -736,7 +868,7 @@ public final class UpdateFlowTest {
   check(other.activity.started.isEmpty(),"the kept confirmation does not open for the next session");
   settled();
   tap(other);
-  check(other.activity.started.isEmpty()&&installer.committed.equals(List.of(lost,next,next)),"and no tap finds it");
+  check(other.activity.started.isEmpty()&&installer.committed.equals(List.of(lost,next)),"and no tap finds it");
   Intent confirm=confirmation(context,next);
   check(other.activity.started.equals(List.of(confirm)),"only Android's own request for that session opens");
   context=installing(cache);
@@ -775,7 +907,7 @@ public final class UpdateFlowTest {
   check(owner.activity.started.equals(List.of(first,second)),"and opens once its owner is back");
  }
  private static void aKeptConfirmationNeverOpensOnWhatAndroidIsPast(File cache)throws Exception{
-  for(int sdk:new int[]{33,34,35,36,37}){
+  for(int sdk=29;sdk<=37;sdk++){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
    installer.sdk=sdk;
@@ -785,6 +917,7 @@ public final class UpdateFlowTest {
    stop(owner);
    confirmation(context,pending);
    installer.accept(pending);
+   installer.install(pending);
    if(sdk<34)installer.prepare(pending);
    resume(owner);
    check(owner.activity.started.isEmpty(),"a kept confirmation stays shut on an accepted session: sdk "+sdk);
@@ -826,6 +959,7 @@ public final class UpdateFlowTest {
   Intent install=confirmation(context,pending);
   stop(owner);
   installer.accept(pending);
+  installer.install(pending);
   Intent kept=verificationRequest(context,pending);
   resume(owner);
   check(installer.getSessionInfo(pending).isActive()&&owner.activity.started.equals(List.of(install,kept)),"it opens though the session is active");
@@ -846,8 +980,105 @@ public final class UpdateFlowTest {
   AlphaDevicePlugin next=restarted(context);
   connections.clear();
   check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.equals(List.of(pending)),"a tap stays quiet and abandons nothing");
-  installer.internals.get(pending).active=0;
-  check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"a reboot resets the count, and a tap asks");
+  installer.reboot();
+  check(tap(restarted(context)).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"a reboot resets the count, and a tap asks");
+ }
+ private static void anIdleBridgesDestroyLeavesTheOwnersKeptConfirmation(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),idle=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  stop(owner);
+  Intent confirm=confirmation(context,committed(context));
+  idle.handleOnDestroy();
+  resume(owner);
+  check(owner.activity.started.equals(List.of(confirm)),"another bridge's destroy changes nothing the owner kept");
+ }
+ private static void aDestroyedOwnerLeavesNoStatusToWaitFor(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  installer.sendConfirmation(pending);
+  owner.handleOnDestroy();
+  settled();
+  check(tap(other).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"its receiver is gone, so a tap on a live bridge asks");
+  Intent confirm=confirmation(context,pending);
+  check(other.activity.started.equals(List.of(confirm))&&owner.activity.started.isEmpty(),"and opens the answer there");
+ }
+ private static void aRefusedCommitLeavesNoStatusToWaitFor(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  tap(bridge(context,Lifecycle.State.RESUMED));
+  int pending=committed(context);
+  installer.sendConfirmation(pending);
+  AlphaDevicePlugin next=restarted(context);
+  installer.committing=()->{installer.committing=()->{};throw new IllegalStateException("Session gone");};
+  check(tap(next).rejected.get()==1,"Android refuses the commit");
+  settled();
+  check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"so the same live bridge asks again on its next tap");
+ }
+ private static void aTapTakenBeforeACommitStaysQuietPastTheWindow(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  CountDownLatch release=new CountDownLatch(1),atCommit=holdCommit(installer,release);
+  PluginCall running=offered();owner.installUpdate(running);
+  check(atCommit.await(20,TimeUnit.SECONDS),"the first attempt reaches commit");
+  Held checking=new Held();body=checking;
+  PluginCall answer=offered();other.checkForUpdate(answer);
+  check(checking.reading.await(20,TimeUnit.SECONDS),"a check holds the other bridge's worker");
+  PluginCall queued=offered();other.installUpdate(queued);
+  release.countDown();running.awaitAnswer();
+  Intent confirm=confirmation(context,committed(context));
+  dismissed(owner);
+  checking.released.countDown();answer.awaitAnswer();queued.awaitAnswer();body=IN_MEMORY;
+  check(other.activity.started.isEmpty()&&owner.activity.started.equals(List.of(confirm))&&installer.committed.size()==1,"the tap it overtook reopens nothing, past the three seconds too");
+ }
+ private static void aStatusInsideCommitReachesItsOwner(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  Intent[] confirm=new Intent[1];
+  installer.committing=()->{installer.committing=()->{};confirm[0]=confirmation(context,installer.sessions.get(0));};
+  tap(owner);
+  check(owner.activity.started.equals(List.of(confirm[0])),"a status landing while commit runs has its owner");
+ }
+ private static void aTerminalStatusWithAnIntentDropsAKeptConfirmation(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  stop(owner);
+  confirmation(context,pending);
+  context.broadcast(new Intent("ai.elizaresearch.alphaphone.UPDATE_STATUS").putExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE).putExtra(PackageInstaller.EXTRA_SESSION_ID,pending).putExtra(Intent.EXTRA_INTENT,new Intent("ignored")));
+  resume(owner);
+  check(owner.activity.started.isEmpty(),"a terminal status ends what was kept, listed or not");
+ }
+ /** A bridge left as owner after its destroy would hold every live bridge's tap for the rest of the process. */
+ private static void aBridgeDestroyedDuringItsListReadTakesNothingOver(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),live=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  Intent confirm=confirmation(context,pending);
+  dismissed(owner);
+  installer.listing=()->{installer.listing=()->{};stop(owner);owner.handleOnDestroy();};
+  check(tap(owner).rejected.get()==1,"its tap stops quietly");
+  settled();
+  check(tap(live).resolved.get()==1&&live.activity.started.equals(List.of(confirm)),"and a live bridge's tap opens what it kept");
+  Context restarting=installing(cache);
+  PackageInstaller other=restarting.packages.installer;
+  tap(bridge(restarting,Lifecycle.State.RESUMED));
+  int asked=committed(restarting);
+  other.sendConfirmation(asked);
+  AlphaDevicePlugin dying=restarted(restarting),stays=bridge(restarting,Lifecycle.State.RESUMED);
+  other.listing=()->{other.listing=()->{};stop(dying);dying.handleOnDestroy();};
+  check(tap(dying).rejected.get()==1&&other.committed.equals(List.of(asked)),"nothing commits for a receiver that is gone");
+  check(tap(stays).resolved.get()==1&&other.committed.equals(List.of(asked,asked)),"so a live bridge's tap asks");
+  Intent answer=confirmation(restarting,asked);
+  check(stays.activity.started.equals(List.of(answer)),"and hears the answer");
  }
  private static void everyFailureSettlesQuietly(File cache)throws Exception{
   Context binder=installing(cache);
@@ -910,8 +1141,13 @@ public final class UpdateFlowTest {
    aLaterTapReopensAnUnansweredConfirmation(cache);
    aTapAfterCommitBeforeAnyStatusChangesNothing(cache);
    aStatusThatNeverArrivesStartsNothingWithoutATap(cache);
+   aStatusALiveProcessNeverHearsWaitsForItsEnd(cache);
+   aLongValidationDrawsNoSecondCommit(cache);
+   aSessionUnderValidationIsLeftAloneWhoeverAsks(cache);
+   theThreeSecondsAreThreeSeconds(cache);
    aRestartRebuildsTheFenceFromAndroid(cache);
-   aSessionARebootLeftUnvalidatedIsCommittedAgain(cache);
+   aSessionARebootRestoredUncommittedIsCommittedAgain(cache);
+   aSessionARebootRestoredCommittedIsGivenUp(cache);
    aStatusLostToADeadProcessFreesTheNextTap(cache);
    aTerminalStatusAllowsANewTap(cache);
    aFailedAskLeavesTheSession(cache);
@@ -931,6 +1167,13 @@ public final class UpdateFlowTest {
    anAndroidThatCannotAnswerStillOpensAKeptConfirmation(cache);
    aDeveloperVerificationRequestStaysAnswerable(cache);
    aProcessKilledBeforeClosingStaysFencedUntilAReboot(cache);
+   anIdleBridgesDestroyLeavesTheOwnersKeptConfirmation(cache);
+   aDestroyedOwnerLeavesNoStatusToWaitFor(cache);
+   aRefusedCommitLeavesNoStatusToWaitFor(cache);
+   aTapTakenBeforeACommitStaysQuietPastTheWindow(cache);
+   aStatusInsideCommitReachesItsOwner(cache);
+   aTerminalStatusWithAnIntentDropsAKeptConfirmation(cache);
+   aBridgeDestroyedDuringItsListReadTakesNothingOver(cache);
    everyFailureSettlesQuietly(cache);
    withoutTheGrantOnlyAndroidsPageOpens(cache);
    appSignerIsTheOriginalCertificateOfOneSigner(cache);

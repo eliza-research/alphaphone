@@ -53,11 +53,12 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('Android installs only the offered newer build of this package, and only when Android holds no sealed session of Alpha\'s',()=>{
+test('Android installs only the offered newer build of this package, and only when Android holds no sealed session of Alpha\'s that can still install',()=>{
  const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','session.fsync(out)','commitUpdate(session,id);','updating.set(false);}\n','updateOwner=this;updateSession=id;','session.commit(','updatesCommitted.incrementAndGet();'].map(step=>install.indexOf(step));
  assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session\'s status can only arrive once it has its owner, and a commit is counted before its attempt lets go');
- // No path abandons a session Android may still finish: only a commit that failed gives up what it staged.
- assert.equal(plugin.match(/abandonSession\(/g).length,1);
+ // No path abandons a session Android may still finish: a commit that failed gives up what it staged, and a tap gives up what a reboot restored committed.
+ assert.equal(plugin.match(/abandonSession\(/g).length,2);
+ assert.match(install,/isCommitted\(\)&&listed\.getProgress\(\)==0f\)installer\.abandonSession\(listed\.getSessionId\(\)\);/);
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
