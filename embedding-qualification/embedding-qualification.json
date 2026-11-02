@@ -1,0 +1,25 @@
+{
+  "pass": true,
+  "nativeAbi": "21",
+  "dimensions": 384,
+  "embeddingCalls": 10,
+  "rawNorms": [
+    0.9999999845447292,
+    0.9999999845447292,
+    0.9999999778659305,
+    0.9999999840795616,
+    0.9999999947840527,
+    1.0000000001909324,
+    0.9999999845447292,
+    0.9999999778659305,
+    0.9999999845447292,
+    0.9999999845447292
+  ],
+  "repeatCosine": 0.9999999690894585,
+  "reopenCosine": 0.9999999690894585,
+  "relatedCosine": 0.7833642633241752,
+  "unrelatedCosine": 0.2678905609016303,
+  "callerRetirementDrained": true,
+  "nativeKernelCancellationClaimed": false,
+  "elapsedMs": 184.427333
+}
