@@ -14,16 +14,18 @@ const residentSignedIn=stripTypeScriptTypes(between(ui,'async function residentS
 const showPostSignInSetup=stripTypeScriptTypes(between(ui,'function showPostSignInSetup(','/**\n * A verified sign-in on the resident flow'),{mode:'transform'});
 const ISSUED='11111111-1111-4111-8111-111111111111';
 
-function harness({admission={binding:'cloud'},admitted=true,refusedAccount=false,connect}={}){
+function harness({admission={binding:'cloud'},admitted=true,refusedAccount=false,connect,admit}={}){
   // The agent before the sign-in ran without Cloud AI ('unavailable').
   const events=[],state={signIn:{step:'code'},open:true,busy:true,message:'Checking your code…',kind:'starting',purpose:'agent',setupRevision:0,cloudAccount:null,residentPlanNotice:null,residentStarting:false,residentInference:'unavailable'};
   let stored={credentialId:ISSUED};
-  const box={ownProviderSelected:()=>false,state,events,active:null,residentAlwaysPresent:true,cloud:{environment:'production'},
+  const box={ownProviderSelected:()=>false,state,events,reads:[],active:null,residentAlwaysPresent:true,cloud:{environment:'production'},
     update:patch=>{Object.assign(state,patch);events.push({update:patch,snapshot:{...state}});},
     retire:()=>{events.push('retire');state.kind='starting';},
     residentEnvironment:()=>'production',cloudServiceName:()=>'Eliza Cloud',
-    cloudCredentialStore:{read:async()=>stored,clear:async()=>{events.push('clear key');stored=null;}},
-    admitCloudResident:async signal=>{events.push({admit:{...state}});signal.throwIfAborted();if(admitted===true)state.cloudAccount=refusedAccount?null:{userId:'owner'};if(admitted instanceof Error)throw admitted;return admission;},
+    cloudCredentialStore:{read:async()=>{box.reads.push(events.length);return stored;},clear:async()=>{events.push('clear key');stored=null;}},
+    CloudProtocolError:class extends Error {constructor(code){super(code);this.code=code;}},
+    replaceStored:value=>{stored=value;},
+    admitCloudResident:async signal=>{events.push({admit:{...state}});admit?.();signal.throwIfAborted();if(admitted===true)state.cloudAccount=refusedAccount?null:{userId:'owner'};if(admitted instanceof Error)throw admitted;return admission;},
     connectResident:async(signal,given)=>{events.push({connect:given,during:{...state}});if(connect)await connect(state);},
   };
   vm.createContext(box);vm.runInContext(showPostSignInSetup+'\n'+residentSignedIn+';globalThis.run=residentSignedIn;',box);
@@ -83,6 +85,20 @@ test('a key Cloud refused right after issuing it is removed and never opens setu
   assert.equal(box.events.indexOf('clear key')>box.events.indexOf(connect),true);
   assert.equal(box.state.setupRevision,0);
   assert.deepEqual({open:box.state.open,error:box.state.error},{open:true,error:'Eliza Cloud refused this sign-in. Your agent keeps running; sign in again to turn AI on.'});
+});
+
+test('a sign-in whose caller matched the expected key reads it once before retiring the agent',async()=>{
+  const box=harness();
+  await box.run(new AbortController().signal,false,{credentialId:ISSUED});
+  const retired=box.events.indexOf('retire');
+  assert.equal(box.reads.filter(at=>at<=retired).length,1,'only the issued key is read before the agent is retired');
+  assert.equal(box.state.setupRevision,1);assert.ok(box.events.some(event=>event.connect));
+});
+
+test('an expected key replaced while the account is admitted still stops the sign-in before the restart',async()=>{
+  const box=harness({admit:()=>box.replaceStored({credentialId:'22222222-2222-4222-8222-222222222222'})});
+  await assert.rejects(box.run(new AbortController().signal,false,{credentialId:ISSUED}),error=>error.code==='account-changed');
+  assert.ok(!box.events.some(event=>event.connect));assert.equal(box.state.signIn,null);
 });
 
 test('a cancelled admission leaves the sign-in step and the agent to the caller restart (P-43)',async()=>{

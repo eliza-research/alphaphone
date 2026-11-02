@@ -590,7 +590,6 @@ function detachCloudTarget() { if (testMocksEnabled && active?.kind === 'cloud')
 // Product builds construct only the managed-services adapter; the hosted-agent fixture exists only with test mocks.
 function makeCloud(environment: CloudEnvironment): CloudProtocol { return testMocksEnabled ? new DevelopmentCloudAgentProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }) : new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }); }
 /** The client for an in-app sign-in in this environment; replaced when the environment changes. */
-let googleSignInGeneration=0;
 function signInClient(environment: CloudEnvironment): CloudProtocol {
   if (cloud.environment !== environment) cloud = makeCloud(environment);
   return cloud;
@@ -664,7 +663,6 @@ function showPostSignInSetup() {
  */
 async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expected?:{credentialId:string;credentialReference?:string}) {
   const assertExpected=async()=>{if(!expected)return;const current=await cloudCredentialStore.read(residentEnvironment());signal.throwIfAborted();if(current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');};
-  await assertExpected();
   const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   signal.throwIfAborted(); retire();
   // The retired agent's AI binding no longer applies; the restarted agent reports its own (connectResident).
@@ -2446,7 +2444,6 @@ export const connectionController = {
    * enters an email; no Eliza Cloud web page is opened. */
   async beginSignIn(environment: CloudEnvironment = residentCloudFlow() ? residentEnvironment() : cloud.environment, refreshNegative = true, automatic = false) {
     if (operation || !cloudEnvironmentAllowed(environment)) return;
-    googleSignInGeneration++;
     // An automatic readiness probe must not erase why the saved sign-in was refused.
     // A new attempt explicitly started by the owner still clears the earlier error.
     // Readiness may take six seconds on a fresh install. Keep that wait cancellable and prevent
@@ -2496,7 +2493,7 @@ export const connectionController = {
           if(committed)return;
           if(operation!==cancellingOperation||state.signIn!==view)return;
         }catch{
-          if(operation===cancellingOperation)update({error:'Sign-in completion is unconfirmed. Wait for the result before trying again.'});
+          if(operation===cancellingOperation)update({error:'Cancel could not be confirmed. Sign-in is still in progress.'});
           return;
         }
       }
@@ -2511,7 +2508,6 @@ export const connectionController = {
   /** Google's external browser flow, followed by the existing native session exchange. */
   async signInGoogle() {
     const view=state.signIn;if(!view)return;
-    const generation=++googleSignInGeneration;
     await work('Continue in your browser.',async signal=>{
       update({signIn:{step:'google',environment:view.environment}});
       const client=signInClient(view.environment);
@@ -2521,13 +2517,14 @@ export const connectionController = {
       if(outcome.status==='mfa'){signal.throwIfAborted();showGoogleMfa(outcome);return;}
       if(!outcome.committedCredential){signal.throwIfAborted();await signedIn(client,outcome,signal);return;}
       // Postcommit reconciliation ignores only the old cancellation signal.
-      // A new sign-in generation, environment or credential still fences adoption.
+      // A replaced client, environment or credential still fences adoption.
       const reconciliation=new AbortController();
-      const current=()=>{if(generation!==googleSignInGeneration||cloud!==client||cloud.environment!==view.environment)reconciliation.abort(new DOMException('Sign-in replaced','AbortError'));};
+      const current=()=>{if(cloud!==client||cloud.environment!==view.environment)reconciliation.abort(new DOMException('Sign-in replaced','AbortError'));};
       current();const unsubscribe=connectionController.subscribe(current);
       try{reconciliation.signal.throwIfAborted();await signedIn(client,outcome,reconciliation.signal,outcome.committedCredential);}
       finally{unsubscribe();}
     });
+    // A cancelled or failed sign-in never leaves the phone without its agent (P-43).
     await ensureResident();
   },
   /** Sends a six-digit code to the address. Resending waits out the cooldown the host enforces. */

@@ -296,7 +296,7 @@ test("browser Google persists native proof before launching and rejects cancelle
   const { file, directory } = harness("CloudSignInBrowserTest.java.txt", {
     ACTUAL_BROWSER_PACKAGE: between(
       plugin,
-      " private String browserPackage()",
+      " private static final class Browser {",
       " private boolean appLinkVerified(",
     ),
     ACTUAL_BROWSER_START: between(

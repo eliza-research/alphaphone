@@ -61,7 +61,7 @@ test('real browser extension remains visible and retains strict commit receipt g
  assert.equal(await actual.cancelGoogleSignIn(),outcome);assert.equal(cancellations,1);
  const {receiver,state}=host(actual,credential);
  const result=await googleMethod().call(receiver,new AbortController().signal);
- assert.equal(state.stored,0);assert.equal(receiver.googleSignInCommitted,true);
+ assert.equal(state.stored,0);assert.equal(receiver.googleSignInCommitted,false,'only the Google sign-in step marks a commit');
  assert.deepEqual(result.committedCredential,{credentialId:'browser-slot',credentialReference:'browser-reference'});
  await assert.rejects(googleMethod().call(host(actual,{...credential,token:'forbidden-browser-token'}).receiver,new AbortController().signal),error=>error.code==='account-changed');
  await assert.rejects(googleMethod().call(host({...actual,startGoogle:async()=>({...outcome,attemptId:undefined})},credential).receiver,new AbortController().signal),error=>error.code==='invalid-response');

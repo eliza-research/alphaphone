@@ -807,8 +807,7 @@ async function googleCommitBoundaryFixture(){
  const source=await readFile(new URL('../scripts/browser-cloud-dev-bridge.ts',import.meta.url),'utf8');
  const start=source.indexOf(' async function cancelGoogleAttempt('),end=source.indexOf(' async function browserGoogleAvailable(',start);
  assert.ok(start>=0&&end>start);const code=stripTypeScriptTypes(source.slice(start,end),{mode:'transform'});
- const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
- const renameEntered=deferred(),releaseRename=deferred(),writeEntered=deferred(),releaseWrite=deferred();
+ const renameEntered=Promise.withResolvers(),releaseRename=Promise.withResolvers(),writeEntered=Promise.withResolvers(),releaseWrite=Promise.withResolvers();
  const disk={value:'old',temporary:null},attempt={id:'attempt',phase:'preparing',environment:'production',controller:new AbortController(),sessionId:'session'};
  const state={googleAttempt:attempt};
  const harness=new Function('state','disk','attempt','renameEntered','releaseRename','writeEntered','releaseWrite','AbortController',`
@@ -840,8 +839,7 @@ test('cancel after rename dispatch waits for and returns the committed outcome',
 
 async function wholeGoogleStackFixture(options={}){
  const commit=await googleCommitBoundaryFixture();
- const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
- const readEntered=deferred(),releaseRead=deferred(),adoptionEntered=deferred(),releaseAdoption=deferred();
+ const readEntered=Promise.withResolvers(),releaseRead=Promise.withResolvers(),adoptionEntered=Promise.withResolvers(),releaseAdoption=Promise.withResolvers();
  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'window'),oldFetch=globalThis.fetch;
  const popup={opener:null,location:{replace(){}},close(){}};
  Object.defineProperty(globalThis,'window',{configurable:true,value:{open:()=>popup}});
@@ -850,7 +848,7 @@ async function wholeGoogleStackFixture(options={}){
   const body=JSON.parse(input.body);
   if(body.operation==='signInStartGoogle'){id=body.attemptId;return Response.json({attemptId:id,expiresAt:Date.now()+60000,browserUrl:'https://eliza.app/auth/cli-login?session='+randomUUID()+'&app=alpha&provider=google'});}
   if(body.operation==='signInPollGoogle')return Response.json(await commit.commit());
-  if(body.operation==='signInCancelGoogle')return Response.json(await commit.cancel());
+  if(body.operation==='signInCancelGoogle')return options.cancelFails?Response.json({code:'unavailable'},{status:503}):Response.json(await commit.cancel());
   throw Error('Unexpected fake host operation');
  };
  const port=new BrowserCloudSignIn();
@@ -864,7 +862,7 @@ async function wholeGoogleStackFixture(options={}){
  const verify=stripTypeScriptTypes(source.slice(source.indexOf('async function verifyService('),source.indexOf('let pendingBillingReview:')),{mode:'transform'});
  const serviceSlot=source.match(/const CLOUD_SERVICE = ('[^']+');/);assert.ok(serviceSlot);
  const harness=new Function('client','methods','signed','verify','store','crypto','CLOUD_SERVICE',`
- let operation=null,googleSignInGeneration=0,cloud=client;
+ let operation=null,cloud=client;
  const state={signIn:{step:'choose',environment:'production'},open:true,purpose:'cloud-account'};
  const listeners=new Set();let service=null,membershipRead=null,pendingBillingReview=null;
  const update=patch=>{Object.assign(state,patch);for(const listener of listeners)listener();},signInClient=()=>client;
@@ -873,10 +871,10 @@ async function wholeGoogleStackFixture(options={}){
  const ensureResident=async()=>{},showGoogleMfa=()=>{throw Error('No MFA');},signInFailed=()=>{};
  const residentCloudFlow=()=>false,prepareSignInReplacement=()=>{},showPostSignInSetup=()=>{},save=()=>{},hosted=null,active=true,cloudServiceName=()=> 'Cloud';
  eval(verify);eval(signed);
- const work=async(_message,action)=>{operation=new AbortController();try{await action(operation.signal);}finally{operation=null;}};
+ const work=async(_message,action)=>{if(operation)return;operation=new AbortController();try{await action(operation.signal);}finally{operation=null;}};
  const connectionController={cancel(){operation?.abort(new DOMException('Cancelled','AbortError'));client.cancelLogin();},close(){},subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);}};
  const actions=eval(methods);
- return {actions,state,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},supersede(){googleSignInGeneration++;for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;}};
+ return {actions,state,genericAbort(){operation.abort(new DOMException('Cancelled','AbortError'));},replaceClient(){cloud={environment:'production'};for(const listener of listeners)listener();},get adopted(){return !!state.cloudAccount;},get operation(){return operation;}};
  `)(client,methods,signed,verify,store,crypto,serviceSlot[1].slice(1,-1));
  return {commit,client,harness,readEntered,releaseRead,adoptionEntered,releaseAdoption,changeAccount(){currentCredential={...currentCredential,credentialId:'99999999-9999-4999-8999-999999999999'};},close(){globalThis.fetch=oldFetch;if(descriptor)Object.defineProperty(globalThis,'window',descriptor);else delete globalThis.window;}};
 }
@@ -916,11 +914,28 @@ test('native Google port without commit-aware cancellation retains ordinary abor
  const result=client.signInWithGoogle(abort.signal);abort.abort(new DOMException('Cancelled','AbortError'));await assert.rejects(result,e=>e.name==='AbortError');assert.ok(cancels>0);assert.equal(client.googleCancellationSupported,false);resolve({});
 });
 
-test('a new sign-in generation during deferred adoption rejects the old committed result',async()=>{
+test('a refused second Google tap during deferred adoption cannot abort the committed result',async()=>{
  const f=await wholeGoogleStackFixture({deferAdoption:true});try{
   const signing=f.harness.actions.signInGoogle();await f.commit.writeEntered.promise;f.commit.releaseWrite.resolve();await f.commit.renameEntered.promise;f.commit.releaseRename.resolve();
-  await f.adoptionEntered.promise;f.harness.supersede();f.releaseAdoption.resolve();await assert.rejects(signing,e=>e.name==='AbortError');assert.equal(f.harness.adopted,false);
+  await f.adoptionEntered.promise;assert.equal(f.harness.state.signIn.step,'google');await f.harness.actions.signInGoogle();f.releaseAdoption.resolve();await signing;
+  assert.equal(f.harness.adopted,true);assert.equal(f.harness.state.cloudAccount.credentialId,credentialId);
  }finally{f.releaseAdoption.resolve();f.commit.releaseWrite.resolve();f.commit.releaseRename.resolve();f.close();}
+});
+test('a replaced Cloud client during deferred adoption rejects the old committed result',async()=>{
+ const f=await wholeGoogleStackFixture({deferAdoption:true});try{
+  const signing=f.harness.actions.signInGoogle();await f.commit.writeEntered.promise;f.commit.releaseWrite.resolve();await f.commit.renameEntered.promise;f.commit.releaseRename.resolve();
+  await f.adoptionEntered.promise;f.harness.replaceClient();f.releaseAdoption.resolve();await assert.rejects(signing,e=>e.name==='AbortError');assert.equal(f.harness.adopted,false);
+ }finally{f.releaseAdoption.resolve();f.commit.releaseWrite.resolve();f.commit.releaseRename.resolve();f.close();}
+});
+test('an unconfirmed Google cancel keeps the attempt and reports only its state',async()=>{
+ const f=await wholeGoogleStackFixture({cancelFails:true});try{
+  const signing=f.harness.actions.signInGoogle();await f.commit.writeEntered.promise;
+  await f.harness.actions.cancelSignIn();
+  assert.equal(f.harness.state.error,'Cancel could not be confirmed. Sign-in is still in progress.');assert.doesNotMatch(f.harness.state.error,/try(ing)? again/i);
+  assert.equal(f.harness.state.signIn.step,'google');assert.equal(f.harness.operation.signal.aborted,false);
+  f.commit.releaseWrite.resolve();await f.commit.renameEntered.promise;f.commit.releaseRename.resolve();await signing;
+  assert.equal(f.harness.adopted,true);assert.equal(f.harness.state.signIn,null);
+ }finally{f.commit.releaseWrite.resolve();f.commit.releaseRename.resolve();f.close();}
 });
 
 test('Google poll without an active attempt or id is an expired attempt, not a null dereference',async()=>{

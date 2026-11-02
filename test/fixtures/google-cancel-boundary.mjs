@@ -49,7 +49,7 @@ export function googleCancelBoundary(root) {
  const outcome=id=>({status:'authenticated',environment:'production',attemptId:id,credentialId:randomUUID(),expiresAt:Date.now()+60000,accountCreated:false});
  const begin=()=>{
   let browserResult;
-  const result=client.signInStep(new AbortController().signal,()=>{browserResult=port.startGoogle({environment:'production'});return browserResult;},parse,()=>{});
+  const result=client.signInStep(new AbortController().signal,()=>{browserResult=port.startGoogle({environment:'production'});return browserResult;},parse,true);
   // Attach a handler immediately so deliberately rejected host polls never leak an unhandled rejection.
   result.catch(()=>{});
   return {result,browserResult:()=>browserResult};

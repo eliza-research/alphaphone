@@ -225,7 +225,7 @@ test('External authorization uses the browser and Google sign-in uses the native
   assert.equal(inventory.surfaces.find(s=>s.id==='eliza-cloud-sign-in-google').kind,'external-browser');
   assert.match(signIn,/CustomTabsIntent/, 'Google sign-in uses the external browser');
   assert.match(read('android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaCloudSignInPlugin.java'),/googleSignInMode\("browser"\)/);
-  assert.match(signIn,/tab\.intent\.setPackage\(browser\)/, 'launch targets the selected Custom Tabs browser');
+  assert.match(signIn,/tab\.intent\.setPackage\(browser\.packageName\)/, 'launch targets the selected Custom Tabs browser');
   assert.doesNotMatch(signIn, /new WebView|WebView\.loadUrl|AlphaBrowserPlugin/, 'never an embedded user agent');
   const ui = read('apps/app/src/runtime/google-connection-ui.tsx');
   assert.match(ui, /await openConnectionBrowser\(url,abort\.signal\);/);

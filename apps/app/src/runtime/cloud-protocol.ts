@@ -279,7 +279,7 @@ export class CloudProtocol {
    * One sign-in step at a time (`login-active`). Cancelling the signal cancels the host's attempt,
    * which burns a pending Google record. Host failures arrive as CloudSignInError codes only.
    */
-  private async signInStep<T>(signal: AbortSignal, run: (port: CloudSignInPort) => Promise<unknown>, parse: (value: unknown) => T, onCommittedCancellation?: () => void): Promise<T> {
+  private async signInStep<T>(signal: AbortSignal, run: (port: CloudSignInPort) => Promise<unknown>, parse: (value: unknown) => T, google = false): Promise<T> {
     void this.authority; // A flag-off build has no staging authority: refuse before any host call.
     const port = this.options.signIn;
     if (!port) throw new CloudSignInError("unavailable");
@@ -291,12 +291,13 @@ export class CloudProtocol {
     let resolveCommitted: (value: unknown) => void = () => {};
     const interrupted = new Promise<unknown>((resolve, reject) => { resolveCommitted=resolve;rejectAbort = reject; });
     let cancellation:Promise<boolean>|null=null,committedCancellation=false;
+    const authenticated = (value: unknown) => !!value && typeof value === "object" && (value as { status?: unknown }).status === "authenticated";
     const cancel = ():Promise<boolean> => cancellation??=(async()=>{
-      if(onCommittedCancellation&&port.cancelGoogleSignIn){
+      if(google&&port.cancelGoogleSignIn){
         const result=await port.cancelGoogleSignIn();
         // Parse the ordinary authenticated contract; never infer success from a phase flag.
-        if(result&&typeof result==='object'&&(result as {status?:unknown}).status==='authenticated'){
-          parse(result);committedCancellation=true;onCommittedCancellation();resolveCommitted(result);return true;
+        if(authenticated(result)){
+          parse(result);committedCancellation=true;resolveCommitted(result);return true;
         }
         if(!result||typeof result!=='object'||Array.isArray(result)||(result as {status?:unknown}).status!=='cancelled'||Object.keys(result).some(key=>key!=='status'))throw new CloudSignInError("unavailable");
       }
@@ -305,8 +306,8 @@ export class CloudProtocol {
       // A lost or invalid cancellation reply leaves the host outcome unknown. Keep polling and allow retry.
       cancellation=null;throw error;
     });
-    if(onCommittedCancellation&&port.cancelGoogleSignIn)this.activeGoogleCancellation=cancel;
-    const abort = () => {if(onCommittedCancellation&&port.cancelGoogleSignIn)void cancel().catch(()=>{});else controller.abort(signal.reason);};
+    if(google&&port.cancelGoogleSignIn)this.activeGoogleCancellation=cancel;
+    const abort = () => {if(google&&port.cancelGoogleSignIn)void cancel().catch(()=>{});else controller.abort(signal.reason);};
     const cancelled = () => { void port.cancel().catch(() => {}); rejectAbort(controller.signal.reason); };
     signal.addEventListener("abort", abort, { once: true });
     controller.signal.addEventListener("abort", cancelled, { once: true });
@@ -314,7 +315,7 @@ export class CloudProtocol {
       const value = await Promise.race([run(port), interrupted]);
       if(!committedCancellation)controller.signal.throwIfAborted();
       const parsed=parse(value);
-      if(onCommittedCancellation&&value&&typeof value==='object'&&(value as {status?:unknown}).status==='authenticated')this.googleSignInCommitted=true;
+      if(google&&authenticated(value))this.googleSignInCommitted=true;
       return parsed;
     } catch (error) {
       if (controller.signal.aborted) throw controller.signal.reason;
@@ -416,12 +417,9 @@ export class CloudProtocol {
   /** Google through the native account picker: request native MFA, or finish after the key is stored. */
   async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome & {committedCredential?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}}> {
     this.googleSignInCommitted=false;
-    const outcome=await this.signInStep(signal,port=>port.startGoogle({environment:this.environment}),value=>googleOutcome(value,this.environment),()=>{});
+    const outcome=await this.signInStep(signal,port=>port.startGoogle({environment:this.environment}),value=>googleOutcome(value,this.environment),true);
     if(outcome.status==='mfa')return outcome;
     if(!this.googleCancellationSupported)return this.storedSignIn(outcome,signal);
-    // Every acknowledged browser-host success is already durable, not just a
-    // success returned by the cancellation RPC. Retire the precommit signal here.
-    this.googleSignInCommitted=true;
     if(!outcome.credentialId||!outcome.attemptId)throw new CloudProtocolError('invalid-response');
     const credential=await this.credentials.read(this.environment);
     if(credential?.credentialId!==outcome.credentialId||!credential.credentialReference||credential.token||credential.expiresAt!==undefined&&credential.expiresAt<=Date.now())throw new CloudProtocolError('account-changed');

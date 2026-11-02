@@ -55,8 +55,24 @@ test('protocol refuses malformed committed metadata and leaves the ordinary outc
  const f=googleCancelBoundary(root),pending=Promise.withResolvers();
  const port={startGoogle:()=>pending.promise,cancelGoogleSignIn:async()=>({status:'authenticated',environment:'production'})};
  const client=new f.client.constructor(port);
- const running=client.signInStep(new AbortController().signal,()=>pending.promise,value=>{assert.equal(typeof value.credentialId,'string');return value;},()=>{});
+ const running=client.signInStep(new AbortController().signal,()=>pending.promise,value=>{assert.equal(typeof value.credentialId,'string');return value;},true);
  running.catch(()=>{});await flush();
  await assert.rejects(client.cancelGoogleSignIn());assert.ok(client.activeLogin);assert.equal(client.activeLogin.signal.aborted,false);
  const committed=f.outcome('test-attempt');pending.resolve(committed);assert.deepEqual(await running,committed);
+});
+
+test('a Google step committed by its own poll answers a later cancel as committed without a host call',{timeout:3000},async()=>{
+ const f=googleCancelBoundary(root),running=f.begin();await flush();const id=f.started[0],committed=f.outcome(id);
+ f.polls.get(id).resolve(committed);assert.deepEqual(await running.result,committed);await running.browserResult();const calls=f.cancelCalls;
+ assert.equal(await f.client.cancelGoogleSignIn(),true);assert.equal(f.cancelCalls,calls);
+});
+
+test('a step without the Google flag keeps ordinary abort on a commit-aware port',{timeout:3000},async()=>{
+ const f=googleCancelBoundary(root),pending=Promise.withResolvers(),abort=new AbortController();let cancels=0,googleCancels=0;
+ const port={cancel:async()=>{cancels++;},cancelGoogleSignIn:async()=>{googleCancels++;return {status:'cancelled'};}};
+ const client=new f.client.constructor(port);
+ const running=client.signInStep(abort.signal,()=>pending.promise,value=>value);
+ abort.abort(new DOMException('Cancelled','AbortError'));
+ await assert.rejects(running,error=>error.name==='AbortError');
+ assert.equal(cancels,1);assert.equal(googleCancels,0);assert.equal(await client.cancelGoogleSignIn(),false);
 });
