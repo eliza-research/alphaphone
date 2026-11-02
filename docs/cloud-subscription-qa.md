@@ -19,7 +19,7 @@ the development chooser) against the environment you pick:
 | | Staging | Production (test-mocks build) |
 |---|---|---|
 | API and entitlement issuer | `https://api-staging.eliza.app` | `https://api.eliza.app` |
-| Sign-in (once ready) | In-app: email code, or Google in a Custom Tab via `https://api-staging.eliza.app/steward/auth/oauth/google/authorize` | In-app: email code, or Google via `https://api.eliza.app/steward/auth/oauth/google/authorize` |
+| Sign-in (once ready) | In-app: email code, or Google in a Custom Tab (otherwise the default browser with a plain VIEW) via `https://api-staging.eliza.app/steward/auth/oauth/google/authorize` | In-app: email code, or Google via `https://api.eliza.app/steward/auth/oauth/google/authorize` |
 | Google return (verified App Link) | `https://staging.eliza.app/alphaphone/auth/callback` (test-mocks manifest only) | `https://eliza.app/alphaphone/auth/callback` |
 | Key | `eliza_mobile_` from `/api/v1/app-auth/mobile/token`, environment `staging`, client `ai.elizaresearch.alphaphone` | same, environment `production` |
 | Hand-off (until the readiness probe passes; afterwards the **Browser sign-in (diagnostic)** button) | `https://staging.eliza.app/auth/cli-login` | `https://eliza.app/auth/cli-login` |
@@ -109,7 +109,7 @@ not reuse production codes.
    | Email: wrong code | "That code did not work"; the field is cleared; the step stays. |
    | Email: right code | Signed in; the plan gate continues below. |
    | Account with an authenticator app or SMS second step | **Enter your verification code** screen; the right code signs in. |
-   | **Continue with Google** | A Custom Tab shows Google's own page (not Eliza's). After consent it returns straight to Alpha and signs in. |
+   | **Continue with Google** | A Custom Tab (otherwise the default browser) shows Google's own page (not Eliza's). After consent it returns straight to Alpha and signs in. |
    | Google: close the tab without finishing | "Google sign-in was closed before it finished"; nothing is stored. |
    | **Cancel sign-in** while waiting | Back to the choice screen; the pending attempt is burned; nothing is stored. |
    | A second sign-in while one runs | Refused ("already in progress"). |

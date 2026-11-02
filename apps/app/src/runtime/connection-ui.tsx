@@ -62,7 +62,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isAndroid } from '../native';
 import type { AgentReply, ActionProposal, OperationReceipt, ContextEnvelope, VerifiedSession } from './alpha-client';
 import { CloudResidentBindingController, CloudResidentBindingError, ResidentRebindQueue, parseResidentPlanAdmission, recentResidentPlanAdmission, type ResidentPlanAdmissionRecord } from '../../../../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts';
-import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment } from './cloud-protocol';
+import { cloudServiceName, cloudSignInHandOffAvailable, CloudProtocol, CloudProtocolError, type CloudAgent, type CloudEnvironment, type CommittedCloudCredential } from './cloud-protocol';
 import { googleOutcome as signInOutcome, type CloudSignInGoogleOutcome, CloudSignInError, normalizeSignInCode, signInFailureMessage as formatSignInFailureMessage, signInReadiness, validSignInEmail, validSignInPhone, type CloudSignInAuthenticated } from './cloud-sign-in';
 import { DevelopmentCloudAgentProtocol, type CloudPhoneTarget } from './development-cloud-agents';
 import { checkEntitlement, clearEntitlementKeyCache, describeSubscription, EntitlementError, EntitlementRefresher, isEntitlementSignInFailure, CHOOSE_PLAN_LABEL, MANAGE_PLAN_LABEL, planAdmission, readServiceLimit, redeemFailureMessage, redeemSuccessMessage, serviceLimitMessage, subscriptionSummary, SubscriptionRedeemError, type ServiceLimit, type SubscriptionView } from './subscription-entitlement';
@@ -466,7 +466,7 @@ const residentRebindBlocked = () => !!operation || !!sending;
 /** Every Cloud detach ends background plan refresh, so no request goes out under a stale admission. */
 function stopEntitlementRefresh(){entitlementRefresher?.stop();entitlementRefresher=null;clearEntitlementKeyCache();}
 function detachService() { stopEntitlementRefresh(); retireReadReplies();for(const request of appRequests)request.abort(new DOMException('Cloud account changed','AbortError')); clearPersonalSetup(); membershipRead?.abort();membershipRead=null;pendingBillingReview=null;service = null; update({ cloudAccount: null,membershipBalance:undefined,membershipCredits:null,membershipPlan:null,lastServiceLimit:null,planEndsAt:null,billingReviewEmail:undefined,membershipDismissed:false,fundingRefused:false }); }
-async function verifyService(client: CloudProtocol, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}) {
+async function verifyService(client: CloudProtocol, signal: AbortSignal, expected?:CommittedCloudCredential) {
   const credential = await cloudCredentialStore.read(client.environment); signal.throwIfAborted();
   if(expected&&(credential?.credentialId!==expected.credentialId||(expected.credentialReference!==undefined&&credential?.credentialReference!==expected.credentialReference)))throw new Error('Cloud account changed. Try again.');
   if(residentCloudFlow())update({residentSavedCredential:!!credential?.credentialId});
@@ -661,7 +661,7 @@ function showPostSignInSetup() {
  * earlier rules: a failed start recovers and the caller's ensureResident() starts it again (P-43),
  * and a key Cloud refused right after issuing it is removed rather than kept for a retry that cannot work.
  */
-async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expected?:{credentialId:string;credentialReference?:string}) {
+async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expected?:CommittedCloudCredential) {
   const assertExpected=async()=>{if(!expected)return;const current=await cloudCredentialStore.read(residentEnvironment());signal.throwIfAborted();if(current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');};
   const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
   signal.throwIfAborted(); retire();
@@ -687,7 +687,7 @@ async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expec
   } else if (unconfirmed) update({ message: `Signed in. ${cloudServiceName(cloud.environment)} did not confirm revoking the sign-in this phone used before.` });
 }
 /** The key is stored; the existing identity, entitlement and agent paths take over unchanged. */
-async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated, signal: AbortSignal, expected?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}) {
+async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated, signal: AbortSignal, expected?:CommittedCloudCredential) {
   if(expected){const saved=await cloudCredentialStore.read(client.environment);signal.throwIfAborted();if(saved?.credentialId!==expected.credentialId||saved?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');}
   const created = outcome.accountCreated === true;
   prepareSignInReplacement();
@@ -2516,6 +2516,8 @@ export const connectionController = {
       catch(error){signal.throwIfAborted();signInFailed(view.environment);throw error;}
       if(outcome.status==='mfa'){signal.throwIfAborted();showGoogleMfa(outcome);return;}
       if(!outcome.committedCredential){signal.throwIfAborted();await signedIn(client,outcome,signal);return;}
+      // The commit settles an earlier unconfirmed cancel.
+      update({error:''});
       // Postcommit reconciliation ignores only the old cancellation signal.
       // A replaced client, environment or credential still fences adoption.
       const reconciliation=new AbortController();

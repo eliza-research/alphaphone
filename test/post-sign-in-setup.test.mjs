@@ -11,14 +11,16 @@ import vm from 'node:vm';
 const ui=readFileSync(new URL('../apps/app/src/runtime/connection-ui.tsx',import.meta.url),'utf8');
 const between=(text,start,end)=>{const from=text.indexOf(start),to=text.indexOf(end,from);assert.ok(from>=0&&to>from,start);return text.slice(from,to);};
 const residentSignedIn=stripTypeScriptTypes(between(ui,'async function residentSignedIn(','/** The key is stored;'),{mode:'transform'});
+const signedIn=stripTypeScriptTypes(between(ui,'async function signedIn(','/** The development hosted-agent client.'),{mode:'transform'});
 const showPostSignInSetup=stripTypeScriptTypes(between(ui,'function showPostSignInSetup(','/**\n * A verified sign-in on the resident flow'),{mode:'transform'});
 const ISSUED='11111111-1111-4111-8111-111111111111';
+const COMMITTED={credentialId:ISSUED,credentialReference:'browser-cloud-reference:33333333-3333-4333-8333-333333333333',userId:'owner',organizationId:'organization'};
 
 function harness({admission={binding:'cloud'},admitted=true,refusedAccount=false,connect,admit}={}){
   // The agent before the sign-in ran without Cloud AI ('unavailable').
   const events=[],state={signIn:{step:'code'},open:true,busy:true,message:'Checking your code…',kind:'starting',purpose:'agent',setupRevision:0,cloudAccount:null,residentPlanNotice:null,residentStarting:false,residentInference:'unavailable'};
   let stored={credentialId:ISSUED};
-  const box={ownProviderSelected:()=>false,state,events,reads:[],active:null,residentAlwaysPresent:true,cloud:{environment:'production'},
+  const box={ownProviderSelected:()=>false,state,events,reads:[],active:null,residentAlwaysPresent:true,cloud:{environment:'production'},residentCloudFlow:()=>true,prepareSignInReplacement:()=>events.push('replace'),
     update:patch=>{Object.assign(state,patch);events.push({update:patch,snapshot:{...state}});},
     retire:()=>{events.push('retire');state.kind='starting';},
     residentEnvironment:()=>'production',cloudServiceName:()=>'Eliza Cloud',
@@ -28,7 +30,7 @@ function harness({admission={binding:'cloud'},admitted=true,refusedAccount=false
     admitCloudResident:async signal=>{events.push({admit:{...state}});admit?.();signal.throwIfAborted();if(admitted===true)state.cloudAccount=refusedAccount?null:{userId:'owner'};if(admitted instanceof Error)throw admitted;return admission;},
     connectResident:async(signal,given)=>{events.push({connect:given,during:{...state}});if(connect)await connect(state);},
   };
-  vm.createContext(box);vm.runInContext(showPostSignInSetup+'\n'+residentSignedIn+';globalThis.run=residentSignedIn;',box);
+  vm.createContext(box);vm.runInContext(showPostSignInSetup+'\n'+residentSignedIn+'\n'+signedIn+';globalThis.run=residentSignedIn;globalThis.signIn=signedIn;',box);
   return box;
 }
 const updates=box=>box.events.filter(event=>event.update).map(event=>event.update);
@@ -99,6 +101,26 @@ test('an expected key replaced while the account is admitted still stops the sig
   const box=harness({admit:()=>box.replaceStored({credentialId:'22222222-2222-4222-8222-222222222222'})});
   await assert.rejects(box.run(new AbortController().signal,false,{credentialId:ISSUED}),error=>error.code==='account-changed');
   assert.ok(!box.events.some(event=>event.connect));assert.equal(box.state.signIn,null);
+});
+
+test('a committed Google key replaced before adoption stops the resident flow before anything is torn down',async()=>{
+  for(const stored of [{...COMMITTED,credentialId:'22222222-2222-4222-8222-222222222222'},{...COMMITTED,credentialReference:'browser-cloud-reference:44444444-4444-4444-8444-444444444444'},null]){
+    const box=harness();box.replaceStored(stored);
+    await assert.rejects(box.signIn(box.cloud,{},new AbortController().signal,COMMITTED),error=>error.code==='account-changed');
+    assert.ok(!box.events.includes('replace'));assert.ok(!box.events.includes('retire'));assert.ok(!box.events.some(event=>event.connect));
+    assert.deepEqual(box.state.signIn,{step:'code'});assert.equal(box.state.setupRevision,0);
+  }
+});
+
+test('a sign-in with a matching or no committed key replaces the old sign-in and restarts the agent',async()=>{
+  for(const expected of [COMMITTED,undefined]){
+    const box=harness();box.replaceStored(COMMITTED);
+    await box.signIn(box.cloud,{},new AbortController().signal,expected);
+    const replaced=box.events.indexOf('replace'),retired=box.events.indexOf('retire');
+    assert.ok(replaced>=0&&retired>replaced);
+    assert.equal(box.reads.filter(at=>at<=retired).length,expected?2:1,'the guard read, when there is one, then the issued key');
+    assert.ok(box.events.findIndex(event=>event.connect)>retired);assert.equal(box.state.setupRevision,1);assert.equal(box.state.signIn,null);
+  }
 });
 
 test('a cancelled admission leaves the sign-in step and the agent to the caller restart (P-43)',async()=>{

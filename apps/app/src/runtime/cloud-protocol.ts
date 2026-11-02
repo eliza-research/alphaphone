@@ -66,6 +66,8 @@ export interface CloudCredential {
   /** Cloud's id for an in-app sign-in key (mobile App Auth credentialId). Not a secret. */
   serverCredentialId?: string;
 }
+/** The key a host committed for a Google attempt; adoption stops once the store holds another. */
+export type CommittedCloudCredential={credentialId:string}&Pick<CloudCredential,'credentialReference'|'userId'|'organizationId'>;
 function sameCloudCredential(a: CloudCredential | null, b: CloudCredential | null): boolean {
   return a === null || b === null ? a === b : a.credentialId === b.credentialId && a.token === b.token && a.credentialReference === b.credentialReference;
 }
@@ -303,8 +305,9 @@ export class CloudProtocol {
       }
       controller.abort(signal.reason??new DOMException("Login cancelled","AbortError"));return false;
     })().catch(error=>{
-      // A lost or invalid cancellation reply leaves the host outcome unknown. Keep polling and allow retry.
-      cancellation=null;throw error;
+      // A lost or invalid cancellation reply leaves the host outcome unknown, unless the attempt
+      // already committed. Keep polling and allow retry.
+      cancellation=null;if(this.googleSignInCommitted)return true;throw error;
     });
     if(google&&port.cancelGoogleSignIn)this.activeGoogleCancellation=cancel;
     const abort = () => {if(google&&port.cancelGoogleSignIn)void cancel().catch(()=>{});else controller.abort(signal.reason);};
@@ -414,8 +417,8 @@ export class CloudProtocol {
     if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) throw new CloudProtocolError("expired");
     return outcome;
   }
-  /** Google through the native account picker: request native MFA, or finish after the key is stored. */
-  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome & {committedCredential?:{credentialId:string;credentialReference?:string;userId?:string;organizationId?:string}}> {
+  /** Google in an external browser: request native MFA, or finish after the key is stored. */
+  async signInWithGoogle(signal: AbortSignal): Promise<CloudSignInGoogleOutcome & {committedCredential?:CommittedCloudCredential}> {
     this.googleSignInCommitted=false;
     const outcome=await this.signInStep(signal,port=>port.startGoogle({environment:this.environment}),value=>googleOutcome(value,this.environment),true);
     if(outcome.status==='mfa')return outcome;

@@ -22,8 +22,8 @@ The same host also receives the Google connector delegation return filter.
 
 Alpha selects `googleSignInMode("browser")` in the shared native auth client. A browser that
 offers Android Custom Tabs opens as a Custom Tab. Without one (stock AOSP ships only the WebView
-shell browser), the default HTTPS browser opens with a plain `ACTION_VIEW`, as Google
-connections do; Alpha's own WebView is never used. At least one external HTTPS browser is required.
+shell browser), the default HTTPS browser opens with a plain `ACTION_VIEW`, as
+`AlphaConnectionPlugin.openExternal` does; Alpha's own WebView is never used. At least one external HTTPS browser is required.
 This supports AOSP without Google Play services. PKCE, the pending state, code exchange,
 MFA and credential writes stay in the native client. A cancelled, expired or superseded
 attempt cannot commit a credential. A process restart during browser sign-in requires a

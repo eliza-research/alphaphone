@@ -20,7 +20,7 @@ const nativeSignInHeader=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:st
  * In-app Eliza Cloud sign-in host: AlphaCloudSignInPlugin on Android, or the development Cloud bridge
  * (email code or canonical hosted Google OAuth) in the explicit browser host. Undefined where this build has no sign-in.
  */
-/** Google uses the native picker or the explicitly hosted browser OAuth flow. */
+/** Google uses an external browser or the explicitly hosted browser OAuth flow. */
 export const cloudSignInGoogle=nativeSignInHeader||browserCloudHost;
 export const cloudSignInPhone=(Capacitor as typeof Capacitor&{PluginHeaders?:{name:string;methods?:{name:string}[]}[]}).PluginHeaders?.some(header=>header.name==='AlphaCloudSignIn'&&header.methods?.some(method=>method.name==='startPhone')&&header.methods?.some(method=>method.name==='verifyPhone'))??false;
 // The durable Google commit/cancel extension belongs to BrowserCloudSignIn only.
