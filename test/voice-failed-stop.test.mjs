@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cloudVoiceViewFixture,load} from './fixtures/cloud-voice-view.mjs';
+import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 
 // The actual voice adapter with a synthetic session whose stop can be refused, then the actual
 // realtime conversation module with a synthetic relay. No microphone, provider or account is used.
@@ -91,9 +92,11 @@ test('DevelopmentAgent: its refused stop is asked of DevelopmentAgent, and Alpha
   assert.equal(rec().state,'recording');assert.equal(f.starts,1);
   rec().discard();await settle(f);
   assert.equal(agentCancels,2,'the stop, then its own repeat');assert.equal(alphaCancels,0,'no other plugin stands in for it');
-  f.render().record();await settle(f);rec().stop();await settle(f);
+  f.render().record();await settle(f);assert.equal(rec().state,'stopping','Record cannot start under its held recorder');
+  rec().stop();await settle(f);
   assert.equal(f.starts,1,'no capture while DevelopmentAgent refuses');assert.equal(alphaCancels,0);
-  refused=false;rec().stop();await settle(f);assert.equal(rec().state,'recording');assert.equal(f.starts,2);
+  refused=false;rec().stop();await settle(f);assert.equal(rec().state,'ready');
+  rec().stop();await settle(f);assert.equal(rec().state,'recording');assert.equal(f.starts,2);
  }finally{refused=false;f.close();await settle(f);}
 });
 
@@ -110,6 +113,115 @@ test('ordinary dictation: Stop on the held panel asks the same recorder again, a
   f.captureCancelError=undefined;f.renderChat().stop();await settle(f);
   assert.equal(f.activeRecording,null);assert.equal(f.renderChat(),null);assert.equal(f.sends,0);
  }finally{f.captureCancelError=undefined;f.close();await settle(f);}
+});
+
+/** A Notes recording, open, on a fixture whose time the test can move. */
+async function notesRecording(options={}){
+ const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,clock,...options});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,nativeLiveVoiceReady:async()=>false});
+ f.render().record();await clock.flush();
+ return Object.assign(f,{clock,rec:()=>f.render().rec});
+}
+test('Notes: a refused recorder keeps its quiet stopping line, Stop asks again, and only its answer closes it',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');const owned=f.activeRecording;
+  f.captureCancelError=Error('Recorder stop refused');f.rec().discard();await f.clock.flush();
+  assert.equal(f.activeRecording,owned,'the capture is still open');assert.equal(f.rec().state,'stopping');assert.equal(f.rec().failed,false);
+  assert.match(f.rec().lines[0].t,/^Stopping the microphone/);assert.deepEqual(f.shell.messages,[]);
+  const asked=f.recordingCancels.length;f.rec().stop();await f.clock.flush();
+  assert.equal(f.recordingCancels.length,asked+1,'Stop asked the recorder again');assert.equal(f.rec().state,'stopping','a refusal keeps it');
+  await f.shell.startVoice();await f.clock.flush();assert.equal(f.starts,1,'no Talk over it');assert.equal(f.renderChat(),null);
+  f.shell.startTranscription();await f.clock.flush();assert.equal(f.starts,1,'no dictation over it');assert.equal(f.renderChat(),null);
+  f.captureCancelError=undefined;f.rec().discard();await f.clock.flush();
+  assert.equal(f.activeRecording,null);assert.equal(f.rec(),undefined);
+  f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');assert.equal(f.starts,2);
+ }finally{f.captureCancelError=undefined;f.close();await f.clock.advance(3000);}
+});
+test('Notes: a held recorder is asked again on a timer, and nothing paid or new runs for it',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();
+  f.captureCancelError=Error('Recorder stop refused');f.rec().discard();await f.clock.flush();
+  const asked=f.recordingCancels.length;await f.clock.advance(3000);assert.equal(f.recordingCancels.length,asked+1);
+  await f.clock.advance(3000);assert.equal(f.recordingCancels.length,asked+2);assert.equal(f.rec().state,'stopping');
+  f.captureCancelError=undefined;await f.clock.advance(3000);
+  assert.equal(f.activeRecording,null,'its answer closed it');assert.equal(f.rec(),undefined);
+  const done=f.recordingCancels.length;await f.clock.advance(20000);assert.equal(f.recordingCancels.length,done,'a confirmed owner is asked nothing more');
+  assert.equal(f.starts,1);assert.equal(f.uploads,0);assert.equal(f.cloudSpeech,0);assert.equal(f.sends,0);
+ }finally{f.captureCancelError=undefined;f.close();await f.clock.advance(3000);}
+});
+test('Notes: a normal Cancel shows no stopping line and asks the recorder once',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();f.rec().discard();assert.equal(f.rec(),undefined);await f.clock.flush();
+  assert.equal(f.activeRecording,null);assert.equal(f.rec(),undefined);assert.equal(f.recordingCancels.length,1);
+  await f.clock.advance(20000);assert.equal(f.recordingCancels.length,1);
+  f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');assert.equal(f.starts,2);
+ }finally{f.close();await f.clock.advance(3000);}
+});
+test('a capture still starting holds no false proof: its cancel waits for it, past the deadline, and stops it when it arrives',async()=>{
+ const f=await notesRecording({holdStart:true});
+ try{
+  f.rec().stop();await f.clock.flush();assert.equal(f.starts,1);
+  f.rec().discard();await f.clock.advance(8000);
+  assert.equal(f.recordingCancels.length,0,'nothing answers for a capture still starting');assert.equal(f.rec().state,'stopping');
+  await f.shell.startVoice();await f.clock.flush();assert.equal(f.starts,1);
+  f.holdStart=false;f.releaseStart({recordingId:'late-clip',maxDurationMs:59000});await f.clock.flush();
+  assert.equal(f.recordingCancels[0],'late-clip','the waiting ask found it open and stopped it');assert.equal(f.activeRecording,null);
+  await f.clock.advance(3000);assert.equal(f.rec(),undefined,'a fresh answer ends the hold');
+ }finally{f.close();await f.clock.advance(3000);}
+});
+test('a held panel is asked again on a timer, and only a confirmation ends it',async()=>{
+ const clock=voiceFakeClock(),f=session({native:true,platform:'android',clock});
+ try{
+  await f.shell.startVoice();
+  f.stopError=Error('Session stop refused');f.captureCancelError=Error('Recorder stop refused');f.renderChat().stop();await clock.flush();
+  const asked=f.recordingCancels.length;await clock.advance(3000);assert.equal(f.recordingCancels.length,asked+1);assert.equal(f.renderChat().state,'stopping');
+  f.stopError=f.captureCancelError=undefined;await clock.advance(3000);assert.equal(f.renderChat(),null);assert.equal(f.sessions,1,'nothing starts by itself');
+  const done=f.recordingCancels.length;await clock.advance(20000);assert.equal(f.recordingCancels.length,done);
+ }finally{f.stopError=f.captureCancelError=undefined;f.close();await clock.advance(3000);}
+});
+test('a stop that never answers becomes a held refusal: Stop asks again, Talk stays blocked, and a typed send does not wait forever',async()=>{
+ const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,platform:'web',native:false,clock});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null});
+ const snapshot=f.box.connectionController.getSnapshot;f.box.connectionController.getSnapshot=()=>({...snapshot(),residentInference:'direct',providerStatus:{voiceConfigured:true}});
+ let conversations=0,stops=0,answers=false;
+ f.box.developmentCartesiaConversation=async input=>{conversations++;return {async start(){input.onState('listening');},stop(){stops++;return answers?Promise.resolve():new Promise(()=>{});},recheck(){},resume(){return false;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false};};
+ try{
+  await f.shell.startVoice();await clock.flush();assert.equal(f.renderChat().state,'listening');
+  f.renderChat().stop();await clock.flush();assert.equal(stops,1);assert.equal(f.renderChat().state,'stopping');
+  f.renderChat().stop();await clock.flush();assert.equal(stops,1,'within the deadline Stop waits for the answer');
+  let waited='pending';void f.shell.stopVoiceConversation().then(()=>{waited='settled';},()=>{waited='settled';});
+  await clock.advance(24000);assert.equal(waited,'settled');
+  const asked=stops;assert.ok(asked>1,'past the deadline the owner is asked again');assert.equal(f.renderChat().state,'stopping');assert.equal(f.renderChat().problem,false);
+  f.renderChat().stop();await clock.advance(8000);assert.ok(stops>asked,'Stop asks it again');
+  await f.shell.startVoice();await clock.flush();assert.equal(conversations,1,'no session over it');assert.equal(f.renderChat().state,'stopping');
+  const again=stops;await clock.advance(11000);assert.ok(stops>again,'the timer asks it too');
+  answers=true;await clock.advance(11000);
+  assert.equal(f.renderChat(),null,'its own answer ends the panel');await f.shell.startVoice();await clock.flush();assert.equal(conversations,2);
+ }finally{f.close();await clock.advance(11000);}
+});
+test('a clip capture that failed to start and refused its cancel stays held for that recorder',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true,native:true,platform:'android',peak:.5});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,nativeLiveVoiceReady:async()=>false});
+ try{
+  f.startError=Error('Capture start failed');f.captureCancelError=Error('Recorder stop refused');
+  await f.shell.startVoice();await settle(f);
+  assert.equal(f.renderChat().state,'stopping','unconfirmed: the panel stays');assert.deepEqual(f.shell.messages,[]);
+  f.startError=f.captureCancelError=undefined;f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);
+ }finally{f.startError=f.captureCancelError=undefined;f.close();await settle(f);}
+});
+test('one owner that refuses skips no later owner in the same stop',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true,native:true,platform:'android',peak:.5});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,nativeLiveVoiceReady:async()=>false,
+  BatchVoiceConversation:class {constructor(input){this.input=input;}async start(){await this.input.capture({signal:new AbortController().signal,onActivity(){},onEnd(){}});this.input.onState({phase:'listening'});}async stop(){if(f.stopError)throw f.stopError;}recheck(){}}});
+ try{
+  await f.shell.startVoice();await settle(f);const owned=f.activeRecording;assert.ok(owned);
+  f.stopError=Error('Session stop refused');f.renderChat().stop();await settle(f);
+  assert.equal(f.activeRecording,null,'the recorder was stopped all the same');assert.ok(f.recordingCancels.includes(owned));assert.equal(f.renderChat().state,'stopping','the refused owner still holds the panel');
+  f.stopError=undefined;f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);
+ }finally{f.stopError=undefined;f.close();await settle(f);}
 });
 
 test('a normal Stop holds the panel until release and forces no plugin stop',async()=>{
@@ -194,8 +306,8 @@ test('an explicit Stop cancels a pending review; leaving for the keyboard does n
 });
 
 /** Realtime Cloud voice through the developer agent; `revoke` answers a ticket retirement through the relay. */
-function realtime(revoke){
- const f=cloudVoiceViewFixture({native:false,platform:'web',account:null});
+function realtime(revoke,options){
+ const f=cloudVoiceViewFixture({native:false,platform:'web',account:null,...options});
  const sdk={clients:0,starts:0,stops:0},calls=[];
  const agent={async request(path){calls.push(path);
   if(path.includes('/health'))return {ready:true,conversationId:f.conversation,agentId:'synthetic-agent',speechRoute:'cloud',speechProvider:'cartesia',providerAdmission:'at-session-start'};
@@ -208,7 +320,7 @@ function realtime(revoke){
   WebSocket:class {constructor(){f.socket=this;queueMicrotask(()=>this.onopen?.());}close(){}},
   loadClient:async()=>({createVoiceSessionClient:options=>{const client=++sdk.clients;sdk.options=options;return {
    async start(){sdk.starts++;options.onMinted({sessionId:'session-'+client});options.onState({phase:'listening',traceId:null,finalTranscript:''});},
-   async stop(){sdk.stops++;if(sdk.stopError)throw sdk.stopError;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false,async unlockPlayback(){}};}})});
+   async stop(){sdk.stops++;await sdk.hang;if(sdk.stopError)throw sdk.stopError;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false,async unlockPlayback(){}};}})});
  load('runtime/development-cartesia-conversation.ts',f.box,['developmentCartesiaConversation'],source=>source.replace(/^export \{.*\} from .*;\n/gm,'').replace("await import('@elizaos/ui/voice/voice-session-client')",'await loadClient()'));
  return Object.assign(f,{sdk,revokes:()=>calls.filter(path=>path.includes('/revoke'))});
 }
@@ -290,6 +402,17 @@ test('a later stop with nothing to do clears no held owner',async()=>{
   f.render().record();await settle(f);f.render().rec?.discard();await settle(f);
   assert.equal(f.renderChat().state,'stopping');await assert.rejects(f.shell.stopVoiceConversation(),/Client stop rejected/);
  }finally{f.sdk.stopError=undefined;f.close();await settle(f);}
+});
+
+test('a client stop that never answers is joined within the deadline, and asked again past it through the wrapper',async()=>{
+ const clock=voiceFakeClock(),f=realtime(()=>({revoked:true}),{clock:{...clock,Date}});
+ try{
+  await f.shell.startVoice();await clock.flush();
+  f.sdk.hang=new Promise(()=>{});f.renderChat().stop();await clock.flush();assert.equal(f.sdk.stops,1);
+  void f.shell.stopVoiceConversation();await clock.flush();assert.equal(f.sdk.stops,1,'within the deadline a repeat joins the stop under way');
+  f.sdk.hang=undefined;await clock.advance(8000);
+  assert.equal(f.sdk.stops,2,'past it the client itself is asked again');assert.equal(f.renderChat(),null);assert.equal(f.sdk.clients,1);
+ }finally{f.sdk.hang=undefined;f.close();await clock.advance(11000);}
 });
 
 test('a held panel left on a closed shell moves to the next shell, which starts no media until its owner confirms',async()=>{

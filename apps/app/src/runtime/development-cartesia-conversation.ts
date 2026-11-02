@@ -123,9 +123,10 @@ export async function developmentCartesiaConversation(input:{binding:VoiceConver
   onPlaybackUnlockChange:()=>{if(!stopped)input.onPlaybackUnlockChange?.();},
   onError:error=>{retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;if(!stopped)input.onError(error);},
  });
- const stop=()=>{if(stopPromise)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();
+ const stop=(again=false)=>{if(stopPromise&&!again)return stopPromise;stopped=true;retireBusyTrace(callerBusyTrace);retireBusyTrace(playbackTrace);callerBusyTrace=undefined;playbackTrace=undefined;playbackEndTrace=undefined;clearTurn();acceptedState=undefined;window.removeEventListener('alpha:device-settings',preferenceChanged);if(rendererRenewal)clearTimeout(rendererRenewal);rendererRenewal=undefined;lifecycle.abort();renderer?.close();pendingRenderer?.close();
   // The client's stop releases the microphone and audio, and that is all Stop waits for: a refusal
-  // leaves the next stop to ask it again. Each minted ticket is revoked once after its first answer,
+  // leaves the next stop to ask it again, and `again` asks past one still unanswered. Each minted
+  // ticket is revoked once after its first answer,
   // whichever it was: a lost relay cannot hold voice stopping, and says nothing for the microphone.
   const revokeTickets=()=>{if(agent!==connectionController.getBrowserSpeechAgent())throw Error('Developer voice retirement could not be confirmed after connection change.');const tickets=[...minted];minted.clear();return Promise.all(tickets.map(async id=>{try{const result=await agent.request(`/api/v1/voice/session/${id}/revoke`,{},new AbortController().signal);if(result.revoked!==true)throw Error('Developer voice retirement was not confirmed.');}catch(error){const failure=error as {status?:number;data?:{code?:string}};if(failure.status!==404||failure.data?.code!=='voice_session_not_found')throw error;}}));};
   const released=stopPromise=client.stop();void released.then(revokeTickets,()=>{stopPromise=undefined;return revokeTickets();}).catch(logVoiceFailure);return released;};

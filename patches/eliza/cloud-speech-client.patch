@@ -2,7 +2,7 @@ diff --git a/packages/voice/src/native-cloud-speech.ts b/packages/voice/src/nati
 new file mode 100644
 --- /dev/null
 +++ b/packages/voice/src/native-cloud-speech.ts
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,127 @@
 +/** Native Cloud speech transport. The host supplies its credential-owning bridge;
 + * only text, levels, timing, and lifecycle events enter the renderer. No platform imports. */
 +import type {AssistantCapture, AssistantListenHandlers} from './voice-assistant-session.js';
@@ -47,8 +47,11 @@ new file mode 100644
 +    retired=true;opened=false;speechActive=false;ended();
 +    ownerSignal?.removeEventListener('abort',ownerAborted);ownerSignal=undefined;
 +    for(const pending of utterances.values())pending.reject(cancelled());utterances.clear();
-+    stopping=(async()=>{try{await port.stopCloudSpeech({sessionId});}finally{await handle?.remove();handle=undefined;}})();
-+    return stopping;
++    const asked=(async()=>{try{await port.stopCloudSpeech({sessionId});}finally{await handle?.remove();handle=undefined;}})();
++    stopping=asked;
++    // Only a confirmed stop stays answered: a refused one is asked again.
++    asked.catch(()=>{stopping=undefined;});
++    return asked;
 +  };
 +  const fail=(error:unknown)=>{
 +    const capture=lifecycle;listening=lifecycle=undefined;

@@ -56,18 +56,51 @@ test('a streaming route lost after it opened ends voice quietly and opens no rec
  }finally{f.close();await f.clock.flush();}
 });
 
-test('streaming speech that cannot confirm its cleanup is held for the speech stream, and AlphaVoiceCloud is not asked for it',async()=>{
- const f=fixture(),create=f.box.createCloudStreamingSpeech;let refused=true,streamStops=0;
- f.box.createCloudStreamingSpeech=input=>({...create(input),async speak(){throw Object.assign(Error('Cloud speech cleanup was not confirmed.'),{code:'speech-cleanup-unconfirmed'});},async stop(){streamStops++;if(refused)throw Error('Stream stop refused');}});
+/** The real Cloud stream over a synthetic bridge, whose stop answers `stop()` each time it is asked. */
+function realStream(f,stop=async()=>{}){
+ load('../../../.eliza/client-features/packages/voice/src/native-cloud-speech.ts',f.box,['createCloudStreamingSpeech']);
+ const create=f.box.createCloudStreamingSpeech,bridge={stops:0,opened:0,emit(){}};
+ const port={async addListener(_event,callback){bridge.emit=callback;return {remove:async()=>{}};},async startCloudSpeech({sessionId}){bridge.opened++;bridge.sessionId=sessionId;return bridge.start?.(sessionId)??{sessionId,sampleRate:16000,echoCancelled:true};},
+  async stopCloudSpeech(){bridge.stops++;await stop();},async setCloudSpeechMuted(){},async speakCloudSpeech(){},async cancelCloudSpeech(){}};
+ f.box.createCloudStreamingSpeech=input=>create(input,port);
+ return bridge;
+}
+test('streaming speech that cannot confirm its cleanup is held for the real stream, a refusal is asked again, and AlphaVoiceCloud is not asked for it',async()=>{
+ const f=fixture();let refused=1;const bridge=realStream(f,async()=>{if(refused-->0)throw Error('Stream stop refused');});
+ const create=f.box.createCloudStreamingSpeech;let handlers;
+ f.box.createCloudStreamingSpeech=input=>{const stream=create(input);return {...stream,async listen(input){handlers=input;return stream.listen(input);},async speak(){throw Object.assign(Error('Cloud speech cleanup was not confirmed.'),{code:'speech-cleanup-unconfirmed'});}};};
  const plugin=()=>(f.stopPlaybackInputs||[]).filter(input=>input===undefined).length+(f.pluginCancels||0);
  try{
-  await f.shell.startVoice();await f.clock.flush();const h=f.getHandlers();
-  h.onSpeechStart(0);h.onSpeechEnd(20);h.onSegment('A completed Cloud utterance.');await f.clock.advance(0);await f.clock.flush();
+  await f.shell.startVoice();await f.clock.flush();
+  handlers.onSpeechStart(0);handlers.onSpeechEnd(20);handlers.onSegment('A completed Cloud utterance.');await f.clock.advance(0);await f.clock.flush();
   assert.equal(f.renderChat().state,'stopping','unconfirmed: the panel stays');assert.deepEqual(f.shell.messages,[]);
-  const asked=streamStops;assert.ok(asked>0,'the stream was asked');assert.equal(plugin(),0,'no other plugin stands in for it');
-  f.renderChat().stop();await f.clock.flush();assert.ok(streamStops>asked,'Stop asked the stream again');assert.equal(f.renderChat().state,'stopping');
-  refused=false;f.renderChat().stop();await f.clock.flush();assert.equal(f.renderChat(),null);assert.equal(plugin(),0);
+  assert.equal(bridge.stops,1,'one refusal so far');assert.equal(plugin(),0,'no other plugin stands in for it');
+  f.renderChat().stop();await f.clock.flush();assert.equal(bridge.stops,2,'Stop reached the bridge again, past the refusal');
+  assert.equal(f.renderChat(),null,'its answer ended the panel');assert.equal(plugin(),0);
+  f.renderChat()?.stop();await f.clock.flush();assert.equal(bridge.stops,2,'a confirmed stop stays answered');
+ }finally{refused=0;f.close();await f.clock.flush();}
+});
+
+test('a streaming start that fails with its stop refused stays held for that stream, and no clip recording opens',async()=>{
+ const f=fixture();let refused=true;const bridge=realStream(f,async()=>{if(refused)throw Error('Stream stop refused');});
+ bridge.start=()=>{throw Object.assign(Error('Cloud streaming request failed'),{code:'cloud-http-401'});};
+ try{
+  await f.shell.startVoice();await f.clock.flush();
+  assert.equal(f.renderChat().state,'stopping','unconfirmed: the panel stays');assert.equal(f.starts,0);assert.deepEqual(f.shell.messages,[]);
+  await f.shell.startVoice();await f.clock.flush();assert.equal(bridge.opened,1,'no second session over it');
+  refused=false;f.renderChat().stop();await f.clock.flush();assert.equal(f.renderChat(),null);
  }finally{refused=false;f.close();await f.clock.flush();}
+});
+
+test('a streaming route that is absent falls back to one clip recording only once the stream is confirmed stopped',async()=>{
+ for(const held of [false,true]){
+  const f=fixture();let refused=held;const bridge=realStream(f,async()=>{if(refused)throw Error('Stream stop refused');});
+  bridge.start=()=>{throw Object.assign(Error('Cloud streaming request failed'),{code:'cloud-http-404'});};
+  try{
+   await f.shell.startVoice();await f.clock.flush();
+   assert.equal(f.starts,held?0:1,'no capture over an unconfirmed stream');assert.equal(f.renderChat().state,held?'stopping':'listening');
+  }finally{refused=false;f.close();await f.clock.advance(3000);}
+ }
 });
 
 test('stopping streaming Talk retires capture and never falls back to batch recording',async()=>{
