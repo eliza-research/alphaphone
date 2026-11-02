@@ -22,8 +22,9 @@ New here:
 - `scripts/ota/generate-ota.sh` runs `ota_from_target_files` on an existing target-files and never
   signs one: Track 1's test-key full OTA, and Track 2's incremental OTA between two retained
   release-signed target-files (the GrapheneOS `generate-delta.sh` step). It refuses missing inputs,
-  a non-A/B target and a key that is not the target's (and source's) `update_engine` payload key,
-  and passes no wipe, downgrade or timestamp option.
+  a non-A/B target and a key whose certificate is not in the target's (and source's)
+  `SYSTEM/etc/security/otacerts.zip`, which `update_engine` verifies payloads against, and passes no
+  wipe, downgrade or timestamp option.
 - `scripts/ota/make-channel-manifest.mjs` (test: `test/ota-channel-manifest.test.mjs`) writes the
   channel manifest an `update_engine` client streams from: version, build fingerprint and date,
   rollout percent and, per package, URL, SHA-256, size, payload offset and size inside the zip and
@@ -63,11 +64,11 @@ New here:
 
 ```sh
 adb -s "$SERIAL" shell getprop ro.build.fingerprint     # .../eng.shaw:userdebug/test-keys
-adb -s "$SERIAL" shell getprop ro.build.date.utc        # the new build must be newer
+adb -s "$SERIAL" shell getprop | grep -E 'ro\.([a-z_]+\.)?build\.date\.utc'   # the new build must be newer on every partition
 adb -s "$SERIAL" shell getprop ro.boot.slot_suffix      # note it (_a or _b)
 adb -s "$SERIAL" shell getprop ro.virtual_ab.enabled    # true
 adb -s "$SERIAL" shell df -h /data                      # several GB free for the snapshot copy-on-write
-adb -s "$SERIAL" exec-out cat /system/etc/update_engine/update-payload-key.pub.pem > device-payload-key.pub.pem
+adb -s "$SERIAL" exec-out cat /system/etc/security/otacerts.zip > device-otacerts.zip
 adb -s "$SERIAL" shell pm path ai.elizaresearch.alphaphone
 adb -s "$SERIAL" shell dumpsys package ai.elizaresearch.alphaphone | grep -E 'versionCode|codePath'
 ```
@@ -88,30 +89,37 @@ sha256sum "$TF"
 
 ```sh
 unzip -p "$TF" META/misc_info.txt | grep -E '^(ab_update|virtual_ab|default_system_dev_certificate)='
-unzip -p "$TF" SYSTEM/build.prop | grep -E '^ro\.build\.(fingerprint|date\.utc)='
-unzip -p "$TF" SYSTEM/etc/update_engine/update-payload-key.pub.pem | diff - device-payload-key.pub.pem
+unzip -p "$TF" SYSTEM/build.prop | grep -E '^ro\.build\.fingerprint='
+unzip -p "$TF" SYSTEM/build.prop VENDOR/build.prop '*/etc/build.prop' | grep -E '^ro\.([a-z_]+\.)?build\.date\.utc='
+unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
+diff <(unzip -p tf-otacerts.zip | openssl x509 -noout -fingerprint -sha256) \
+     <(unzip -p device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
 unzip -p "$TF" PRODUCT/app/AlphaPhone/AlphaPhone.apk > /abs/image-alpha.apk
 adb -s "$SERIAL" exec-out cat <path from pm path> > /abs/installed-alpha.apk
 apksigner verify --print-certs /abs/image-alpha.apk      # SDK build-tools or $ANDROID_HOST_OUT/bin
 apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-256 digest required
 ```
 
-Stop unless: `ab_update=true` and `virtual_ab=true`; `ro.build.date.utc` is **greater** than the
-device's (the 2026-10-24 evidence records an incremental build that kept an earlier timestamp; then
-rebuild so the build properties regenerate, never `--downgrade`); the payload key equals the
-device's; both APKs have the same signer digest. With a higher versionCode in the image the system
+Stop unless: `ab_update=true` and `virtual_ab=true`; every `ro.<partition>.build.date.utc` (system,
+vendor, product, system_ext, odm, where present) is **greater** than the device's, because
+`update_engine` checks each partition (the 2026-10-24 evidence records an incremental build that kept an earlier timestamp; then
+rebuild so the build properties regenerate, never `--downgrade`); the target's `otacerts.zip`
+holds the device's certificate (the running build verifies the payload against it); both APKs have the same signer digest. With a higher versionCode in the image the system
 copy replaces the installed update, otherwise the installed update stays; data is kept either way
 because the signer is the same.
 
 ### 4. Generate the full OTA and its manifest (on the builder, from the Alpha checkout)
 
+`OTA_DIR` is a scratch directory on the builder; never reuse AOSP's `OUT_DIR` name, which a later `m`
+in the same shell would build into.
+
 ```sh
-OUT_DIR=/abs/ota-lab-$(date -u +%Y%m%dT%H%MZ); mkdir "$OUT_DIR"
+OTA_DIR=/abs/ota-lab-$(date -u +%Y%m%dT%H%MZ); mkdir "$OTA_DIR"
 bash scripts/ota/generate-ota.sh --releasetools "$ANDROID_HOST_OUT/bin" \
   --package-key "$AOSP_SOURCE/build/make/target/product/security/testkey" \
-  --target-files "$TF" --out "$OUT_DIR/ota.zip"
-node scripts/ota/make-channel-manifest.mjs --channel beta --version "lab-$(date -u +%Y%m%d)" \
-  --base-url http://127.0.0.1:8000/ --out "$OUT_DIR/manifest.json" "$OUT_DIR/ota.zip"
+  --target-files "$TF" --out "$OTA_DIR/ota.zip"
+node scripts/ota/make-channel-manifest.mjs --channel beta --version "lab-$(date -u +%Y%m%d)" --sequence 1 \
+  --base-url http://127.0.0.1:8000/ --out "$OTA_DIR/manifest.json" "$OTA_DIR/ota.zip"
 ```
 
 Check `buildFingerprint` (test-keys, stallion) and `buildDateUtc` (greater than the device's) in
@@ -119,7 +127,8 @@ Check `buildFingerprint` (test-keys, stallion) and `buildDateUtc` (greater than 
 
 ### 5. Serve over adb reverse (on the host the phone is attached to)
 
-Copy `ota.zip` and `manifest.json` there if needed and confirm the zip's SHA-256 equals
+Copy `ota.zip` and `manifest.json` there if needed, set `OTA_DIR` on this host to the directory
+holding them, and confirm the zip's SHA-256 equals
 `updates[0].sha256`. `update_engine` streams `payload.bin` out of the zip with HTTP Range requests,
 so the server must honour Range; `python3 -m http.server` ignores Range and must not be used. This
 serves the one file, with Range, on loopback only:
@@ -137,7 +146,7 @@ http.createServer((req, res) => {
     ...(range && {"Content-Range": `bytes ${start}-${end}/${size}`})});
   fs.createReadStream(file, {start, end}).pipe(res);
 }).listen(8000, "127.0.0.1");
-' "$OUT_DIR/ota.zip"
+' "$OTA_DIR/ota.zip"
 ```
 
 AOSP's `system/update_engine/scripts/update_device.py` in the builder's tree (check its `--help`)
@@ -147,7 +156,7 @@ with `--wipe-user-data`.
 ### 6. Apply with update_engine_client
 
 ```sh
-M="$OUT_DIR/manifest.json"
+M="$OTA_DIR/manifest.json"
 URL=$(node -p "require('$M').updates[0].url")
 OFFSET=$(node -p "require('$M').updates[0].payload.offset")
 SIZE=$(node -p "require('$M').updates[0].payload.size")
@@ -156,7 +165,8 @@ adb -s "$SERIAL" shell "update_engine_client --update --follow --payload=$URL --
 ```
 
 Expect progress, then `UPDATE_STATUS_UPDATED_NEED_REBOOT` and exit 0. Virtual A/B writes the
-inactive slot through snapshots; the running system and `/data` are not touched. Watch
+inactive slot through snapshots, whose copy-on-write may use space on `/data`; the running slot and
+user data are not modified. Watch
 `adb -s "$SERIAL" logcat -s update_engine` in another terminal. If this build refuses the shell's
 binder call to `update_engine`, run `adb -s "$SERIAL" root` once (userdebug; it restarts adbd only)
 and repeat. Before rebooting, `ro.boot.slot_suffix` is still the old slot. Then
@@ -233,7 +243,7 @@ the other slot, the new date, Alpha is HOME with the owner still signed in and t
 6. The manifest, for the beta channel first:
 
    ```sh
-   node scripts/ota/make-channel-manifest.mjs --channel beta --version 0.1.1 \
+   node scripts/ota/make-channel-manifest.mjs --channel beta --version 0.1.1 --sequence <last beta sequence + 1> \
      --base-url https://updates.example/alpha/stallion/releases/0.1.1/ --rollout-percent 5 \
      --out channels/beta.json N/ota.zip N/incremental-from-P.zip
    ```
@@ -242,7 +252,7 @@ GrapheneOS's `generate-release.sh` corresponds to steps 2 and 3 (factory images:
 
 ### 2.3 Verified boot key, relock, and the one-time move of test-key units
 
-Release keys change the platform certificate, the OTA and payload key and the AVB key. A test-key
+Release keys change the platform certificate, the OTA key (`otacerts.zip`) and the AVB key. A test-key
 unit verifies OTAs against the test key, and its data holds packages bound to the test platform
 certificate, which Android does not migrate; the move is therefore **one reflash with a wipe**, never
 an OTA. Locking wipes too, so do both in one session, with the unit owner's consent (P-70):
@@ -279,14 +289,16 @@ https://updates.example/alpha/stallion/
   `sha256(installId + version)` modulo 100 are below `rolloutPercent`; `installId` is a random value
   the updater creates once, never a hardware identifier. At publish time sign every planned step
   (for example 5, 25, 100) and a halted twin (0), so raising or halting never waits for the offline
-  key.
+  key. Each manifest carries a `sequence`: the steps get increasing sequences and the halted twin the
+  highest, so lifting a halt needs a fresh offline signature.
 - **Kill switch**: publish the halted twin. Devices that have not started do nothing, a running
   download is cancelled and an applied update waiting for restart is reset. A bad release is then
   fixed by rolling forward; downgrades stay refused (`downgradeAllowed: false`).
 - Beta gets each release first; stable later gets a new manifest for the same release files.
-- `update_engine` verifies the payload signature against the installed payload key and the
-  `FILE_HASH`/`METADATA_HASH` headers, so the CDN is never trusted with content. A replayed older
-  manifest can only withhold an update, never install an older build.
+- `update_engine` verifies the payload signature against the running build's `otacerts.zip` and the
+  `FILE_HASH`/`METADATA_HASH` headers, so the CDN is never trusted with content. The updater keeps
+  the highest `sequence` it has accepted per channel and refuses a lower one, so a replayed earlier
+  manifest cannot lift a halt or install an older build; it can only withhold an update.
 
 ### 2.5 The privileged update client
 
@@ -354,15 +366,15 @@ during a ringing or active call, and a metered network suspending the download. 
 ## Open points
 
 1. Unverified on stallion: the shell's binder access to `update_engine` on this userdebug build
-   (`adb root` fallback), and the payload key path in its target-files (generate-ota.sh refuses when
-   absent).
+   (`adb root` fallback), and that its target-files carries `SYSTEM/etc/security/otacerts.zip` with
+   the test key's certificate (generate-ota.sh refuses otherwise).
 2. A build whose date is not newer than the device's is refused by `update_engine`; the fix is a
    rebuild, never `--downgrade`.
 3. generate-ota.sh signs incrementals with key files only; managed signing needs a payload signer
    option there when the HSM path is chosen.
 4. The channel manifest is separate from the shared schemaVersion 2 install manifest
    (`publish-update-manifest.ts`); move the writer upstream with the updater.
-5. Manifests carry no expiry, so a replay can withhold updates; an enforced `expiresAt` needs
-   scheduled re-signing.
+5. Manifests carry a `sequence` but no expiry, so a replay of the current manifest can withhold a
+   newer one; an enforced `expiresAt` needs scheduled re-signing.
 6. Resume on Reboot and the updater's SELinux domain need stallion verification before overnight
    restarts.

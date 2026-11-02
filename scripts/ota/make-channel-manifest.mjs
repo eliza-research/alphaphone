@@ -2,7 +2,7 @@
 /**
  * Write one update channel manifest for Alpha Phone A/B OS updates (docs/runbooks/ota-updates.md).
  *
- *   node scripts/ota/make-channel-manifest.mjs --channel stable|beta --version VERSION \
+ *   node scripts/ota/make-channel-manifest.mjs --channel stable|beta --version VERSION --sequence N \
  *     --base-url URL --out NEW_FILE [--rollout-percent 0-100] FULL_OTA.zip [INCREMENTAL_OTA.zip ...]
  *
  * It reads each ota_from_target_files package and records what an update_engine client needs to
@@ -11,8 +11,10 @@
  * magic and payload_properties.txt FILE_SIZE), the four payload_properties.txt lines passed as
  * update_engine headers, and the zip's SHA-256 and size. Every package must update to the same
  * build; exactly one is full and each incremental starts from a different build. Any URL must be
- * HTTPS, except a loopback http URL for adb reverse (Track 1); a test-keys build is described only
- * for loopback, never for a CDN. rolloutPercent 0 halts the channel (kill switch).
+ * HTTPS, except a loopback http URL for adb reverse (Track 1); a test-keys or dev-keys build is
+ * described only for loopback, never for a CDN. rolloutPercent 0 halts the channel (kill switch).
+ * sequence orders the channel's signed manifests: the updater keeps the highest it has accepted and
+ * refuses any lower one, so a replayed earlier manifest cannot undo a later halt.
  *
  * The manifest is written unsigned; signing it (a detached signature over the exact bytes) is the
  * release owner's offline step. Nothing is uploaded, signed or applied here.
@@ -76,10 +78,11 @@ async function describe(file, baseUrl) {
 }
 
 /** The channel manifest for `otas`; throws with every problem found. */
-export async function channelManifest({ channel, version, baseUrl, rolloutPercent = 100, otas }) {
+export async function channelManifest({ channel, version, sequence, baseUrl, rolloutPercent = 100, otas }) {
   const problems = [];
   if (!CHANNELS.includes(channel)) problems.push(`channel must be one of ${CHANNELS.join(", ")}`);
   if (!VERSION.test(version ?? "")) problems.push("version must be a plain token such as 0.1.0 or lab-20261102");
+  if (!Number.isSafeInteger(sequence) || sequence < 1) problems.push("sequence must be a positive integer");
   if (!Number.isInteger(rolloutPercent) || rolloutPercent < 0 || rolloutPercent > 100) problems.push("rollout percent must be an integer from 0 to 100");
   if (!otas?.length) problems.push("at least one OTA package is required");
   const base = URL.canParse(baseUrl) ? new URL(baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`) : null;
@@ -99,13 +102,14 @@ export async function channelManifest({ channel, version, baseUrl, rolloutPercen
   const sources = updates.map(update => update.from).filter(Boolean);
   if (new Set(sources).size !== sources.length) problems.push("two incremental packages start from the same build");
   if (sources.includes(build.fingerprint)) problems.push("an incremental package starts from the build it updates to");
-  if (build.fingerprint.endsWith("/test-keys") && !loopback) problems.push("a test-keys build is described only for a loopback URL, never a CDN");
+  if (/\/(test|dev)-keys$/.test(build.fingerprint) && !loopback) problems.push("a test-keys or dev-keys build is described only for a loopback URL, never a CDN");
   if (problems.length) throw new Error(problems.join("\n"));
   return {
     schema: 1,
     channel,
     device: build.device,
     version,
+    sequence,
     buildFingerprint: build.fingerprint,
     buildDateUtc: build.dateUtc,
     securityPatch: build.securityPatch,
@@ -114,18 +118,19 @@ export async function channelManifest({ channel, version, baseUrl, rolloutPercen
   };
 }
 
-const USAGE = "Usage: node scripts/ota/make-channel-manifest.mjs --channel stable|beta --version VERSION --base-url URL --out NEW_FILE [--rollout-percent N] FULL_OTA.zip [INCREMENTAL_OTA.zip ...]";
+const USAGE = "Usage: node scripts/ota/make-channel-manifest.mjs --channel stable|beta --version VERSION --sequence N --base-url URL --out NEW_FILE [--rollout-percent N] FULL_OTA.zip [INCREMENTAL_OTA.zip ...]";
 
 async function main(argv) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { channel: { type: "string" }, version: { type: "string" }, "base-url": { type: "string" }, out: { type: "string" }, "rollout-percent": { type: "string", default: "100" } },
+    options: { channel: { type: "string" }, version: { type: "string" }, sequence: { type: "string" }, "base-url": { type: "string" }, out: { type: "string" }, "rollout-percent": { type: "string", default: "100" } },
   });
   if (!values.out || !values["base-url"]) throw new Error(USAGE);
   const manifest = await channelManifest({
     channel: values.channel,
     version: values.version,
+    sequence: /^\d+$/.test(values.sequence ?? "") ? Number(values.sequence) : NaN,
     baseUrl: values["base-url"],
     rolloutPercent: /^\d+$/.test(values["rollout-percent"]) ? Number(values["rollout-percent"]) : NaN,
     otas: positionals,

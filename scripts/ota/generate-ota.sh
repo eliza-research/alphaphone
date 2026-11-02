@@ -12,9 +12,9 @@
 # release key.
 #
 # It refuses a missing input, an existing output, a target that is not A/B, a source that is the
-# target, and a key that is not the update_engine payload key of the target and the source (the
-# installed build accepts only a payload signed with its own key). It passes no wipe, downgrade or
-# timestamp override option and accepts no other argument.
+# target, and a key whose certificate is not in SYSTEM/etc/security/otacerts.zip of the target and
+# the source (update_engine verifies payloads against the running build's otacerts.zip). It passes
+# no wipe, downgrade or timestamp override option and accepts no other argument.
 set -euo pipefail
 
 usage='Usage: bash scripts/ota/generate-ota.sh --releasetools DIR --package-key KEY --target-files ZIP --out NEW_ZIP [--from ZIP]'
@@ -50,9 +50,17 @@ fi
 misc_info=$(unzip -p "$target" META/misc_info.txt) || refuse "$target has no META/misc_info.txt"
 grep -qx 'ab_update=true' <<<"$misc_info" || refuse "$target is not an A/B target-files"
 signer=$(openssl x509 -in "$key.x509.pem" -noout -pubkey | openssl pkey -pubin) || refuse "$key.x509.pem is not a certificate"
+certs=$(mktemp -d)
+trap 'rm -rf "$certs"' EXIT
 for zip in "$target" ${from:+"$from"}; do
-  payload_key=$(unzip -p "$zip" SYSTEM/etc/update_engine/update-payload-key.pub.pem 2>/dev/null | openssl pkey -pubin 2>/dev/null) || payload_key=''
-  [[ -n $payload_key && $payload_key == "$signer" ]] || refuse "$key is not the update_engine payload key of $zip"
+  rm -rf "${certs:?}"/*
+  unzip -p "$zip" SYSTEM/etc/security/otacerts.zip >"$certs/otacerts.zip" 2>/dev/null &&
+    unzip -q "$certs/otacerts.zip" -d "$certs/trusted" 2>/dev/null || refuse "$zip has no SYSTEM/etc/security/otacerts.zip"
+  trusted=''
+  for cert in "$certs"/trusted/*; do
+    if [[ $(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null | openssl pkey -pubin 2>/dev/null) == "$signer" ]]; then trusted=1; fi
+  done
+  [[ -n $trusted ]] || refuse "$key is not in the otacerts.zip of $zip"
 done
 
 "$releasetools/ota_from_target_files" -p "$(dirname "$releasetools")" -k "$key" ${from:+-i "$from"} "$target" "$out"

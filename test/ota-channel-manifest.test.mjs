@@ -11,6 +11,7 @@ import { channelManifest } from "../scripts/ota/make-channel-manifest.mjs";
 
 const SCRIPT = path.resolve(import.meta.dirname, "../scripts/ota/make-channel-manifest.mjs");
 const LAB = "Alpha/alpha_stallion_phone/stallion:17/CP2A.260605.016/eng.shaw:userdebug/test-keys";
+const DEV = "Alpha/alpha_stallion_phone/stallion:17/CP2A.261005.001/42:user/dev-keys";
 const RELEASE = "Alpha/alpha_stallion_phone/stallion:17/CP2A.261005.001/42:user/release-keys";
 const PREVIOUS = "Alpha/alpha_stallion_phone/stallion:17/CP2A.261005.001/41:user/release-keys";
 const PAYLOAD = Buffer.concat([Buffer.from("CrAU"), Buffer.alloc(60, 7)]);
@@ -42,7 +43,7 @@ function ota(dir, name, { post = RELEASE, pre = null, offset = OFFSET, fileSize 
   return file;
 }
 
-const options = (otas, overrides = {}) => ({ channel: "stable", version: "0.1.0", baseUrl: "https://updates.example/alpha/stallion/0.1.0", otas, ...overrides });
+const options = (otas, overrides = {}) => ({ channel: "stable", version: "0.1.0", sequence: 1, baseUrl: "https://updates.example/alpha/stallion/0.1.0", otas, ...overrides });
 
 test("describes a full and an incremental package for update_engine", async t => {
   const dir = temporary(t);
@@ -55,6 +56,7 @@ test("describes a full and an incremental package for update_engine", async t =>
     channel: "stable",
     device: "stallion",
     version: "0.1.0",
+    sequence: 1,
     buildFingerprint: RELEASE,
     buildDateUtc: 1793000000,
     securityPatch: "2026-10-05",
@@ -75,12 +77,13 @@ test("describes a full and an incremental package for update_engine", async t =>
   assert.equal((await channelManifest(options([full], { rolloutPercent: 0 }))).rolloutPercent, 0);
 });
 
-test("serves a test-keys build only over loopback", async t => {
+test("serves a test-keys or dev-keys build only over loopback", async t => {
   const dir = temporary(t);
   const lab = ota(dir, "ota.zip", { post: LAB });
   const manifest = await channelManifest(options([lab], { channel: "beta", version: "lab-20261102", baseUrl: "http://127.0.0.1:8000" }));
   assert.equal(manifest.updates[0].url, "http://127.0.0.1:8000/ota.zip");
-  await assert.rejects(channelManifest(options([lab])), /test-keys build is described only for a loopback URL/);
+  await assert.rejects(channelManifest(options([lab])), /test-keys or dev-keys build is described only for a loopback URL/);
+  await assert.rejects(channelManifest(options([ota(dir, "dev.zip", { post: DEV })])), /test-keys or dev-keys build is described only for a loopback URL/);
   await assert.rejects(channelManifest(options([lab], { baseUrl: "http://updates.example/" })), /must be https, or http on a loopback/);
   await assert.rejects(channelManifest(options([lab], { baseUrl: "https://user:pass@updates.example/" })), /must not carry credentials/);
 });
@@ -98,19 +101,20 @@ test("refuses packages update_engine could not stream as described", async t => 
     [[ota(dir, "self.zip", { pre: RELEASE }), full], /starts from the build it updates to/],
   ];
   for (const [otas, problem] of cases) await assert.rejects(channelManifest(options(otas)), problem);
-  await assert.rejects(channelManifest(options([full], { rolloutPercent: 101, channel: "nightly", version: "../x" })), error =>
-    ["channel must be one of stable, beta", "version must be a plain token", "rollout percent must be an integer"].every(text => error.message.includes(text)));
+  await assert.rejects(channelManifest(options([full], { rolloutPercent: 101, channel: "nightly", version: "../x", sequence: 0 })), error =>
+    ["channel must be one of stable, beta", "version must be a plain token", "sequence must be a positive integer", "rollout percent must be an integer"].every(text => error.message.includes(text)));
 });
 
 test("the command writes a new manifest file and never overwrites one", t => {
   const dir = temporary(t);
   const full = ota(dir, "ota.zip");
   const out = path.join(dir, "stable.json");
-  const run = () => spawnSync(process.execPath, [SCRIPT, "--channel", "stable", "--version", "0.1.0", "--base-url", "https://updates.example/r/", "--rollout-percent", "5", "--out", out, full], { encoding: "utf8" });
+  const run = () => spawnSync(process.execPath, [SCRIPT, "--channel", "stable", "--version", "0.1.0", "--sequence", "3", "--base-url", "https://updates.example/r/", "--rollout-percent", "5", "--out", out, full], { encoding: "utf8" });
   const first = run();
   assert.equal(first.status, 0, first.stderr);
   const written = JSON.parse(fs.readFileSync(out, "utf8"));
   assert.equal(written.rolloutPercent, 5);
+  assert.equal(written.sequence, 3);
   assert.equal(written.updates[0].url, "https://updates.example/r/ota.zip");
   const second = run();
   assert.equal(second.status, 1);
