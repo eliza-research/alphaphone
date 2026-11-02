@@ -340,16 +340,26 @@ surfaces started it. A tap while one runs starts nothing beside it and never rep
 only a tap on the same surface, behind an attempt that fails first, retries. The plugin downloads at most
 `sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
-because Android would otherwise accept a same-versionCode reinstall. Only then does it drop the
-session that surface created earlier and the owner left unanswered, and open a session for this
-package, so a tap refused before that point leaves the earlier session. No tap touches another surface's session, and a
-session left by a killed process or a closed surface stays until Android expires it. Closing the
+because Android would otherwise accept a same-versionCode reinstall. Only then does it open a session for this
+package. A session left unsealed by a killed process stays until Android expires it. Closing the
 surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
-in front, so one that arrives while the screen is locked or another app is open waits and opens when
-the surface that started the install is resumed, and a tap while it waits changes nothing; another of
-Alpha's surfaces never opens it. A dismissed Android confirmation downloads again on the next tap.
+in front, so one that arrives while the screen is locked or another app is open waits and opens once when
+the surface that handed the session to Android is resumed, and a tap while it waits changes nothing.
+
+A committed session fences every later tap, on any surface and across restarts, because the fence is
+Android's own list (`getMySessions`): a commit seals the session, and Android drops it at its terminal
+status (success or any failure, cancel included), whether or not that status reached Alpha, so a finished
+install, or a status lost while Alpha was dead, frees the next tap. A pending confirmation is not terminal.
+While a session is listed nothing abandons, replaces or retries it, and nothing happens without a tap.
+A tap downloads nothing: it stays quiet while Android works on the session (or validates a commit from this
+process), and otherwise commits the same session again, which Android documents after a reboot and which,
+in its source, re-sends the confirmation, so the owner can always answer one left with no status (the
+confirmation activity destroyed without finishing, which Home or Alpha's own `singleTask` relaunch can do).
+That tap's surface opens the answer; the staged build may be older than the manifest's offer, because
+Android lists no version, and cancelling it frees the next tap for the new one. The session stays fenced
+if a process dies between commit and closing the session, since Android then reports it active until a reboot.
 
 Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
 installed versionCode and signing it with the installed app's key, then upload the APK before the

@@ -25,7 +25,7 @@ test('the download is admitted only at its declared size and SHA-256',()=>{
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('the update flow runs one attempt per process, keeps Android\'s confirmation for the bridge that started it, opens it once, and settles every failure quietly',()=>{
+test('the update flow runs one attempt per process, fences a session Android still holds, keeps its confirmation for the bridge that asked, opens it once, and settles every failure quietly',()=>{
  const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.lastIndexOf('}');
  const deadline='UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(6)';
  const signer=plugin.match(/^ *SystemFacts\.fact\(facts,"appSigner".*$/m)?.[0];
@@ -53,9 +53,11 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('Android installs only the offered newer build of this package, in place of this plugin\'s own earlier session',()=>{
- const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','session.fsync(out)','updateSession=id;','session.commit(','updatesCommitted.incrementAndGet();','updating.set(false);}\n'].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, size, SHA-256 and the archive are admitted before any session changes, a new session\'s status can only arrive once it is this plugin\'s, and an attempt counts its commit before letting go');
+test('Android installs only the offered newer build of this package, and only when Android holds no sealed session of Alpha\'s',()=>{
+ const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','session.fsync(out)','commitUpdate(session,id);','updating.set(false);}\n','updateOwner=this;updateSession=id;','session.commit(','updatesCommitted.incrementAndGet();'].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session\'s status can only arrive once it has its owner, and a commit is counted before its attempt lets go');
+ // No path abandons a session Android may still finish: only a commit that failed gives up what it staged.
+ assert.equal(plugin.match(/abandonSession\(/g).length,1);
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
