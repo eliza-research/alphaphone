@@ -327,9 +327,9 @@ public final class AlphaDevicePlugin extends Plugin {
   * versionCode, above the installed one. Android shows its own confirmation and installs only an APK signed
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
   * per process: a tap while one runs on another bridge, or that a commit overtook while it waited, changes nothing;
-  * queued behind one that failed first, it retries. A session that can still install is never abandoned, replaced or
-  * retried: a tap only opens its confirmation again, and only with no live owner for it does a tap commit it again so
-  * Android sends one. The one session a tap gives up is one a reboot restored committed.
+  * queued behind one that failed first, it retries. A session Android lists as sealed is never abandoned, replaced or retried:
+  * a tap only opens its confirmation again, and only with no live owner for it does a tap commit it again so Android sends one,
+  * never for one a reboot restored committed. Only a stage or commit of this attempt's own that failed gives up what it staged.
   */
  @PluginMethod public void installUpdate(PluginCall call){
   if(!getContext().getPackageManager().canRequestPackageInstalls()){
@@ -352,14 +352,7 @@ public final class AlphaDevicePlugin extends Plugin {
      // Android's own list is the fence, so no process can lose it: a commit seals the session, and Android drops it at
      // its terminal status, whether or not that status reached Alpha. An unsealed session of a killed process never fences.
      PackageInstaller.SessionInfo pending=null;
-     for(PackageInstaller.SessionInfo listed:installer.getMySessions()){
-      if(!listed.isSealed())continue;
-      // Committed at progress 0 reads only after a reboot: staging counts before a commit is marked, and only the mark is
-      // saved. Android 11 and later cannot install it and can die on its commit, so the owner's tap gives it up. Nothing is
-      // running on it: a confirmation or an install needs a commit this boot, and no tap makes one.
-      if(listed.isCommitted()&&listed.getProgress()==0f)installer.abandonSession(listed.getSessionId());
-      else if(pending==null)pending=listed;
-     }
+     for(PackageInstaller.SessionInfo listed:installer.getMySessions())if(listed.isSealed()){pending=listed;break;}
      if(pending!=null){
       throwIfDestroyed();
       boolean ours=pending.getSessionId()==updateSession;
@@ -375,7 +368,9 @@ public final class AlphaDevicePlugin extends Plugin {
        // No confirmation is held. A live owner's status is still due, however long Android takes. Otherwise only a commit makes
        // Android send one: of a session it marked committed (a restart or the owner's destroy lost the status), or of one a
        // reboot restored unmarked. Unmarked and created this boot, Android is validating it: Android never moves a non-staged session's updatedMillis.
-       else if((owner==null||!ours)&&(pending.isCommitted()||pending.getUpdatedMillis()<System.currentTimeMillis()-android.os.SystemClock.elapsedRealtime()))try(PackageInstaller.Session session=installer.openSession(pending.getSessionId())){commitUpdate(session,pending.getSessionId());}
+       // Marked with no progress is one a reboot restored, and no tap commits or gives it up: Android 11 and later cannot install it and can die on its
+       // commit, nothing fences Android 10's install of it, and a restored mark is no receipt. From 13 a read during validation returns that pair too, and the next tap reads 0.8.
+       else if((owner==null||!ours)&&(pending.isCommitted()?pending.getProgress()>0f:pending.getUpdatedMillis()<System.currentTimeMillis()-android.os.SystemClock.elapsedRealtime()))try(PackageInstaller.Session session=installer.openSession(pending.getSessionId())){commitUpdate(session,pending.getSessionId());}
       }
      }else{
       long deadline=System.nanoTime()+UPDATE_DEADLINE_NANOS;

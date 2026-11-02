@@ -18,7 +18,7 @@ public class PackageInstaller {
  public Runnable staging=()->{};
  /** Runs inside commit, once the session has its owner, to hold or fail it there. */
  public Runnable committing=()->{};
- /** Runs as Android answers getMySessions, to destroy a bridge at that moment. */
+ /** Runs as Android answers getMySessions, while each read waits on its session's lock: to destroy a bridge at that moment, or to let validation end. */
  public volatile Runnable listing=()->{};
  public boolean listDown,infoDown;
  private int next=40;
@@ -30,15 +30,16 @@ public class PackageInstaller {
   public void setAppPackageName(String name){}
   public void setSize(long size){}
  }
+ /** What one read returned, not a view of the session. */
  public static class SessionInfo {
-  private final int id;private final Internal internal;
-  SessionInfo(int id,Internal internal){this.id=id;this.internal=internal;}
+  private final int id;private final boolean sealed,active,committed;private final float progress;private final long updated;
+  SessionInfo(int id,Internal internal,float progress){this.id=id;sealed=internal.sealed;active=internal.active>0;committed=internal.validated;this.progress=progress;updated=internal.updated;}
   public int getSessionId(){return id;}
-  public boolean isSealed(){return internal.sealed;}
-  public boolean isActive(){return internal.active>0;}
-  public boolean isCommitted(){return internal.validated;}
-  public float getProgress(){return internal.progress;}
-  public long getUpdatedMillis(){return internal.updated;}
+  public boolean isSealed(){return sealed;}
+  public boolean isActive(){return active;}
+  public boolean isCommitted(){return committed;}
+  public float getProgress(){return progress;}
+  public long getUpdatedMillis(){return updated;}
  }
  public class Session implements java.io.Closeable {
   private final int id;Session(int id){this.id=id;}
@@ -78,7 +79,14 @@ public class PackageInstaller {
  public void abandonSession(int id){if(!sessions.remove((Integer)id))throw new SecurityException("No such session");abandoned.add(id);}
  public int createSession(SessionParams params){sessions.add(++next);internals.put(next,new Internal());write();return next;}
  public Session openSession(int id){if(!sessions.contains(id))throw new SecurityException("No such session");internals.get(id).active++;return new Session(id);}
- public SessionInfo getSessionInfo(int id){if(infoDown)throw new RuntimeException("DeadSystemException");return sessions.contains(id)?new SessionInfo(id,internals.get(id)):null;}
+ /** generateInfoInternal: validation holds the session's lock up to its mark, and a read waits for that lock. From sdk 33 it takes progress ahead of the lock, so one that waited pairs the mark with the progress from before it; through sdk 32 it takes both under the lock. */
+ private SessionInfo read(int id,Runnable waiting){
+  Internal session=internals.get(id);
+  float progress=session.progress;
+  waiting.run();
+  return new SessionInfo(id,session,sdk>=33?progress:session.progress);
+ }
+ public SessionInfo getSessionInfo(int id){if(infoDown)throw new RuntimeException("DeadSystemException");return sessions.contains(id)?read(id,()->{}):null;}
  /** PackageInstallerService writing its session file. */
  public void write(){for(Internal session:internals.values())session.onDisk=session.validated;}
  /** A boot rereads that file: seals stay, a commit's mark is what was written, and progress, the count and an accept start over. */
@@ -88,9 +96,8 @@ public class PackageInstaller {
  }
  public java.util.List<SessionInfo> getMySessions(){
   if(listDown)throw new RuntimeException("DeadSystemException");
-  listing.run();
   java.util.List<SessionInfo> mine=new java.util.ArrayList<>();
-  for(int id:sessions)mine.add(new SessionInfo(id,internals.get(id)));
+  for(int id:new java.util.ArrayList<>(sessions))mine.add(read(id,listing));
   return mine;
  }
 }
