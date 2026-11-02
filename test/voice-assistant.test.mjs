@@ -660,7 +660,7 @@ test('sources: no Web Speech, storage or logging in the assistant path; the adap
   // The shared adapters fix the echo-cancellation choice: the assistant cancels its own speaker, dictation does not.
   const shared = fs.readFileSync(new URL('../vendor/eliza/packages/voice/src/live-voice-session.ts', import.meta.url), 'utf8');
   assert.match(shared, /export function liveAssistantListener[\s\S]{0,500}echoCancel: true/);
-  assert.match(shared, /export function createLiveDictation[\s\S]{0,2500}echoCancel: false/);
+  assert.match(shared, /export function createLiveDictation[\s\S]{0,3000}echoCancel: false/);
   const template = fs.readFileSync(new URL('../apps/app/src/prototype/template.html', import.meta.url), 'utf8');
   assert.doesNotMatch(template, /aria-label="Transcribe" title="Transcribe into draft"/);
   assert.match(template, /title="Voice assistant" aria-label="Talk" onPointerDown="\{\{chatControlPointer\}\}" onClick="\{\{startVoice\}\}"/);

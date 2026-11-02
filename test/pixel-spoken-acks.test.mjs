@@ -1551,7 +1551,7 @@ test(`busy hold over the speech socket: an idle Mute whose native mute ${how} en
    await f.clock.advance(boundMs-(unmuteAtMs??0)-1);
    assert.equal(f.renderChat()?.state,'listening');assert.deepEqual(n.mutes,[false,true],'nothing reopens while the mute is pending');
    await f.clock.advance(1);await f.clock.flush();
-  }
+  }else await f.clock.flush();
   assert.equal(f.renderChat(),null);
   assert.deepEqual(f.shell.messages,[]);assert.equal(n.stops,1,'the socket is retired once');
   f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
