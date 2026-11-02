@@ -56,6 +56,20 @@ test('a streaming route lost after it opened ends voice quietly and opens no rec
  }finally{f.close();await f.clock.flush();}
 });
 
+test('streaming speech that cannot confirm its cleanup is held for the speech stream, and AlphaVoiceCloud is not asked for it',async()=>{
+ const f=fixture(),create=f.box.createCloudStreamingSpeech;let refused=true,streamStops=0;
+ f.box.createCloudStreamingSpeech=input=>({...create(input),async speak(){throw Object.assign(Error('Cloud speech cleanup was not confirmed.'),{code:'speech-cleanup-unconfirmed'});},async stop(){streamStops++;if(refused)throw Error('Stream stop refused');}});
+ const plugin=()=>(f.stopPlaybackInputs||[]).filter(input=>input===undefined).length+(f.pluginCancels||0);
+ try{
+  await f.shell.startVoice();await f.clock.flush();const h=f.getHandlers();
+  h.onSpeechStart(0);h.onSpeechEnd(20);h.onSegment('A completed Cloud utterance.');await f.clock.advance(0);await f.clock.flush();
+  assert.equal(f.renderChat().state,'stopping','unconfirmed: the panel stays');assert.deepEqual(f.shell.messages,[]);
+  const asked=streamStops;assert.ok(asked>0,'the stream was asked');assert.equal(plugin(),0,'no other plugin stands in for it');
+  f.renderChat().stop();await f.clock.flush();assert.ok(streamStops>asked,'Stop asked the stream again');assert.equal(f.renderChat().state,'stopping');
+  refused=false;f.renderChat().stop();await f.clock.flush();assert.equal(f.renderChat(),null);assert.equal(plugin(),0);
+ }finally{refused=false;f.close();await f.clock.flush();}
+});
+
 test('stopping streaming Talk retires capture and never falls back to batch recording',async()=>{
  const f=fixture();
  try{
