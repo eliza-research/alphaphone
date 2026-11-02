@@ -96,6 +96,71 @@ test('Calendar reads bind the current grant and refuse a revoked source before r
  }finally{await f.close();}
 });
 
+const calendarAccount={...account,label:'owned@example.invalid',grantedCapabilities:['google.calendar.read']};
+const calendarInput=grantId=>({grantId,calendarId:'primary',timeMin:'2026-10-14T00:00:00Z',timeMax:'2026-10-16T00:00:00Z',timeZone:'UTC'});
+/** One normal read: the service lists sources, then reads each feed. */
+async function calendarTurn(f){const sources=await f.reader.calendarSources();await f.reader.calendarFeed(calendarInput(sources[0].grantId));return sources;}
+
+test('A repeated Calendar read reaches Google and the grant re-check, not the whole owner verification again',async()=>{
+ const f=await fixture();try{
+  f.setAccounts(()=>[calendarAccount]);
+  await calendarTurn(f);const first=f.calls.length;assert.ok(first<=6,`first read took ${first} Cloud calls`);
+  f.calls.length=0;await calendarTurn(f);
+  assert.deepEqual(f.calls.map(u=>u.pathname.split('/').at(-1)),['feed','accounts']);
+ }finally{await f.close();}
+});
+
+test('Calendar reads stay current: a revoked grant returns nothing and the next read verifies again',async()=>{
+ const f=await fixture();try{
+  f.setAccounts(()=>[calendarAccount]);const [source]=await calendarTurn(f);
+  f.setAfterRead(async()=>f.setAccounts(()=>[]));
+  await assert.rejects(f.reader.calendarFeed(calendarInput(source.grantId)),/permission changed/);
+  f.setAfterRead(async()=>{});f.calls.length=0;
+  assert.deepEqual(await f.reader.calendarSources(),[]);
+  assert.ok(f.calls.some(u=>u.pathname==='/api/v1/user'),'the next read verified the owner again');
+ }finally{await f.close();}
+});
+
+test('A calendar or account added during the shared minute still joins',async()=>{
+ const f=await fixture();try{
+  const owned={calendarId:'primary',summary:'Owned calendar',primary:true,selected:true,accessRole:'owner'};
+  f.setAccounts(()=>[calendarAccount]);f.setCalendars(()=>[{...owned,calendarId:'team',summary:'Team'}]);
+  const [source]=await f.reader.calendarSources();
+  f.setCalendars(()=>[{...owned,calendarId:'team',summary:'Team'},owned]);
+  assert.equal((await f.reader.calendarFeed(calendarInput(source.grantId))).calendarId,'primary');
+  const second='55555555-5555-4555-8555-555555555555';
+  f.setAccounts(()=>[calendarAccount,{...calendarAccount,connectionId:second,label:'second@example.invalid'}]);
+  await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(new Set((await f.reader.calendarSources()).map(row=>row.managedGoogleConnectionId)).size,2);
+ }finally{await f.close();}
+});
+
+test('Shared Calendar lookups last one minute, and concurrent reads make one',async()=>{
+ const f=await fixture(),now=Date.now;try{
+  f.setAccounts(()=>[calendarAccount]);
+  const [a,b]=await Promise.all([f.reader.calendarSources(),f.reader.calendarSources()]);assert.deepEqual(a,b);
+  assert.equal(f.calls.filter(u=>u.pathname==='/api/v1/user').length,1);
+  f.calls.length=0;const later=now()+61000;Date.now=()=>later;await f.reader.calendarSources();
+  assert.equal(f.calls.filter(u=>u.pathname.endsWith('/calendars')).length,1);
+ }finally{Date.now=now;await f.close();}
+});
+
+test('Another Cloud credential never reuses a Calendar lookup',async()=>{
+ const f=await fixture();try{
+  f.setAccounts(()=>[calendarAccount]);await calendarTurn(f);
+  f.credential.credentialId='66666666-6666-4666-8666-666666666666';await f.save();f.calls.length=0;
+  await f.reader.calendarSources();
+  assert.ok(f.calls.some(u=>u.pathname==='/api/v1/user'),'a new credential verified its own owner');
+ }finally{await f.close();}
+});
+
+test('Gmail reads keep their own owner verification on every read',async()=>{
+ const f=await fixture();try{
+  await f.reader.list({});f.calls.length=0;await f.reader.list({});
+  assert.ok(f.calls.some(u=>u.pathname==='/api/v1/user'));
+ }finally{await f.close();}
+});
+
 test('Calendar sources join the one merged agent feed when Google shows them, and only then',async()=>{
  const f=await fixture();try{
   f.setAccounts(()=>[{...account,label:'owned@example.invalid',grantedCapabilities:['google.calendar.read']}]);
