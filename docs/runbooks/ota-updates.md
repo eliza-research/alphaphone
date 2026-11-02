@@ -181,10 +181,10 @@ unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
 diff <(unzip -p tf-otacerts.zip | openssl x509 -noout -fingerprint -sha256) \
      <(unzip -p /abs/device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
 unzip -l "$TF" | grep -E 'SYSTEM_EXT/priv-app/ElizaOsUpdater/|SYSTEM_EXT/etc/(permissions/ElizaOsUpdater|default-permissions/default-permissions-ai.elizaos.updater|sysconfig/ElizaOsUpdater-sysconfig)'
-unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service | grep -v neverallow   # eliza_updater, never priv_app; confirm this path on the first target-files
+unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service | grep -v neverallow   # eliza_updater beside stock factory_ota_app and rilextensionservice_app, never priv_app; confirm this path on the first target-files
 unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_seapp_contexts | grep ai.elizaos.updater   # domain=eliza_updater
 unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_mac_permissions.xml \
-  | grep -o 'signature="[0-9a-f]*"><package name="ai.elizaos.updater"' \
+  | grep -o 'signature="[0-9a-f]*"><seinfo value="eliza_updater"' \
   | sed 's/.*signature="\([0-9a-f]*\)".*/\1/' | xxd -r -p | sha256sum   # the updater signer's digest below
 unzip -p "$TF" SYSTEM_EXT/priv-app/ElizaOsUpdater/ElizaOsUpdater.apk > /abs/image-updater.apk
 apksigner verify --print-certs /abs/image-updater.apk    # SDK build-tools or $ANDROID_HOST_OUT/bin
@@ -196,8 +196,8 @@ apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-
 ```
 
 Stop unless: the updater's APK, allowlist, default-permissions and sysconfig files are all listed;
-the compiled system_ext policy gives `update_engine_service` to `eliza_updater` and no `priv_app`
-domain; `system_ext_seapp_contexts` maps `ai.elizaos.updater` to `eliza_updater`; the certificate
+the compiled system_ext policy gives `update_engine_service` to `eliza_updater` beside the stock
+`factory_ota_app` and `rilextensionservice_app` rows, and to no `priv_app` domain; `system_ext_seapp_contexts` maps `ai.elizaos.updater` to `eliza_updater`; the certificate
 digest in `system_ext_mac_permissions.xml` equals the updater APK's signer digest, because a mismatch
 leaves the updater in `priv_app` with no `update_engine`;
 the updater APK holds this `CHANNEL_KEY` and `CHANNEL_MANIFEST_URL`; `ab_update=true` and `virtual_ab=true`; the fingerprint carries this build's `BUILD_NUMBER`; every `ro.<partition>.build.date.utc` (system,
@@ -355,14 +355,16 @@ sleep 20                                                  # the check reaches th
 adb -s "$SERIAL" logcat -d | grep -E 'avc: denied.*(update_engine|eliza_updater)|ElizaOsUpdater'   # no denial, no "Update run ended early"
 adb -s "$SERIAL" shell su 0 content call --uri content://ai.elizaos.updater.status --method status   # state=up-to-date
 adb -s "$SERIAL" exec-out su 0 cat /sys/fs/selinux/policy > /abs/device-policy
-m sepolicy-analyze   # in "$AOSP_SOURCE"; no output and exit 0 means no other privileged app reaches update_engine
-"$ANDROID_HOST_OUT/bin/sepolicy-analyze" /abs/device-policy neverallow -n 'neverallow { priv_app priv_app_36 } update_engine_service:service_manager find; neverallow { priv_app priv_app_36 } update_engine:binder call;'
+m sepolicy-analyze   # in "$AOSP_SOURCE"; no output and exit 0 means no app domain outside this list reaches update_engine
+"$ANDROID_HOST_OUT/bin/sepolicy-analyze" /abs/device-policy neverallow -n 'neverallow { appdomain -eliza_updater -rilextensionservice_app -system_app -gmscore_app -factory_ota_app } update_engine:binder call;'
 ```
 
 Pass: the other slot, the new date and fingerprint, Alpha is HOME with the owner still signed in and
 their data present, `--merge` exited 0, the three updater permissions granted, a `cacerts` count above
 0, `eliza_updater`, no `update_engine` or `eliza_updater` denial, no `Update run ended early`,
-`state=up-to-date`, and `sepolicy-analyze` silent with exit 0. After
+`state=up-to-date`, and `sepolicy-analyze` silent with exit 0. Its list is `eliza_updater` and the four
+stock app domains that hold `update_engine:binder call` in the CP3A stallion policy; any other holder,
+`priv_app` included, prints a line and exits non-zero. The stock four keep their access (Open point 9). After
 `--merge`, that state proves the signature, the embedded key, TLS on the job's network and the JSON
 parsing on the phone; during a merge the job writes it without reading the channel. Anything else
 means the key, the URL or the policy is wrong, and only another cable OTA corrects them, so fix it
@@ -559,7 +561,7 @@ module.
 | Privileged permissions | `REBOOT` only (`privapp_allowlist`). |
 | Other permissions | `INTERNET`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, and the runtime permissions `POST_NOTIFICATIONS` and `READ_PHONE_STATE`. `DefaultPermissionGrantPolicy` grants those two from `/system_ext/etc/default-permissions` (`fixed="false"`) when the fingerprint changes, so nothing prompts; the app has no screen to prompt from. It has no launcher entry, so permission hibernation exempts it. If the owner revokes `READ_PHONE_STATE` in Settings, **Restart** does nothing until it is granted again. |
 | Never | `READ_PRIVILEGED_PHONE_STATE` (it also exposes persistent device identifiers, which this client never reads), `RECOVERY`, `ACCESS_CACHE_FILESYSTEM` or `/data/ota_package` (the payload streams by URL), `INSTALL_PACKAGES`, `WRITE_SECURE_SETTINGS`. |
-| SELinux | `update_engine` checks no caller itself and stock `priv_app` cannot reach it, so the updater has its own domain, `eliza_updater`, in system_ext private policy. It is `app_domain`, `net_domain` and `app_api_service`, the shape of stock `adservices`, plus `update_engine_service` and Binder both ways; it inherits none of `priv_app_all`. `mac_permissions.xml` gives the seinfo to the one package under its signer, and `seapp_contexts` maps name, seinfo and `isPrivApp` to the domain, ahead of every target-SDK row. Two `neverallow priv_app_all` rules run in `sepolicy_neverallows` at every image build, so the generic grant cannot return. |
+| SELinux | `update_engine` checks no caller itself and stock `priv_app` cannot reach it, so the updater has its own domain, `eliza_updater`, in system_ext private policy. It is `app_domain`, `net_domain` and `app_api_service`, the shape of stock `adservices`, plus `update_engine_service` and Binder both ways; it inherits none of `priv_app_all`. `mac_permissions.xml` gives the seinfo to its signer, and `seapp_contexts` maps name, seinfo and `isPrivApp` to the domain, ahead of every target-SDK row, so another package under that signer carries an unused seinfo. Two `neverallow priv_app_all` rules run in `sepolicy_neverallows` at every image build, so the generic grant cannot return. Four stock app domains outside `priv_app_all` keep their own paths (Open point 9). |
 | Platform API | `android.os.UpdateEngine`: `bind`, `applyPayload(url, offset, size, headers)`, `unbind`. `TelecomManager.isInCall`, `AppOpsManager.checkOpNoThrow`. |
 | Status | `content://ai.elizaos.updater.status`, `call("status")`, guarded by `ai.elizaos.updater.permission.READ_STATUS` (`signature\|knownSigner`, bound to the launcher certificate) and re-checked in `call()`. |
 
@@ -647,7 +649,8 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
    device: Soong build, policy, grants, `update_engine` calls, the notification and how far a
    screen-off transfer gets between job runs (step 9). The `eliza_updater` policy has passed
    `checkpolicy`, `checkseapp` and `insertkeys` on a host against the android-17.0.0_r1 platform
-   policy only, without stallion's vendor policy.
+   policy, and its rules compile with neverallows on against the stock CP3A stallion CIL set, not the
+   generated tree.
 2. A build whose date is not newer than the device's is refused by `update_engine`; the fix is a
    rebuild, never `--downgrade`.
 3. generate-ota.sh signs incrementals with key files only; managed signing needs a payload signer
@@ -662,9 +665,16 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
    the first manifest's bytes.
 6. Resume on Reboot needs stallion verification before overnight restarts.
 7. `sign_target_files_apks` rewrites `*mac_permissions.xml` from dev certificates it reads relative to
-   its working directory and skips a missing one silently, so run release signing from the AOSP tree
-   and repeat the step 3 digest check on the signed target-files. A skipped rewrite leaves the
-   updater out of its domain, with no `update_engine`.
+   its working directory and skips a missing one silently. Release signing runs it from the otatools
+   root and refuses, before any OTA, a `*mac_permissions.xml` that still holds an AOSP dev certificate.
+   Confirm on the first run that otatools carries them at `build/make/target/product/security`, and
+   repeat the step 3 digest check on the signed target-files: a `--map-key` source is not pinned, and
+   a skipped rewrite leaves the updater out of its domain, with no `update_engine`.
 8. Whether the APK lane's `alpha-update/v1` duplicates upstream's plugin-native-agent updater and
    ota-trust APK descriptors is a separate owner decision. The APK lane cannot share a fetch helper
    with this client: it runs in Alpha's process, built by Gradle, and this is a separate Soong app.
+9. Four stock app domains besides the updater reach `update_engine` in the CP3A stallion policy:
+   `rilextensionservice_app`, `system_app`, `gmscore_app` and `factory_ota_app`. The first binds
+   `com.google.android.rilextension` by name and `isPrivApp` with no seinfo, and the source lock lists
+   `system_ext/priv-app/ril-extension/ril-extension.apk`. Owner decision: accept that stock path, or
+   strip its rules from the extracted `sepolicy_ext.cil` through the existing vendor patch.

@@ -158,14 +158,17 @@ partly presigned APEX. Every certificate it signs with must match a reviewed dig
 `otaCertificateSha256`, and every other one (`shared`, `media`, `networkstack`, `sdk_sandbox`,
 `bluetooth`, `nfc`, `apex` when an APEX is re-signed, and each `--map-key` name) matches
 `signer.releaseCertificates.<name>`. All of these are `UNSET` until reviewed, so a key bundle
-carrying a public AOSP test key under a release name is refused. It then runs `sign_target_files_apks -o -d KEYS` with
+carrying a public AOSP test key under a release name is refused. It then runs `sign_target_files_apks -o -d KEYS` from the
+otatools root, the parent of `--releasetools`, where its `*mac_permissions.xml` rewrite reads the development certificates, with
 `-k build/make/target/product/security/bluetooth=KEYS/bluetooth` and the same for `nfc`, an
 `--extra_apex_payload_key NAME=KEYS/apex_payload.pem` and `--extra_apks NAME=KEYS/apex` for
 every APEX that is not presigned, and the `avb` key and algorithm for vbmeta and each chained
 partition. Before any OTA is built it runs `apksigner verify --print-certs` on every APK and
 APEX in the signed target-files that is not presigned and refuses any signer that is not a
 release certificate from the key directory (a remaining test, development or unknown key), and
-any re-signed APEX without the release payload public key. `sign_target_files_apks` also receives `--package_key KEYS/releasekey` (and, under managed
+any re-signed APEX without the release payload public key. It also refuses any `*mac_permissions.xml` that still holds an AOSP
+development certificate; other signers there stay, because a vendor file names certificates this job never re-signs.
+`sign_target_files_apks` also receives `--package_key KEYS/releasekey` (and, under managed
 signing, the payload signer), so an embedded boot OTA (`VENDOR/` or `SYSTEM/boot_otas/*.zip`)
 is re-signed with the release key rather than the build's development certificate. Only APKs
 packaged in the target-files need a key mapping; `apkcerts.txt` also lists test and CTS packages
