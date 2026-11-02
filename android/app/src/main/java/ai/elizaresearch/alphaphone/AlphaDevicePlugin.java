@@ -224,29 +224,54 @@ public final class AlphaDevicePlugin extends Plugin {
  private static final String UPDATE_STATUS="ai.elizaresearch.alphaphone.UPDATE_STATUS";
  /** Downloads run here, never on the problem-log worker. */
  private final java.util.concurrent.ExecutorService updateWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+ /** The session this process last handed to Android. Every bridge's receiver hears every session's status, and only updateOwner acts on it. */
+ private static volatile int updateSession;
  /**
-  * Android's request for the owner's confirmation, kept until Alpha is resumed: Android silently drops an
-  * activity Alpha starts while it is not in front (screen locked during the download, another app open).
+  * Android's request for the owner's confirmation of updateSession, kept until that session ends: Android offers no way to
+  * ask again but a second commit, which spoils the session's active count, so a tap after a dismissal opens this same request.
   */
- private volatile Intent updateConfirm;
- /** The session this plugin last handed to Android. Every bridge's receiver hears every session's status, and only updateOwner acts on it. */
- private volatile int updateSession;
- /** The bridge that last handed a session to Android, until its destroy: the one that opens that session's confirmation. Not a fence: installUpdate reads that from Android. */
+ private static volatile Intent updateConfirm;
+ /** updateConfirm waits for its owner: Android silently drops an activity Alpha starts while it is not in front (screen locked during the download, another app open). */
+ private static volatile boolean updateDue;
+ /** updateConfirm has started and its owner has not resumed since, so the confirmation may still be up, in a task another bridge cannot see. */
+ private static volatile boolean updateOpen;
+ /** System.nanoTime() of Alpha's last exchange with Android on this session (a commit, a confirmation opened, or the owner's return from one), 0 with none. */
+ private static volatile long updateAsked;
+ /** The bridge that last committed a session or opened its confirmation, until its destroy: the one that opens what Android asks next. Not a fence: installUpdate reads that from Android. */
  private static volatile AlphaDevicePlugin updateOwner;
  /** Android's status for the owner's update session. A request for confirmation is not an end; any other status is Android's last for the session, and a confirmation kept for it would open on nothing. */
  private final android.content.BroadcastReceiver updateStatus=new android.content.BroadcastReceiver(){
   @Override public void onReceive(Context context,Intent intent){
    if(updateOwner!=AlphaDevicePlugin.this||intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID,-1)!=updateSession)return;
-   updateConfirm=intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)==PackageInstaller.STATUS_PENDING_USER_ACTION?androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class):null;
-   if(getActivity().getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))confirmUpdate();
+   updateDue=intent.getIntExtra(PackageInstaller.EXTRA_STATUS,PackageInstaller.STATUS_FAILURE)==PackageInstaller.STATUS_PENDING_USER_ACTION;
+   updateConfirm=updateDue?androidx.core.content.IntentCompat.getParcelableExtra(intent,Intent.EXTRA_INTENT,Intent.class):null;
+   if(inFront())confirmUpdate();
   }
  };
- /** Shows the kept confirmation once, on the main thread like updateStatus and handleOnResume. */
- private void confirmUpdate(){
-  Intent confirm=updateConfirm;updateConfirm=null;
-  if(confirm!=null)try{getActivity().startActivity(confirm);}catch(RuntimeException unavailable){/* The next tap asks Android again. */}
+ private boolean inFront(){return getActivity().getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED);}
+ /**
+  * Android has moved past asking the owner about this session, or the session is gone: a confirmation opened now could end an
+  * install already accepted. Progress is what survives a restart and a second commit: staging counts 0.8, and only after an
+  * accept does Android add 0.1, ahead of marking the stage directory in use (AOSP 10 to 17). isActive() reads an accepted session
+  * only from Android 14, and never once it was committed twice. A developer-verification request (Android 17) comes on an active session.
+  */
+ private static boolean pastConfirmation(PackageInstaller.SessionInfo session,Intent confirm){
+  return session==null||session.getProgress()>0.8f||session.isActive()&&(confirm==null||!"android.content.pm.action.CONFIRM_DEVELOPER_VERIFICATION".equals(confirm.getAction()));
  }
- @Override protected void handleOnResume(){super.handleOnResume();confirmUpdate();}
+ /** Opens the kept confirmation once, never over one still open, on the main thread like updateStatus and handleOnResume. */
+ private void confirmUpdate(){
+  if(!updateDue||updateOpen)return;
+  updateDue=false;updateOpen=true;updateAsked=System.nanoTime();
+  try{getActivity().startActivity(updateConfirm);}catch(RuntimeException unavailable){updateOpen=false;/* The next tap opens it. */}
+ }
+ /** A resume follows a pause, so what this bridge opened above itself is gone: answered, or dismissed with no status. Time may have passed since Android asked for what it kept. */
+ @Override protected void handleOnResume(){
+  super.handleOnResume();
+  if(updateOwner!=this)return;
+  if(updateOpen){updateOpen=false;updateAsked=System.nanoTime();}
+  try{if(updateDue&&pastConfirmation(getContext().getPackageManager().getPackageInstaller().getSessionInfo(updateSession),updateConfirm))updateDue=false;}catch(RuntimeException unanswered){/* It opens as kept. */}
+  confirmUpdate();
+ }
  /** The update download in the cache, deleted once the session has its copy or the download is refused. */
  private java.io.File updateApk(){return new java.io.File(getContext().getCacheDir(),"alpha-update.apk");}
  /**
@@ -301,7 +326,7 @@ public final class AlphaDevicePlugin extends Plugin {
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
   * per process: a tap while one runs on another bridge, or that a commit overtook while it waited, changes nothing;
   * queued behind one that failed first, it retries. A session Android still holds is never abandoned, replaced or
-  * retried: a tap only asks Android again for its confirmation, and nothing asks without a tap.
+  * retried: a tap only opens its confirmation again, and only a process holding none commits it again so Android sends one.
   */
  @PluginMethod public void installUpdate(PluginCall call){
   if(!getContext().getPackageManager().canRequestPackageInstalls()){
@@ -325,12 +350,18 @@ public final class AlphaDevicePlugin extends Plugin {
      // its terminal status, whether or not that status reached Alpha. An unsealed session of a killed process never fences.
      PackageInstaller.SessionInfo pending=installer.getMySessions().stream().filter(PackageInstaller.SessionInfo::isSealed).findFirst().orElse(null);
      if(pending!=null){
+      Intent confirm=pending.getSessionId()==updateSession?updateConfirm:null;
       AlphaDevicePlugin owner=updateOwner;
-      // Active: Android is working and owes a status. Kept: its owner opens that confirmation once, on resume. Not yet
-      // committed: Android is validating this process's commit; with no owner it was left by a reboot, which Android
-      // lets an installer commit again. Otherwise it waits on the owner, and committing it again makes Android re-send
-      // the confirmation (a dismissal can end without a status), to this bridge if the last owner is gone or done.
-      if(!pending.isActive()&&(owner==null||owner.updateConfirm==null&&pending.isCommitted()))try(PackageInstaller.Session session=installer.openSession(pending.getSessionId())){commitUpdate(session,pending.getSessionId());}
+      long asked=updateAsked;
+      // A tap stays quiet once Android is past asking; for three seconds after Alpha's last exchange with it, which covers a
+      // status in flight, a start not yet covering Alpha (Android allows a pause 500 ms) and an accept not yet listed; while a
+      // confirmation may be up behind its owner; and while another bridge owes the one it kept. A start Android dropped frees itself.
+      if(!pastConfirmation(pending,confirm)&&(asked==0||System.nanoTime()-asked>=java.util.concurrent.TimeUnit.SECONDS.toNanos(3))&&(!updateOpen||owner==null||owner.inFront())&&(!updateDue||owner==this)){
+       if(confirm!=null){updateOwner=this;updateOpen=false;updateDue=true;getActivity().runOnUiThread(()->{if(inFront())confirmUpdate();});}
+       // This process holds no confirmation (a restart, or Android's first status never came), and only a commit makes
+       // Android send one. Not yet committed with an owner: Android is validating this process's commit.
+       else if(owner==null||pending.isCommitted())try(PackageInstaller.Session session=installer.openSession(pending.getSessionId())){commitUpdate(session,pending.getSessionId());}
+      }
      }else{
       long deadline=System.nanoTime()+UPDATE_DEADLINE_NANOS;
       javax.net.ssl.HttpsURLConnection connection=updateConnection(apkUrl);
@@ -358,10 +389,10 @@ public final class AlphaDevicePlugin extends Plugin {
  }
  /** Makes this bridge the session's owner before commit, because Android's status can arrive as soon as commit reaches it. */
  private void commitUpdate(PackageInstaller.Session session,int id){
-  updateOwner=this;updateSession=id;
+  updateOwner=this;updateSession=id;updateConfirm=null;updateDue=false;updateOpen=false;updateAsked=System.nanoTime();
   session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
   updatesCommitted.incrementAndGet();
  }
  /** Stops an update download too: disconnect only closes the raw socket, which Android allows on this main thread. A session outlives its owner, for a later tap on any bridge. */
- @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();javax.net.ssl.HttpsURLConnection active=updateActive;if(active!=null)active.disconnect();getContext().unregisterReceiver(updateStatus);if(updateOwner==this)updateOwner=null;super.handleOnDestroy();}
+ @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();javax.net.ssl.HttpsURLConnection active=updateActive;if(active!=null)active.disconnect();getContext().unregisterReceiver(updateStatus);if(updateOwner==this){updateOwner=null;updateDue=false;updateOpen=false;}super.handleOnDestroy();}
 }
