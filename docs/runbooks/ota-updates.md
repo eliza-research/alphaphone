@@ -63,10 +63,10 @@ unit remotely (step 9).
 | `AOSP_SOURCE` | The verified stallion tree the installed image came from, `vendor/alphaphone` staged (2026-10-24 evidence: `/home/shaw/Android/pixel10a-preparation/...`) |
 | Lunch target | The installed build's: `alpha_stallion_phone-cp2a-userdebug` |
 | Staged launcher APK | Signed by the same development key as the installed Alpha app |
-| `SERIAL` and the host the phone is attached to | That host serves the OTA (step 5) |
+| `SERIAL` and the host the phone is attached to | That host runs steps 1 and 5 to 8 and serves the OTA (step 5) |
 | Package key | The build's `default_system_dev_certificate`, normally `build/make/target/product/security/testkey` |
-| Alpha checkout on the builder | This branch's `scripts/ota/generate-ota.sh` |
-| `$ELIZA` on the builder | `packages/os` of Eliza `claude/os-updater-client-20261102` at commit `0422719df6`. The branch is not pushed, so copy it from the Mac: `git -C <eliza> archive 0422719df6 packages/os \| ssh <builder> tar -x -C "$ELIZA"`. Node and `unzip` are its only needs. Record the commit in the physical-product evidence |
+| `$ALPHA` on the builder | `scripts/ota/generate-ota.sh` of this branch, `claude/os-updater-alpha-20261102`. The branch is not pushed, so copy it from the Mac: `git -C <alpha> archive claude/os-updater-alpha-20261102 scripts/ota/generate-ota.sh \| ssh <builder> tar -x -C "$ALPHA"` |
+| `$ELIZA` on the builder | `packages/os` of Eliza `claude/os-updater-client-20261102` at commit `f423950273`. The branch is not pushed, so copy it from the Mac: `git -C <eliza> archive f423950273 packages/os \| ssh <builder> tar -x -C "$ELIZA"`. Node and `unzip` are its only needs. Record the commit in the physical-product evidence |
 | `CHANNEL_KEY` | Public half of the lab channel key, base64 Ed25519 SPKI DER. The owner or Root makes it offline (below). No key, no remote updates: stop before step 2a |
 | `CHANNEL_MANIFEST_URL` | The https URL baked into this image (section 2.4). Payload URLs live in each manifest and can change later; this one changes only through an OS update |
 
@@ -87,11 +87,24 @@ adb -s "$SERIAL" shell getprop ro.build.fingerprint     # .../eng.builde:userdeb
 adb -s "$SERIAL" shell getprop | grep -E 'ro\.([a-z_]+\.)?build\.date\.utc'   # the new build must be newer on every partition
 adb -s "$SERIAL" shell getprop ro.boot.slot_suffix      # note it (_a or _b)
 adb -s "$SERIAL" shell getprop ro.virtual_ab.enabled    # true
+adb -s "$SERIAL" shell getprop zygote.critical_window.minute                  # record it, empty or not
+adb -s "$SERIAL" shell 'su 0 sh -c "grep -h checkpoint= /vendor/etc/fstab.*"'  # record it: the /data line
 adb -s "$SERIAL" shell df -h /data                      # several GB free for the snapshot copy-on-write
-adb -s "$SERIAL" exec-out cat /system/etc/security/otacerts.zip > device-otacerts.zip
+adb -s "$SERIAL" exec-out cat /system/etc/security/otacerts.zip > /abs/device-otacerts.zip
 adb -s "$SERIAL" shell pm path ai.elizaresearch.alphaphone
+adb -s "$SERIAL" exec-out cat <path from pm path> > /abs/installed-alpha.apk
 adb -s "$SERIAL" shell dumpsys package ai.elizaresearch.alphaphone | grep -E 'versionCode|codePath'
 ```
+
+These run on the host the phone is attached to. When that is not the builder, copy
+`device-otacerts.zip` and `installed-alpha.apk` to the builder for step 3.
+
+The two recorded lines say what a boot failure looks like (step 8). With
+`zygote.critical_window.minute` empty or `off`, `zygote` is not a critical service, so a framework
+crash loop never reboots the phone by itself. A `checkpoint=` flag means `update_verifier` leaves the
+slot's success mark to the end of boot. Without one, `update_verifier` can mark the new slot before
+the framework starts, if this image runs it, and a framework failure would not fall back: tell the OS
+owner before step 6.
 
 ### 2a. Add the update client to the staged tree
 
@@ -100,7 +113,11 @@ two make lines from the product's `updater` block, after checking the channel ke
 updater does not compile, remove the two make lines and `rm -rf vendor/alphaphone/updater`: Soong
 parses every `Android.bp` in the tree, so the make lines alone do not take it out of the build.
 
+The parentheses make the guard stop a pasted block: at an interactive prompt it would otherwise print
+its error and the next line would still run.
+
 ```sh
+(
 : "${CHANNEL_KEY:?}" "${CHANNEL_MANIFEST_URL:?}"
 cd "$AOSP_SOURCE"
 cp -R "$ELIZA/packages/os/android/updater" vendor/alphaphone/updater
@@ -119,6 +136,8 @@ cat >> vendor/alphaphone/product.mk <<'EOF'
 PRODUCT_PACKAGES += ElizaOsUpdater
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += vendor/alphaphone/updater/sepolicy/private
 EOF
+)
+cd "$AOSP_SOURCE"
 source build/envsetup.sh
 lunch alpha_stallion_phone-cp2a-userdebug
 get_build_var SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS   # must list vendor/alphaphone/updater/sepolicy/private
@@ -150,17 +169,18 @@ sha256sum "$TF"
 
 ```sh
 unzip -p "$TF" META/misc_info.txt | grep -E '^(ab_update|virtual_ab|default_system_dev_certificate)='
-unzip -p "$TF" SYSTEM/build.prop | grep -E '^ro\.build\.fingerprint='
+unzip -p "$TF" SYSTEM/build.prop | grep -E '^ro\.system\.build\.fingerprint='
 unzip -p "$TF" SYSTEM/build.prop VENDOR/build.prop '*/etc/build.prop' | grep -E '^ro\.([a-z_]+\.)?build\.date\.utc='
 unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
 diff <(unzip -p tf-otacerts.zip | openssl x509 -noout -fingerprint -sha256) \
-     <(unzip -p device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
+     <(unzip -p /abs/device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
 unzip -l "$TF" | grep -E 'SYSTEM_EXT/priv-app/ElizaOsUpdater/|SYSTEM_EXT/etc/(permissions/ElizaOsUpdater|default-permissions/default-permissions-ai.elizaos.updater|sysconfig/ElizaOsUpdater-sysconfig)'
 unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service   # confirm this path on the first target-files
 unzip -p "$TF" SYSTEM_EXT/priv-app/ElizaOsUpdater/ElizaOsUpdater.apk > /abs/image-updater.apk
 aapt2 dump badging /abs/image-updater.apk | grep targetSdkVersion   # SDK build-tools or $ANDROID_HOST_OUT/bin
+aapt2 dump strings /abs/image-updater.apk | grep -F "${CHANNEL_KEY:?}"
+aapt2 dump strings /abs/image-updater.apk | grep -F "${CHANNEL_MANIFEST_URL:?}"
 unzip -p "$TF" PRODUCT/app/AlphaPhone/AlphaPhone.apk > /abs/image-alpha.apk
-adb -s "$SERIAL" exec-out cat <path from pm path> > /abs/installed-alpha.apk
 apksigner verify --print-certs /abs/image-alpha.apk      # SDK build-tools or $ANDROID_HOST_OUT/bin
 apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-256 digest required
 ```
@@ -168,7 +188,7 @@ apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-
 Stop unless: the updater's APK, allowlist, default-permissions and sysconfig files are all listed;
 the compiled system_ext policy holds the `update_engine_service` rule; the updater's
 `targetSdkVersion` is 37, because a lower one runs it in `priv_app_36`, which the grant does not cover;
-`ab_update=true` and `virtual_ab=true`; the fingerprint carries this build's `BUILD_NUMBER`; every `ro.<partition>.build.date.utc` (system,
+the updater APK holds this `CHANNEL_KEY` and `CHANNEL_MANIFEST_URL`; `ab_update=true` and `virtual_ab=true`; the fingerprint carries this build's `BUILD_NUMBER`; every `ro.<partition>.build.date.utc` (system,
 vendor, product, system_ext, odm, where present) is **greater** than the device's, because
 `update_engine` checks each partition (the 2026-10-24 evidence records an incremental build that kept an earlier timestamp; then
 rebuild so the build properties regenerate, never `--downgrade`); the target's `otacerts.zip`
@@ -176,14 +196,14 @@ holds the device's certificate (the running build verifies the payload against i
 copy replaces the installed update, otherwise the installed update stays; data is kept either way
 because the signer is the same.
 
-### 4. Generate the full OTA and its manifest (on the builder, from the Alpha checkout)
+### 4. Generate the full OTA and its manifest, then prove the channel (on the builder)
 
 `OTA_DIR` is a scratch directory on the builder; never reuse AOSP's `OUT_DIR` name, which a later `m`
 in the same shell would build into.
 
 ```sh
 OTA_DIR=/abs/ota-lab-$(date -u +%Y%m%dT%H%MZ); mkdir "$OTA_DIR"
-bash scripts/ota/generate-ota.sh --releasetools "$ANDROID_HOST_OUT/bin" \
+bash "$ALPHA/scripts/ota/generate-ota.sh" --releasetools "$ANDROID_HOST_OUT/bin" \
   --package-key "$AOSP_SOURCE/build/make/target/product/security/testkey" \
   --target-files "$TF" --out "$OTA_DIR/ota.zip"
 node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --version "lab-$(date -u +%Y%m%d)" --sequence 1 \
@@ -192,6 +212,45 @@ node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --
 
 Check `buildFingerprint` (test-keys, stallion) and `buildDateUtc` (greater than the device's) in
 `manifest.json`.
+
+Prove the channel key and URL now, while the phone is untouched. After step 7 the old slot is gone
+and a wrong value needs a second full build and cable OTA. Make a manifest that offers nothing. At
+rollout 0 nothing reads its URL:
+
+```sh
+node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --version "lab-$(date -u +%Y%m%d)" \
+  --sequence 1 --rollout-percent 0 --base-url https://updates.example/unused/ \
+  --out "$OTA_DIR/stallion-beta.json" "$OTA_DIR/ota.zip"
+```
+
+On the offline host, sign the exact bytes and verify before upload (OpenSSL 3):
+
+```sh
+openssl pkeyutl -sign -rawin -inkey channel-lab.pem -in stallion-beta.json -out stallion-beta.json.sig
+openssl pkey -in channel-lab.pem -pubout -out channel-lab.pub
+openssl pkeyutl -verify -rawin -pubin -inkey channel-lab.pub -in stallion-beta.json -sigfile stallion-beta.json.sig
+```
+
+Publish `stallion-beta.json` and its `.sig` at `$CHANNEL_MANIFEST_URL`. On a GitHub release keep it a
+**prerelease** with a fixed tag, created once:
+
+```sh
+gh release create os-channel --prerelease --repo eliza-research/alphaphone --title os-channel --notes ''
+gh release upload os-channel stallion-beta.json stallion-beta.json.sig --clobber --repo eliza-research/alphaphone
+```
+
+Back on the builder (OpenSSL 3), read both through the baked URL and verify them with the baked key:
+
+```sh
+curl -fsSL "$CHANNEL_MANIFEST_URL" -o "$OTA_DIR/m.json"
+curl -fsSL "$CHANNEL_MANIFEST_URL.sig" -o "$OTA_DIR/m.sig"
+printf %s "$CHANNEL_KEY" | base64 -d | openssl pkey -pubin -inform DER -out "$OTA_DIR/p.pub"
+openssl pkeyutl -verify -rawin -pubin -inkey "$OTA_DIR/p.pub" -in "$OTA_DIR/m.json" -sigfile "$OTA_DIR/m.sig"
+```
+
+Stop before step 5 unless both downloads succeed and this prints `Signature Verified Successfully`.
+Step 3 already tied these two values to the image. A wrong value means fixing the input and repeating
+steps 2a to 4.
 
 ### 5. Serve over adb reverse (on the host the phone is attached to)
 
@@ -245,6 +304,8 @@ in a call, wait.
 
 ### 7. Verify the slot switch
 
+If this wait has not returned 10 minutes after the reboot, stop it and go to step 8.
+
 ```sh
 adb -s "$SERIAL" wait-for-device
 adb -s "$SERIAL" shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
@@ -255,6 +316,7 @@ adb -s "$SERIAL" shell getenforce                         # Enforcing
 adb -s "$SERIAL" shell getprop ro.boot.verifiedbootstate  # orange, as before (unlocked)
 adb -s "$SERIAL" shell dumpsys package ai.elizaresearch.alphaphone | grep -E 'versionCode|codePath'
 adb -s "$SERIAL" shell su 0 update_engine_client --merge  # returns when the Virtual A/B merge is done
+echo "merge exit $?"                                      # 0
 ```
 
 The owner unlocks the phone once now. `BOOT_COMPLETED` comes after the first unlock and only that
@@ -268,18 +330,10 @@ adb -s "$SERIAL" shell dumpsys jobscheduler | grep -A3 ai.elizaos.updater
 adb -s "$SERIAL" shell ls /system/etc/security/cacerts | wc -l
 ```
 
-Prove the channel while the cable is still attached, because a failure after this shows nothing.
-On the builder, make a manifest that offers nothing. At rollout 0 nothing reads its URL. Sign and
-publish it as in step 9:
-
-```sh
-node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --version "lab-$(date -u +%Y%m%d)" \
-  --sequence 1 --rollout-percent 0 --base-url https://updates.example/unused/ \
-  --out "$OTA_DIR/stallion-beta.json" "$OTA_DIR/ota.zip"
-```
-
-The updater runs only inside its job, so read its domain while it runs. This is the one step here
-that starts something, a single check that reaches the channel; at rollout 0 it applies nothing:
+Prove the channel on the phone while the cable is still attached, because a failure after this shows
+nothing. The updater reads the rollout 0 manifest published in step 4. It runs only inside its job,
+so read its domain while it runs. This is the one step here that starts something, a single check
+that reaches the channel; at rollout 0 it applies nothing:
 
 ```sh
 adb -s "$SERIAL" shell cmd jobscheduler run -f ai.elizaos.updater 1
@@ -290,33 +344,47 @@ adb -s "$SERIAL" shell su 0 content call --uri content://ai.elizaos.updater.stat
 ```
 
 Pass: the other slot, the new date and fingerprint, Alpha is HOME with the owner still signed in and
-their data present, the three updater permissions granted, `priv_app`, no `update_engine` denial, no
-`Update run ended early`, and `state=up-to-date`. That state proves the signature, the embedded key,
-TLS on the job's network and the JSON parsing on the phone. Anything else means the key, the URL or
-the policy is wrong, and only another cable OTA corrects them, so fix it before the cable comes off.
-A failed updater never blocks the demo: it does nothing and says nothing. A missing or extra privapp
-allowlist entry is different: under `enforce` it stops `system_server`, the new slot never completes boot and
-the bootloader returns to the old slot (step 8).
+their data present, `--merge` exited 0, the three updater permissions granted, a `cacerts` count above
+0, `priv_app`, no `update_engine` denial, no `Update run ended early`, and `state=up-to-date`. After
+`--merge`, that state proves the signature, the embedded key, TLS on the job's network and the JSON
+parsing on the phone; during a merge the job writes it without reading the channel. Anything else
+means the key, the URL or the policy is wrong, and only another cable OTA corrects them, so fix it
+before the cable comes off.
+
+The payload path stays unproven until step 9. Rollout 0 returns before `applyPayload` from `priv_app`,
+`NETWORK_ID` and `update_engine`'s own HTTPS fetch, which reads `/system/etc/security/cacerts` itself
+and is separate from the TLS the job proves. Keep the cable available for the first remote update.
+
+A failed updater never blocks the demo: it does nothing and says nothing. A missing privapp allowlist
+entry is different: under `enforce` it stops `system_server`, the new slot never completes boot and
+the way back is step 8.
 
 ### 8. Rollback
 
 - **Before the reboot** (`UPDATED_NEED_REBOOT`): `adb -s "$SERIAL" shell su 0 update_engine_client --reset_status`
   cancels the slot switch; after a reboot the device runs the same slot and build. This is the only
   rollback to run on purpose tonight.
-- **The new slot does not boot**: do nothing. The bootloader retries it and, because it was never
-  marked successful, returns to the previous slot. Verify with step 7 that the slot and date are the
-  old ones.
+- **The new slot does not boot** (no lock screen 10 minutes after the reboot): it may be in a framework
+  restart loop, which restarts `zygote`, not the kernel, so waiting does not help. `init` reboots for
+  `zygote` only under step 1's property, and RescueParty is off on userdebug, so nothing prompts a
+  wipe. Run plain `adb -s "$SERIAL" reboot`, or hold the power button if adb does not answer, wait
+  10 minutes, and repeat until the old slot boots. Each real reboot uses one bootloader try. The new
+  slot was never marked successful, so the bootloader returns to the previous slot, which stays
+  intact until boot completes. gs-common's boot HAL arms three tries; this unit's bootloader is
+  unverified. Still no fastboot. Verify with step 7 that the slot and date are the old ones.
 - **After the new slot booted and merged**, the previous slot's contents are gone (Virtual A/B).
   Rollback is a roll forward: rebuild the previous source (it gets a newer date) and repeat steps 2
   to 7.
 
-### 9. The first remote update (test keys, no cable)
+### 9. The first remote update (test keys, cable within reach)
 
-The owner or Root decides the host first (section 2.4). Build as steps 2 and 3 with a new
+This is the first run of the payload path (step 7), so keep the cable available until it passes. The
+owner or Root decides the payload host first (section 2.4). Build as steps 2 and 3 with a new
 `BUILD_NUMBER`; the build date must be newer than the unit's.
 
 ```sh
-bash scripts/ota/generate-ota.sh --releasetools "$ANDROID_HOST_OUT/bin" \
+OTA_DIR=/abs/ota-lab-$(date -u +%Y%m%dT%H%MZ); mkdir "$OTA_DIR"
+bash "$ALPHA/scripts/ota/generate-ota.sh" --releasetools "$ANDROID_HOST_OUT/bin" \
   --package-key "$AOSP_SOURCE/build/make/target/product/security/testkey" \
   --target-files "$TF" --out "$OTA_DIR/ota.zip"
 sha256sum "$OTA_DIR/ota.zip"; du -h "$OTA_DIR/ota.zip"    # over 2 GiB rules out a GitHub release asset
@@ -325,21 +393,9 @@ node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --
   --out "$OTA_DIR/stallion-beta.json" "$OTA_DIR/ota.zip"
 ```
 
-Upload `ota.zip` first and confirm a Range request returns 206. On the offline host, sign the exact
-bytes and verify before upload (OpenSSL 3):
-
-```sh
-openssl pkeyutl -sign -rawin -inkey channel-lab.pem -in stallion-beta.json -out stallion-beta.json.sig
-openssl pkey -in channel-lab.pem -pubout -out channel-lab.pub
-openssl pkeyutl -verify -rawin -pubin -inkey channel-lab.pub -in stallion-beta.json -sigfile stallion-beta.json.sig
-```
-
-Publish `stallion-beta.json` and its `.sig` at `$CHANNEL_MANIFEST_URL`. On a GitHub release keep it a
-**prerelease** with a fixed tag (create it once with `gh release create os-channel --prerelease`):
-
-```sh
-gh release upload os-channel stallion-beta.json stallion-beta.json.sig --clobber --repo eliza-research/alphaphone
-```
+Upload `ota.zip` first and confirm a Range request returns 206. Then sign, verify and publish
+`stallion-beta.json` as in step 4; the `os-channel` release exists, so only `gh release upload` runs
+again.
 
 The two files do not change atomically; a device that fetches between them refuses quietly and
 retries. The unit starts the update on its next check (every 6 h on unmetered Wi-Fi with the battery
@@ -467,7 +523,10 @@ https://updates.example/alpha/stallion/
   test-key unit the signed channel's `FILE_HASH` is the only real boundary, because the test key is
   public. The updater keeps
   the highest `sequence` it has accepted per channel and refuses a lower one, so a replayed earlier
-  manifest cannot lift a halt or install an older build; it can only withhold an update.
+  manifest cannot lift a halt this device has already read. A device that never fetched the halt still
+  accepts the earlier manifest, so a CDN that withholds the halt can serve the withdrawn release (open
+  point 5). `FILE_HASH` still binds the bytes to a signed release, and `buildDateUtc` must be newer
+  than the booted build, so a replay never installs an older one.
 
 ### 2.5 The privileged update client
 
@@ -570,8 +629,9 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
    deferred.
 4. `pixel10a-alpha.json` gets its `updater` block (`channel`, `manifestUrl`, `channelKey`) once the
    host and lab key exist; a composed build stages no updater before that.
-5. Manifests carry a `sequence` but no expiry, so a replay of the current manifest can withhold a
-   newer one; an enforced `expiresAt` needs scheduled re-signing.
+5. Manifests carry a `sequence` but no expiry. A replay of the current manifest can withhold a newer
+   one, and a device that never read a halt still accepts an earlier manifest, so a CDN that withholds
+   the halt can serve the withdrawn release. An enforced `expiresAt` needs scheduled re-signing.
 6. Resume on Reboot and the updater's dedicated SELinux domain need stallion verification before
    overnight restarts.
 7. Whether the APK lane's `alpha-update/v1` duplicates upstream's plugin-native-agent updater and
