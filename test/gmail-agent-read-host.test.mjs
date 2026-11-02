@@ -16,10 +16,10 @@ async function fixture(){
  const scoped=join(profile,cloudStorageNamespace.replaceAll(':','-'));await mkdir(scoped,{mode:0o700});
  const credential={credentialReference:'browser-cloud-reference:44444444-4444-4444-8444-444444444444',credentialId:grant,userId:owner,organizationId:org,token:'synthetic-only'};
  const save=()=>writeFile(join(scoped,'credentials.json'),JSON.stringify({production:credential}),{mode:0o600});await save();
- const calls=[],sends=new Map();let loseDispatch=false,accounts=()=>[account],afterRead=async()=>{},pages=()=>({messages:[message],syncedAt:message.receivedAt}),calendars=()=>[{calendarId:'primary',summary:'Owned calendar',primary:true,selected:true,accessRole:'owner'}];
+ const calls=[],sends=new Map();let beforeOwner=async()=>{},feedStatus=0,loseDispatch=false,accounts=()=>[account],afterRead=async()=>{},pages=()=>({messages:[message],syncedAt:message.receivedAt}),calendars=()=>[{calendarId:'primary',summary:'Owned calendar',primary:true,selected:true,accessRole:'owner'}];
  const original=globalThis.fetch;globalThis.fetch=async(url,init={})=>{
   const u=new URL(url);calls.push(u);
-  if(u.pathname==='/api/v1/user')return Response.json({success:true,data:{id:owner,organization_id:org}});
+  if(u.pathname==='/api/v1/user'){await beforeOwner();return Response.json({success:true,data:{id:owner,organization_id:org}});}
   if(u.pathname.endsWith('/accounts'))return Response.json(accounts());
   if(u.pathname.includes('/inbox-v1/operations')){
    const body=init.body?JSON.parse(init.body):null;
@@ -36,14 +36,14 @@ async function fixture(){
    }
    return Response.json({version:1,providerExactlyOnce:false,receipt:saved.receipt});
   }
-  if(u.pathname.endsWith('/calendars'))return Response.json(calendars());
-  if(u.pathname.endsWith('/feed')){await afterRead();return Response.json({calendarId:'primary',events:[],syncedAt:message.receivedAt});}
+  if(u.pathname.endsWith('/calendars'))return Response.json(calendars(u));
+  if(u.pathname.endsWith('/feed')){if(feedStatus)return Response.json({error:'Refused'},{status:feedStatus});await afterRead();return Response.json({calendarId:'primary',events:[],syncedAt:message.receivedAt});}
   if(u.pathname.endsWith('/search')){const data=pages(u);await afterRead();return Response.json(data);}
   if(u.pathname.endsWith('/read')){await afterRead();return Response.json({message:{...message,metadata:{historyId:'h1'}},bodyText:'Exact synthetic body'});}
   throw Error('Unexpected route');
  };
  let reader;try{reader=createGmailAgentReadHost(profile);}finally{globalThis.fetch=original;}
- return {reader,calls,credential,save,sends,setAccounts:fn=>accounts=fn,setAfterRead:fn=>afterRead=fn,setPages:fn=>pages=fn,setCalendars:fn=>calendars=fn,loseDispatch:()=>{loseDispatch=true;},close:()=>rm(profile,{recursive:true,force:true})};
+ return {reader,calls,credential,save,sends,setAccounts:fn=>accounts=fn,setAfterRead:fn=>afterRead=fn,setPages:fn=>pages=fn,setCalendars:fn=>calendars=fn,setBeforeOwner:fn=>beforeOwner=fn,setFeedStatus:status=>feedStatus=status,loseDispatch:()=>{loseDispatch=true;},close:()=>rm(profile,{recursive:true,force:true})};
 }
 const sendAccount={...account,grantedCapabilities:['google.gmail.triage','google.gmail.send']};
 const email=()=>({requestId:randomUUID(),to:['self@example.invalid'],subject:'Synthetic QA',bodyText:'No real email is sent by this fixture.'});
@@ -99,6 +99,8 @@ test('Calendar reads bind the current grant and refuse a revoked source before r
 const calendarAccount={...account,label:'owned@example.invalid',grantedCapabilities:['google.calendar.read']};
 const calendarInput=grantId=>({grantId,calendarId:'primary',timeMin:'2026-10-14T00:00:00Z',timeMax:'2026-10-16T00:00:00Z',timeZone:'UTC'});
 /** One normal read: the service lists sources, then reads each feed. */
+const until=async ready=>{while(!ready())await new Promise(resolve=>setTimeout(resolve,1));};
+const ownerCalls=f=>f.calls.filter(u=>u.pathname==='/api/v1/user').length;
 async function calendarTurn(f){const sources=await f.reader.calendarSources();await f.reader.calendarFeed(calendarInput(sources[0].grantId));return sources;}
 
 test('One Calendar read checks the owner once, and every read of sources is fresh',async()=>{
@@ -160,23 +162,57 @@ test('A calendar added after the source step is still readable',async()=>{
 });
 
 test('A feed step reuses an owner check for seconds only, however often reads repeat',async()=>{
- const f=await fixture(),now=Date.now;let clock=now();Date.now=()=>clock;try{
+ const f=await fixture(),now=performance.now;let clock=now.call(performance);performance.now=()=>clock;try{
   f.setAccounts(()=>[calendarAccount]);const [source]=await f.reader.calendarSources();
   const input=calendarInput(source.grantId);
   for(let read=0;read<4;read++){clock+=2000;await f.reader.calendarFeed(input);}
   assert.equal(f.calls.filter(u=>u.pathname==='/api/v1/user').length,2,'renewed by a verified lookup, never by a re-check');
- }finally{Date.now=now;await f.close();}
+ }finally{performance.now=now;await f.close();}
 });
 
-test('Concurrent Calendar reads share one lookup, and a joiner survives a failed one',async()=>{
- const f=await fixture(),fetchNow=globalThis.fetch;try{
+test('A read cannot join an owner check older than the step window',async()=>{
+ const f=await fixture(),now=performance.now;let clock=now.call(performance),release;performance.now=()=>clock;try{
+  f.setAccounts(()=>[calendarAccount]);f.setBeforeOwner(()=>new Promise(resolve=>{release=resolve;}));
+  const slow=f.reader.calendarSources();await until(()=>release);
+  clock+=6000;f.setBeforeOwner(async()=>{});await f.reader.calendarSources();
+  assert.equal(ownerCalls(f),2);
+  release();await slow;
+ }finally{performance.now=now;await f.close();}
+});
+
+test('Concurrent Calendar reads share one lookup, and a joiner reads for itself when the leader ends',async()=>{
+ const f=await fixture();try{
   f.setAccounts(()=>[calendarAccount]);
   const [a,b]=await Promise.all([f.reader.calendarSources(),f.reader.calendarSources()]);assert.deepEqual(a,b);
   assert.equal(f.calls.filter(u=>u.pathname==='/api/v1/user').length,1);
-  const controller=new AbortController();controller.abort();
-  const [ended,alive]=await Promise.allSettled([f.reader.calendarSources(controller.signal),f.reader.calendarSources()]);
-  assert.equal(ended.status,'rejected');assert.equal(alive.status,'fulfilled');
- }finally{globalThis.fetch=fetchNow;await f.close();}
+  let release;f.setBeforeOwner(()=>new Promise(resolve=>{release=resolve;}));
+  const controller=new AbortController(),leader=f.reader.calendarSources(controller.signal);await until(()=>release);
+  const joiner=f.reader.calendarSources();await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(ownerCalls(f),2,'the joiner waits on the running lookup');
+  f.setBeforeOwner(async()=>{});controller.abort();release();
+  const [ended,alive]=await Promise.allSettled([leader,joiner]);
+  assert.equal(ended.status,'rejected');assert.equal(alive.status,'fulfilled');assert.equal(alive.value.length,1);
+ }finally{await f.close();}
+});
+
+test('A refused feed drops the shared lookups',async()=>{
+ const f=await fixture();try{
+  f.setAccounts(()=>[calendarAccount]);const [source]=await f.reader.calendarSources();
+  f.setFeedStatus(403);await assert.rejects(f.reader.calendarFeed(calendarInput(source.grantId)));
+  f.setFeedStatus(0);f.calls.length=0;await f.reader.calendarFeed(calendarInput(source.grantId));
+  assert.equal(f.calls[0].pathname,'/api/v1/user');
+ }finally{await f.close();}
+});
+
+test('Each account keeps its own calendars across the feed step',async()=>{
+ const f=await fixture();try{
+  const second={...calendarAccount,connectionId:'55555555-5555-4555-8555-555555555555'},row={calendarId:'primary',summary:'Owned calendar',primary:true,selected:true,accessRole:'owner'};
+  f.setAccounts(()=>[calendarAccount,second]);
+  f.setCalendars(u=>[u.href.includes(second.connectionId)?{...row,calendarId:'team',summary:'Team'}:row]);
+  const sources=await f.reader.calendarSources(),other=sources.find(source=>source.calendarId==='team');
+  await assert.rejects(f.reader.calendarFeed(calendarInput(other.grantId)),/not currently readable/);
+  assert.equal((await f.reader.calendarFeed(calendarInput(sources.find(source=>source.calendarId==='primary').grantId))).calendarId,'primary');
+ }finally{await f.close();}
 });
 
 test('Another Cloud credential never reuses a Calendar lookup',async()=>{

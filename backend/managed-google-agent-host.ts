@@ -14,20 +14,20 @@ function sendProposal(input:AgentSendContent){
 }
 /** The owner's Settings switches. Off refuses agent writes before any Google request; reads, receipts and the connection stay. */
 export type GoogleAgentAccess={gmailChanges:boolean;calendarEdits:boolean};
-/** How long one read's source lookups can serve its feed step, from the start of their owner check. */
+/** How long one source lookup can serve one read's feed step, from the lookup's start. */
 const CALENDAR_READ_STEP_MS=5_000;
 export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:()=>GoogleAgentAccess=()=>({gmailChanges:true,calendarEdits:true})){
  const allowed=(kind:keyof GoogleAgentAccess)=>{if(access()[kind]!==true)throw Error(kind==='gmailChanges'?'Gmail changes are turned off in Settings › Google accounts. Google stays connected; nothing was changed.':'Calendar edits are turned off in Settings › Google accounts. Google stays connected; nothing was changed.');};
  const refuseWrite=()=>{throw Error('Gmail agent reads cannot change credentials or mail.');};
  // One Calendar read lists sources, then reads each feed. Without this the feed verifies the owner and lists calendars
- // again: nine Cloud round trips for one empty day. A feed reuses the source step's lookups for seconds, and concurrent
- // reads join one lookup. Source lists never come from a finished lookup, and every read ends with a fresh grant check.
+ // again. A feed reuses the source step's lookups for seconds, and concurrent reads join one lookup. Source lists only
+ // ever join a lookup still in flight, never a finished one, and every read ends with a fresh grant check.
  const shared=new Map<string,{expires:number;pending:boolean;value:Promise<unknown>}>();
  async function sharedLookup<T>(key:string,read:()=>Promise<T>,reuseFinished:boolean):Promise<T>{
   const entry=shared.get(key);
   // A failed lookup belongs to its caller, whose request may have ended: a joiner reads for itself.
-  if(entry&&(entry.pending||reuseFinished&&entry.expires>Date.now()))return (entry.value as Promise<T>).catch(read);
-  const value=read(),next={expires:Date.now()+CALENDAR_READ_STEP_MS,pending:true,value};shared.set(key,next);
+  if(entry&&entry.expires>performance.now()&&(entry.pending||reuseFinished))return (entry.value as Promise<T>).catch(read);
+  const value=read(),next={expires:performance.now()+CALENDAR_READ_STEP_MS,pending:true,value};shared.set(key,next);
   value.then(()=>{next.pending=false;},()=>{if(shared.get(key)===next)shared.delete(key);});
   return value;
  }
@@ -56,7 +56,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
   stage='credential-recheck';
   await current();
   // Every grant used by the read must still hold the capability after it, or nothing is returned.
-  const confirm=async(grantIds:string[])=>{const lookup=calendarRead?shared.get(ownerKey):undefined;try{const latest=await client.gmailAccounts(signal);if(grantIds.some(id=>!latest.some(a=>a.connectionId===id&&a.connected&&a.grantedCapabilities.includes(capability))))throw Error('Gmail permission changed.');await current();if(lookup&&shared.get(ownerKey)===lookup)lookup.value=Promise.resolve(latest);}catch(error){if(calendarRead)shared.clear();recordManagedGoogleFailure(error,'permission-recheck');throw error;}};
+  const confirm=async(grantIds:string[])=>{try{const latest=await client.gmailAccounts(signal);if(grantIds.some(id=>!latest.some(a=>a.connectionId===id&&a.connected&&a.grantedCapabilities.includes(capability))))throw Error('Gmail permission changed.');await current();}catch(error){if(calendarRead)shared.clear();recordManagedGoogleFailure(error,'permission-recheck');throw error;}};
   return {client,signal,accounts,confirm};
   }catch(error){recordManagedGoogleFailure(error,stage);throw error;}
  }
@@ -119,18 +119,20 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
   },
   async calendarFeed(input:{grantId:string;calendarId:string;timeMin:string;timeMax:string;timeZone:string},parent?:AbortSignal){
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar',true);
+   try{
    const owned=accounts.find(a=>input.grantId===`alpha-google:${a.scope}`);if(!owned)throw Error('Select a calendar from the current owner connection.');
    const {grantId,scope}=owned,readable=(rows:Awaited<ReturnType<typeof googleCalendars>>)=>rows.find(row=>row.calendarId===input.calendarId&&['reader','writer','owner'].includes(row.accessRole));
    // A calendar added since the previous step is still readable.
    let calendar=readable(await googleCalendars(client,grantId,scope,signal,true));
    if(!calendar)calendar=readable(await googleCalendars(client,grantId,scope,signal,false));
    if(!calendar)throw Error('This calendar is not currently readable.');
-   const result=await client.googleCalendarFeed(grantId,input.calendarId,{timeMin:input.timeMin,timeMax:input.timeMax,timeZone:input.timeZone},signal).catch(error=>{shared.clear();throw error;});
+   const result=await client.googleCalendarFeed(grantId,input.calendarId,{timeMin:input.timeMin,timeMax:input.timeMax,timeZone:input.timeZone},signal);
    const key={provider:'google',side:'owner',grantId:input.grantId,connectorAccountId:input.grantId,calendarId:input.calendarId};
    await confirm([grantId]);
    return {...result,source:'synced',state:'complete',timeMin:input.timeMin,timeMax:input.timeMax,
     sources:[{key,summary:calendar.summary,accessRole:calendar.accessRole,visibility:'details',status:'fresh',syncedAt:result.syncedAt,error:null}],
     events:result.events.map(event=>({...event,id:`${input.grantId}:${event.externalId}`,agentId:'',provider:'google',side:'owner',grantId:input.grantId,connectorAccountId:input.grantId,syncedAt:result.syncedAt,updatedAt:typeof event.metadata.updated==='string'?event.metadata.updated:result.syncedAt,calendarSummary:calendar.summary}))};
+   }catch(error){shared.clear();throw error;}
   },
   async list({limit=25,query='',since}:{limit?:number;query?:string;since?:string},parent?:AbortSignal){
    if(!Number.isSafeInteger(limit)||limit<1||limit>51||typeof query!=='string'||query.length>4096)throw Error('Choose a Gmail read limit from 1 to 50 plus its overflow probe.');
