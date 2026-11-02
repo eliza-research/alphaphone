@@ -255,7 +255,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const recorder=captureStop();
     // A capture that may be open holds Notes from now on. A kept clip's microphone is already off.
     if(hadCapture&&!clip&&!chatShell)heldRecorder=recorder;
-    void queueStops(async () => { await ownerStop(()=>conversationStopped,previousOwner);await ownerStop(()=>previousSpeech?.catch(keepUnconfirmedSpeech),previousSpeechOwner);await ownerStop(()=>previousNotesSpeech?.catch(keepUnconfirmedSpeech),playbackStopped);if(hadCapture){await ownerStop(recorder);if(!chatShell&&unreleased.has(recorder))heldRecorder=recorder;} });
+    void queueStops(async () => { await ownerStop(()=>conversationStopped,previousOwner);if(previousSpeechOwner!==playbackStopped)await ownerStop(previousSpeechOwner);await ownerStop(()=>previousSpeech?.catch(keepUnconfirmedSpeech),previousSpeechOwner);await ownerStop(()=>previousNotesSpeech?.catch(keepUnconfirmedSpeech),playbackStopped);if(hadCapture){await ownerStop(recorder);if(!chatShell&&unreleased.has(recorder))heldRecorder=recorder;} });
     if(chatShell&&(previousConversation||previousSpeech||hadCapture||heldRecorder||unreleased.size)){
       retirement={shell:chatShell,returnChat:previousChat!.chat,view:previousChat!.view,binding:previousChat!.binding,panelChat:chatShell.S().chat,approval:chatShell.pendingActionApproval,proposalId:chatShell.pendingActionApprovalProposalId};
     }else void mediaSettled().catch(()=>{}); // No panel offers a retry here: a failed owner is asked again at once.
@@ -767,7 +767,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
         try{await assistant.start();assistantStarted=true;current();return;}
         catch(failure){
           // A stream that could not confirm its stop stays held, whichever failure ended the start.
-          if(streamingCloud)await ownerStop(streamingCloud.stop);
+          const stream=streamingCloud;if(stream)await queueStops(()=>ownerStop(stream.stop)).catch(()=>{});
           // A server with no streaming route has not accepted microphone audio.
           // Keep the existing app usable during rollout; other failures never retry audio.
           if(!streamingCloud||(failure as {code?:string})?.code!=='cloud-http-404')throw failure;
