@@ -57,6 +57,10 @@ test('Android installs only the offered newer build of this package, after any s
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
+ // The status intent reaches only this app's receiver, and Android must be able to add the session result to it.
+ assert.match(install,/new Intent\(UPDATE_STATUS\)\.setPackage\(getContext\(\)\.getPackageName\(\)\)/);
+ assert.match(install,/PendingIntent\.FLAG_MUTABLE/);
+ assert.match(plugin,/registerReceiver\(getContext\(\),updateStatus,new android\.content\.IntentFilter\(UPDATE_STATUS\),androidx\.core\.content\.ContextCompat\.RECEIVER_NOT_EXPORTED\)/);
  assert.match(install,/catch\(Exception failed\)\{installer\.abandonSession\(id\);throw failed;\}/);
  // A check of 404 is an answer, not a failure.
  assert.match(plugin,/if\(status==404\)\{call\.resolve\(new JSObject\(\)\);return;\}\s*if\(status!=200\)throw/);
