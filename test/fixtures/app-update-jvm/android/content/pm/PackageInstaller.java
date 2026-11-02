@@ -24,11 +24,11 @@ public class PackageInstaller {
  /** Runs as Android answers getMySessions, while each read waits on its session's lock: to destroy a bridge at that moment, or to let validation end. */
  public volatile Runnable listing=()->{};
  public boolean listDown,infoDown,abandonDown;
- /** The phase that throws next, once: open, write, fsync, stream (its close), sender (the status PendingIntent), reply (commit's, lost once Android has done its work), kill (the process, ahead of a session's close, which then never lands) or close (the session's, after it lands). */
+ /** The phase that throws next, once: open, write, fsync, stream (its close), sender (the status PendingIntent), intent (setStagingProgress's reply, lost once Android holds the value), reply (commit's, lost once Android has done its work), kill (the process, ahead of a session's close, which then never lands) or close (the session's, after it lands). */
  public String failAt="";
  public void phase(String name){if(name.equals(failAt)){failAt="";throw new RuntimeException("DeadSystemException");}}
  private int next=40;
- /** Android's side of a session. progress: 0.8 once validated, 0.9 once native libraries are being prepared. validated: its commit is marked. onDisk: that mark as Android last wrote it. referrer: written with the rest of the session, so a seal on disk always carries it. */
+ /** Android's side of a session. progress: 0.8 once staging is reported done or the session is validated, 0.9 once native libraries are being prepared. validated: its commit is marked. onDisk: that mark as Android last wrote it. referrer: written with the rest of the session, so a seal on disk always carries it. */
  public static final class Internal {public int active;public boolean sealed,validated,onDisk,accepted,stageDirInUse;public float progress;public android.net.Uri referrer;}
  public static class SessionParams {
   public static final int MODE_FULL_INSTALL=1;
@@ -56,6 +56,8 @@ public class PackageInstaller {
    return new java.io.FilterOutputStream(java.io.OutputStream.nullOutputStream()){@Override public void close(){phase("stream");}};
   }
   public void fsync(java.io.OutputStream out){phase("fsync");staging.run();}
+  /** setClientProgress, a two-way call: Android holds the value before it returns, and reads it times 0.8, as a seal leaves it. Only this and a seal move an unsealed session here: a stream from openWrite never does, and no write saves it, so a boot reads 0. */
+  public void setStagingProgress(float value){internals.get(id).progress=Math.max(0f,Math.min(value*0.8f,0.8f));phase("intent");}
   public void commit(android.content.IntentSender receiver){
    committing.run();
    Internal session=internals.get(id);

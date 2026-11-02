@@ -48,13 +48,16 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('Android installs only the offered newer build of this package, and only when no sealed session of Alpha\'s fences the tap',()=>{
- const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','params.setReferrerUri(','installer.createSession(params)','session.fsync(out)','updateOwner=this;updateSession=id;','if(Thread.currentThread().isInterrupted())updateOwner=null;','commitAttempted=true;','session.commit(','updatesCommitted.incrementAndGet();','updating.set(false);}\n'].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session is bound before Android has it, its status can only arrive once it has its owner, the commit boundary is crossed in that order, and a commit is counted before its attempt lets go');
+test('Android installs only the offered newer build of this package, and only when no session of Alpha\'s fences the tap',()=>{
+ const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','installer.getMySessions()','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','params.setReferrerUri(','installer.createSession(params)','session.fsync(out)','session.setStagingProgress(1f);','updateOwner=this;updateSession=id;','if(Thread.currentThread().isInterrupted())updateOwner=null;','commitAttempted=true;','session.commit(','updatesCommitted.incrementAndGet();','updating.set(false);}\n'].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, Android\'s sessions fence it before any download, size, SHA-256 and the archive are admitted before any session changes, a session is bound before Android has it, its commit intent is Android\'s before anything else of the commit, its status can only arrive once it has its owner, the commit boundary is crossed in that order, and a commit is counted before its attempt lets go');
  // One path abandons, a failure of the attempt's own session before its commit, asserted below. Nothing abandons a session Android lists as sealed.
  assert.equal(plugin.match(/abandonSession\(/g).length,1);
  // One commit, the attempt's own first: nothing commits a session a process did not just stage.
  assert.equal(plugin.match(/session\.commit\(/g).length,1);
+ // One commit intent, read as an exact 0 so that nothing but Android's own zero clears it.
+ assert.equal(plugin.match(/setStagingProgress\(/g).length,1);
+ assert.match(install,/if\(!listed\.isSealed\(\)&&listed\.getProgress\(\)==0f\)continue;/);
  assert.doesNotMatch(plugin,/refused\)\{updateOwner=null|commitUpdate|getUpdatedMillis|elapsedRealtime/);
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);

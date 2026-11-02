@@ -341,7 +341,8 @@ only a tap on the same surface, behind an attempt that failed before its commit,
 `sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it open a session for this
-package. A session left unsealed by a killed process stays until Android expires it. Closing the
+package. A session a killed process left unsealed, short of its commit intent (below), holds nothing and stays until
+Android expires it. Closing the
 surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
@@ -362,9 +363,32 @@ status sender. From the commit
 call on nothing proves a refusal. `Session.commit` rethrows a `RemoteException`, and Android 10 marks a commit, as 14
 seals and dispatches one, ahead of the reply that can be lost; the close after a commit can throw; and the same
 exception class comes from different phases on different versions. So whatever is thrown there, Alpha keeps the
-session and its owner, the tap fails quietly, and what happened comes from Android's status or its list. Until
-Android lists that session no more, it fences even if it reads unsealed. A process that ended knows nothing of it,
-but an unsealed session of a dead process never fences: every effect of a commit follows the seal.
+session and its owner, the tap fails quietly, and what happened comes from Android's status or its list.
+
+A commit can also outlive its process. The call can still be waiting in Binder, short of Android's seal, when Alpha
+dies, and a client's death cancels nothing, so a session reading unsealed may yet seal. Fencing every unsealed session
+would overshoot: every session is bound now, so a process killed while writing one would hold updates until Android
+expired it, days off. Android shows no queued call, so Alpha states the commit first. After the last step of its own
+that can fail, and before the commit, it calls `Session.setStagingProgress(1f)`, and an unsealed session fences unless
+its progress reads exactly 0. Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
+
+- `setClientProgress` is a two-way call. Android stores the value and recomputes progress before replying, checking
+  only that the caller owns the session, so a commit sent after that reply is always behind it.
+- Nothing else moves an unsealed session of Alpha's off 0. A stream from `openWrite` reports no progress; only
+  `Session.write` from a descriptor does, which Alpha does not call. The one other writer is the seal, which sets the
+  same 1, so progress reads 0.8 as it does after any commit.
+- No session file saves it, so it goes when `system_server` goes, and so does any Binder call queued there. It lasts
+  exactly as long as a queued commit can.
+- Android reads it for nothing but reports: a progress callback the seal fires too, dumps and session history.
+
+So 0 on an unsealed session proves no commit was sent this boot, and none sent earlier can still arrive. Such a session
+is left for Android to expire and the next tap stages beside it, which duplicates nothing, because nothing commits a
+session it did not just stage. Anything but an exact 0 fences, NaN included, and a list Android cannot give stops the
+tap. Alpha never clears the intent: it ends with the session, gives way to the seal, or goes at the next `system_server`
+start along with any commit it stood for. A file would have to be cleared and would outlive that boot, and
+`File.exists` answers false for any error from `access`, so it reads an I/O error as absent. A build before this one set
+no intent, so a commit it left queued as a newer build replaced it goes unseen, which takes that install landing inside
+Binder's wait.
 
 No tap commits a session it did not just stage, and nothing an app reads could make that safe. In AOSP a commit that
 reaches an accepted session ends it on Android 10 to 13 at any stage (relinquished through 12, files in use on 13),
@@ -373,7 +397,8 @@ staging finished: Android 10 sets the accept and queues the install before progr
 an accepted session idle at 0.8 until its one install thread reaches it. A reboot loses what little there is. Android
 saves neither progress nor its active count, and from Android 11 it writes a session at sealing, before marking the
 commit, so a session comes back committed only if a later write recorded the mark (Android 10 marks first, so
-always), and then reads committed at progress 0, which a read during validation also returns from Android 13. So
+always), and then reads committed at progress 0, which a read during validation also returns from Android 13 on a
+session with no commit intent. So
 neither a recovered session nor one of unknown state is committed, whatever it reads.
 
 Each session names its target in Android's own record of it. `SessionParams.setReferrerUri`, set before
@@ -440,7 +465,12 @@ and the current version keeps showing.
 - No binding, or a corrupt one: Android's expiry alone. No installed version ends it.
 - A commit that threw, sealed: Android's status if it comes, otherwise the same. On Android 10 a validation I/O error
   seals a session with no mark and no status, so it stays until the expiry.
-- A commit that threw, reading unsealed: until Android lists it no more or the process ends.
+- An unsealed session holding a commit intent: a commit that threw, a process killed with its commit queued short of
+  the seal, one killed in the instant between the intent and the commit, or an intent whose reply was lost with its
+  cleanup failing too, which all read the same. Until Android lists it
+  no more, its bound target is installed, or the next `system_server` start, whichever is first, with no time limit
+  short of those. A process restart does not free it. A queued commit that then seals joins the entries above, and its
+  status reconnects as usual. A kill during a download or a write never lands here.
 - A confirmation opened on a surface that stays in the background, such as the assistant behind Home, holds a reopen
   from the other surface until the first resumes or closes, or the process ends.
 - A developer-verification request (Android 17, with `verification_service` on and a verifier present) comes
@@ -473,7 +503,8 @@ has, read from AOSP 10 to 17:
 | --- | --- | --- |
 | Session gone from `getMySessions`, `getSessionInfo` null | 29 to 37 | Terminal. Built: this is the fence. |
 | Referrer, read back | 29 to 37 | What the session holds, for a session Alpha bound. Built. A build before the binding wrote none. |
-| Sealed, committed, progress, active | 29 to 37 | Nothing terminal, and not whether an owner's accept is queued. Committed at 0 reads after a reboot, and on 33 to 37 during validation. |
+| Sealed, committed, progress, active | 29 to 37 | Nothing terminal, and not whether an owner's accept is queued. Committed at 0 reads after a reboot, and on 33 to 37 during validation with no commit intent. |
+| Progress on an unsealed session | 29 to 37 | Exactly 0: no commit was sent this boot, and none sent earlier can arrive. Built: the commit intent. Anything else proves nothing and fences. |
 | `getUpdatedMillis`, from 30 `getCreatedMillis` | 29 to 37 | Age against a boot computed from the wall clock, so only as true as that clock. |
 | `SessionCallback.onFinished` | 29 to 37 | An end while the callback is registered. No more than the list, and nothing across a restart. |
 | Installed versionCode and signer | 29 to 37 | With a binding, that the target landed or was passed. Built. Without one, nothing: `getSize` is the nearest public fact about a session, and equal sizes prove nothing. |
@@ -484,7 +515,7 @@ has, read from AOSP 10 to 17:
 A cancellation path, before any fresh session, would have to prove no outcome is pending. It is for Root's review and
 goes against the standing rule that no tap abandons a sealed session, so it stays unbuilt:
 
-1. It is not under validation: a read taken after one that showed the mark still reads committed at 0.
+1. It is not under validation: with no commit intent, a read taken after one that showed the mark still reads committed at 0.
 2. No commit reached it this boot, since a confirmation and an install each need one, and Android writes no status
    receiver across a boot. Android shows no commit count, and on 10 such a commit also reads 0. A bound session can
    answer this, because a build that binds commits once, in the boot it names. An unbound session cannot, and stays out.
