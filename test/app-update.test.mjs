@@ -54,7 +54,7 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
 });
 
 test('Android installs only the offered newer build of this package, in place of this plugin\'s own earlier session',()=>{
- const order=['copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
+ const order=['copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','session.fsync(out)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
  assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'size, SHA-256 and the archive are admitted before any session changes, and a new session\'s status can only arrive once it is this plugin\'s');
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);

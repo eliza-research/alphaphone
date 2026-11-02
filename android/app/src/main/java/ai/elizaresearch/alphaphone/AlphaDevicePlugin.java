@@ -328,10 +328,12 @@ public final class AlphaDevicePlugin extends Plugin {
      if(updateSession!=0)try{installer.abandonSession(updateSession);}catch(RuntimeException finished){/* Already gone. */}
      PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
      params.setAppPackageName(getContext().getPackageName());params.setSize(size);
-     int id=installer.createSession(params);updateSession=id;
+     int id=installer.createSession(params);
      try(PackageInstaller.Session session=installer.openSession(id)){
       try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
       throwIfDestroyed();
+      // Set at commit: a tap reaching the worker before this has nothing staged to keep, and one after it voids itself.
+      updateSession=id;
       session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
      }catch(Exception failed){installer.abandonSession(id);throw failed;}
     }finally{apk.delete();updating.set(false);}
