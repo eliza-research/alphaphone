@@ -358,8 +358,8 @@ session fences it. A session Android lists as sealed is never abandoned or repla
 that list, or when its bound target is what is installed, below.
 
 A session is committed once, by the attempt that staged it. Alpha abandons only that attempt's own session, for a
-failure before its commit call: opening the session, writing, copying, `fsync`, closing the stream or making the
-status sender. From the commit
+failure before its commit call: opening the session, writing, copying, `fsync`, closing the stream, making the
+status sender or stating the commit intent. From the commit
 call on nothing proves a refusal. `Session.commit` rethrows a `RemoteException`, and Android 10 marks a commit, as 14
 seals and dispatches one, ahead of the reply that can be lost; the close after a commit can throw; and the same
 exception class comes from different phases on different versions. So whatever is thrown there, Alpha keeps the
@@ -368,15 +368,14 @@ session and its owner, the tap fails quietly, and what happened comes from Andro
 A commit can also outlive its process. The call can still be waiting in Binder, short of Android's seal, when Alpha
 dies, and a client's death cancels nothing, so a session reading unsealed may yet seal. Fencing every unsealed session
 would overshoot: every session is bound now, so a process killed while writing one would hold updates until Android
-expired it, days off. Android shows no queued call, so Alpha states the commit first. After the last step of its own
-that can fail, and before the commit, it calls `Session.setStagingProgress(1f)`, and an unsealed session fences unless
-its progress reads exactly 0. Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
+expired it, days off. Android shows no queued call, so Alpha states the commit first. As the last step before the
+commit it calls `Session.setStagingProgress(1f)`, and an unsealed session fences unless its progress reads exactly 0. Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
 
 - `setClientProgress` is a two-way call. Android stores the value and recomputes progress before replying, checking
   only that the caller owns the session, so a commit sent after that reply is always behind it.
 - Nothing else moves an unsealed session of Alpha's off 0. A stream from `openWrite` reports no progress; only
-  `Session.write` from a descriptor does, which Alpha does not call. The one other writer is the seal, which sets the
-  same 1, so progress reads 0.8 as it does after any commit.
+  `Session.write` from a descriptor does, which Alpha does not call. The one other writer runs after the seal, at
+  validation, so it never touches an unsealed session, and it sets the same 1, so progress reads 0.8 after any commit.
 - No session file saves it, so it goes when `system_server` goes, and so does any Binder call queued there. It lasts
   exactly as long as a queued commit can.
 - Android reads it for nothing but reports: a progress callback the seal fires too, dumps and session history.
