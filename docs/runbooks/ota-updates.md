@@ -33,7 +33,7 @@ New here:
   schemaVersion 2 `publish-update-manifest.ts` format stays the factory-image install index.
 - `packages/os/android/updater` (upstream, section 2.5) is the on-device update client. Alpha adds no
   updater code: its only input is an `updater` block in `pixel10a-alpha.json`. Until Alpha re-pins,
-  both come from an Eliza checkout of `claude/os-updater-client-20261102` (`$ELIZA` below).
+  both come from a copy of Eliza's `packages/os` (`$ELIZA` below).
 
 ## Track 1: tonight, current test keys, user data kept
 
@@ -53,7 +53,7 @@ unit remotely (step 9).
   the Alpha APK in the image signed by the current development key (the 04:38 key) so it matches the
   installed copy.
 - On any refusal, signer or key mismatch, or `update_engine` error: stop, leave the device on its
-  current slot (`update_engine_client --reset_status` if it already reports `UPDATED_NEED_REBOOT`)
+  current slot (`su 0 update_engine_client --reset_status` if it already reports `UPDATED_NEED_REBOOT`)
   and report. Do not retry with other flags.
 
 ### Inputs from the OS owner
@@ -66,7 +66,7 @@ unit remotely (step 9).
 | `SERIAL` and the host the phone is attached to | That host serves the OTA (step 5) |
 | Package key | The build's `default_system_dev_certificate`, normally `build/make/target/product/security/testkey` |
 | Alpha checkout on the builder | This branch's `scripts/ota/generate-ota.sh` |
-| `$ELIZA` on the builder | Eliza checkout of `claude/os-updater-client-20261102`; record its commit in the physical-product evidence |
+| `$ELIZA` on the builder | `packages/os` of Eliza `claude/os-updater-client-20261102` at commit `0422719df6`. The branch is not pushed, so copy it from the Mac: `git -C <eliza> archive 0422719df6 packages/os \| ssh <builder> tar -x -C "$ELIZA"`. Node and `unzip` are its only needs. Record the commit in the physical-product evidence |
 | `CHANNEL_KEY` | Public half of the lab channel key, base64 Ed25519 SPKI DER. The owner or Root makes it offline (below). No key, no remote updates: stop before step 2a |
 | `CHANNEL_MANIFEST_URL` | The https URL baked into this image (section 2.4). Payload URLs live in each manifest and can change later; this one changes only through an OS update |
 
@@ -95,11 +95,13 @@ adb -s "$SERIAL" shell dumpsys package ai.elizaresearch.alphaphone | grep -E 've
 
 ### 2a. Add the update client to the staged tree
 
-Tonight's Alpha APK and SDK pin stay unchanged, so this is by hand. A composed build gets the same
-result from the product's `updater` block. Removing the two make lines drops the updater again if it
-does not compile.
+Tonight's Alpha APK and SDK pin stay unchanged, so this is by hand. A composed build appends the same
+two make lines from the product's `updater` block, after checking the channel key and URL. If the
+updater does not compile, remove the two make lines and `rm -rf vendor/alphaphone/updater`: Soong
+parses every `Android.bp` in the tree, so the make lines alone do not take it out of the build.
 
 ```sh
+: "${CHANNEL_KEY:?}" "${CHANNEL_MANIFEST_URL:?}"
 cd "$AOSP_SOURCE"
 cp -R "$ELIZA/packages/os/android/updater" vendor/alphaphone/updater
 mkdir -p vendor/alphaphone/updater/res/values
@@ -154,6 +156,9 @@ unzip -p "$TF" SYSTEM/etc/security/otacerts.zip > tf-otacerts.zip
 diff <(unzip -p tf-otacerts.zip | openssl x509 -noout -fingerprint -sha256) \
      <(unzip -p device-otacerts.zip | openssl x509 -noout -fingerprint -sha256)
 unzip -l "$TF" | grep -E 'SYSTEM_EXT/priv-app/ElizaOsUpdater/|SYSTEM_EXT/etc/(permissions/ElizaOsUpdater|default-permissions/default-permissions-ai.elizaos.updater|sysconfig/ElizaOsUpdater-sysconfig)'
+unzip -p "$TF" SYSTEM_EXT/etc/selinux/system_ext_sepolicy.cil | grep update_engine_service   # confirm this path on the first target-files
+unzip -p "$TF" SYSTEM_EXT/priv-app/ElizaOsUpdater/ElizaOsUpdater.apk > /abs/image-updater.apk
+aapt2 dump badging /abs/image-updater.apk | grep targetSdkVersion   # SDK build-tools or $ANDROID_HOST_OUT/bin
 unzip -p "$TF" PRODUCT/app/AlphaPhone/AlphaPhone.apk > /abs/image-alpha.apk
 adb -s "$SERIAL" exec-out cat <path from pm path> > /abs/installed-alpha.apk
 apksigner verify --print-certs /abs/image-alpha.apk      # SDK build-tools or $ANDROID_HOST_OUT/bin
@@ -161,6 +166,8 @@ apksigner verify --print-certs /abs/installed-alpha.apk  # same certificate SHA-
 ```
 
 Stop unless: the updater's APK, allowlist, default-permissions and sysconfig files are all listed;
+the compiled system_ext policy holds the `update_engine_service` rule; the updater's
+`targetSdkVersion` is 37, because a lower one runs it in `priv_app_36`, which the grant does not cover;
 `ab_update=true` and `virtual_ab=true`; the fingerprint carries this build's `BUILD_NUMBER`; every `ro.<partition>.build.date.utc` (system,
 vendor, product, system_ext, odm, where present) is **greater** than the device's, because
 `update_engine` checks each partition (the 2026-10-24 evidence records an incremental build that kept an earlier timestamp; then
@@ -217,15 +224,17 @@ with `--wipe-user-data`.
 ### 6. Apply with update_engine_client
 
 ```sh
-adb -s "$SERIAL" root      # userdebug only; restarts adbd. Stock policy gives shell no binder call with update_engine
-adb -s "$SERIAL" wait-for-device
 M="$OTA_DIR/manifest.json"
 URL=$(node -p "require('$M').updates[0].url")
 OFFSET=$(node -p "require('$M').updates[0].payload.offset")
 SIZE=$(node -p "require('$M').updates[0].payload.size")
 HEADERS=$(node -p "require('$M').updates[0].payload.properties.join('\n')")
-adb -s "$SERIAL" shell "update_engine_client --update --follow --payload=$URL --offset=$OFFSET --size=$SIZE --headers='$HEADERS'"
+adb -s "$SERIAL" shell "su 0 update_engine_client --update --follow --payload=$URL --offset=$OFFSET --size=$SIZE --headers='$HEADERS'"
 ```
+
+`su 0` is how `update_device.py` starts the client on userdebug: stock policy gives shell no binder
+call with `update_engine`. Never `adb root` here: restarting adbd drops the `adb reverse` rule from
+step 5.
 
 Expect progress, then `UPDATE_STATUS_UPDATED_NEED_REBOOT` and exit 0. Virtual A/B writes the
 inactive slot through snapshots, whose copy-on-write may use space on `/data`; the running slot and
@@ -245,33 +254,53 @@ adb -s "$SERIAL" shell getprop ro.build.fingerprint       # = manifest buildFing
 adb -s "$SERIAL" shell getenforce                         # Enforcing
 adb -s "$SERIAL" shell getprop ro.boot.verifiedbootstate  # orange, as before (unlocked)
 adb -s "$SERIAL" shell dumpsys package ai.elizaresearch.alphaphone | grep -E 'versionCode|codePath'
-adb -s "$SERIAL" shell update_engine_client --merge       # returns when the Virtual A/B merge is done
+adb -s "$SERIAL" shell su 0 update_engine_client --merge  # returns when the Virtual A/B merge is done
+```
+
+The owner unlocks the phone once now. `BOOT_COMPLETED` comes after the first unlock and only that
+schedules the updater's job, so before it the job checks below find nothing.
+
+```sh
 adb -s "$SERIAL" shell getprop ro.control_privapp_permissions
 adb -s "$SERIAL" shell pm path ai.elizaos.updater         # /system_ext/priv-app/ElizaOsUpdater/...
-adb -s "$SERIAL" shell dumpsys package ai.elizaos.updater | grep -E 'android.permission.(REBOOT|POST_NOTIFICATIONS): granted=true'
+adb -s "$SERIAL" shell dumpsys package ai.elizaos.updater | grep -E 'android.permission.(REBOOT|READ_PRIVILEGED_PHONE_STATE|POST_NOTIFICATIONS): granted=true'
 adb -s "$SERIAL" shell dumpsys jobscheduler | grep -A3 ai.elizaos.updater
 adb -s "$SERIAL" shell ls /system/etc/security/cacerts | wc -l
 ```
 
-The updater runs only inside its job, so read its domain while it runs. This is the one step here that
-starts something, a single check that reaches the channel; it applies nothing unless the channel
-offers a build:
+Prove the channel while the cable is still attached, because a failure after this shows nothing.
+On the builder, make a manifest that offers nothing. At rollout 0 nothing reads its URL. Sign and
+publish it as in step 9:
+
+```sh
+node "$ELIZA/packages/os/scripts/android/channel-manifest.mjs" --channel beta --version "lab-$(date -u +%Y%m%d)" \
+  --sequence 1 --rollout-percent 0 --base-url https://updates.example/unused/ \
+  --out "$OTA_DIR/stallion-beta.json" "$OTA_DIR/ota.zip"
+```
+
+The updater runs only inside its job, so read its domain while it runs. This is the one step here
+that starts something, a single check that reaches the channel; at rollout 0 it applies nothing:
 
 ```sh
 adb -s "$SERIAL" shell cmd jobscheduler run -f ai.elizaos.updater 1
 adb -s "$SERIAL" shell ps -AZ | grep ai.elizaos.updater   # u:r:priv_app:..., never priv_app_36
-adb -s "$SERIAL" logcat -d | grep -E 'avc: denied.*update_engine|ElizaOsUpdater'   # no denial
+sleep 20                                                  # the check reaches the channel
+adb -s "$SERIAL" logcat -d | grep -E 'avc: denied.*update_engine|ElizaOsUpdater'   # no denial, no "Update run ended early"
+adb -s "$SERIAL" shell su 0 content call --uri content://ai.elizaos.updater.status --method status   # state=up-to-date
 ```
 
 Pass: the other slot, the new date and fingerprint, Alpha is HOME with the owner still signed in and
-their data present, both updater permissions granted, `priv_app`, no `update_engine` denial. A failed
-updater never blocks the demo: it does nothing and says nothing. A missing or extra privapp allowlist
-entry is different: under `enforce` it stops `system_server`, the new slot never completes boot and
+their data present, the three updater permissions granted, `priv_app`, no `update_engine` denial, no
+`Update run ended early`, and `state=up-to-date`. That state proves the signature, the embedded key,
+TLS on the job's network and the JSON parsing on the phone. Anything else means the key, the URL or
+the policy is wrong, and only another cable OTA corrects them, so fix it before the cable comes off.
+A failed updater never blocks the demo: it does nothing and says nothing. A missing or extra privapp
+allowlist entry is different: under `enforce` it stops `system_server`, the new slot never completes boot and
 the bootloader returns to the old slot (step 8).
 
 ### 8. Rollback
 
-- **Before the reboot** (`UPDATED_NEED_REBOOT`): `adb -s "$SERIAL" shell update_engine_client --reset_status`
+- **Before the reboot** (`UPDATED_NEED_REBOOT`): `adb -s "$SERIAL" shell su 0 update_engine_client --reset_status`
   cancels the slot switch; after a reboot the device runs the same slot and build. This is the only
   rollback to run on purpose tonight.
 - **The new slot does not boot**: do nothing. The bootloader retries it and, because it was never
@@ -313,11 +342,18 @@ gh release upload os-channel stallion-beta.json stallion-beta.json.sig --clobber
 ```
 
 The two files do not change atomically; a device that fetches between them refuses quietly and
-retries. The unit takes the update on its next check (every 6 h on unmetered Wi-Fi with the battery
-not low). To check now: `adb shell cmd jobscheduler run -f ai.elizaos.updater 1`. The owner then
-sees one silent **Update ready** notification and taps **Restart**; during a ringing or active call
-that tap does nothing and the notification stays. Verify with step 7. A later run sees the new build
-and reports up to date.
+retries. The unit starts the update on its next check (every 6 h on unmetered Wi-Fi with the battery
+not low). To check now: `adb shell cmd jobscheduler run -f ai.elizaos.updater 1`. The job then stays
+open while `update_engine` works, so **Update ready** posts when the work ends, if that is inside a
+job run; otherwise the run after it posts it. The owner sees one silent notification and taps
+**Restart**; during a call in any state, ringing on a silenced phone included, that tap does nothing
+and the notification stays. Verify with step 7. A later run sees the new build and reports up to
+date.
+
+On this first remote update, measure one transfer with the screen off and on battery: time from
+start to **Update ready**, and `update_engine` progress in logcat across a gap between job runs
+(section 2.5, step 3). If it stalls, the fix is a partial wake lock in a later OTA; this client can
+still install that OTA, more slowly.
 
 ## Track 2: after the demo, release keys
 
@@ -425,9 +461,11 @@ https://updates.example/alpha/stallion/
   bucket in the Alpha GCP project where the builder runs (`gcloud storage cp`, Range support, objects
   to 5 TiB, read-only object grant without listing); Cloudflare R2 is the alternative. Publicly
   hosting an OTA that contains Pixel vendor and firmware blobs is a separate owner decision.
-- `update_engine` verifies the payload signature against the running build's `otacerts.zip` and the
-  `FILE_HASH`/`METADATA_HASH` headers, so the CDN is never trusted with content. On a test-key unit
-  the signed channel is the only real boundary, because the test key is public. The updater keeps
+- `update_engine` verifies the payload signature against the running build's `otacerts.zip` and,
+  at the end of the download, the `FILE_HASH` header, before postinstall and any slot switch, so the
+  CDN is never trusted with content. `METADATA_HASH` only forms the payload id on this path. On a
+  test-key unit the signed channel's `FILE_HASH` is the only real boundary, because the test key is
+  public. The updater keeps
   the highest `sequence` it has accepted per channel and refuses a lower one, so a replayed earlier
   manifest cannot lift a halt or install an older build; it can only withhold an update.
 
@@ -442,11 +480,11 @@ module.
 | Package | `ai.elizaos.updater`, a separate small app, never part of `:app`. The Alpha app stays nonprivileged (P-75). |
 | Build | Soong `android_app` from source in the image build, `sdk_version: system_current`, because `UpdateEngine` is `@SystemApi` and a Gradle profile targeting 36 would run in `priv_app_36`. The build's default certificate signs it. |
 | Partition | `/system_ext/priv-app/ElizaOsUpdater`, installed for the system user only. This is the image's second privileged package, after the listener. |
-| Privileged permissions | `REBOOT` only (`privapp_allowlist`). |
+| Privileged permissions | `REBOOT` and `READ_PRIVILEGED_PHONE_STATE` only (`privapp_allowlist`). |
 | Other permissions | `INTERNET`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED`, and `POST_NOTIFICATIONS` from a default-permissions file (`fixed="false"`). |
-| Never | `READ_PHONE_STATE` (calls are seen through the audio mode, as the listener does), `RECOVERY`, `ACCESS_CACHE_FILESYSTEM` or `/data/ota_package` (the payload streams by URL), `INSTALL_PACKAGES`, `WRITE_SECURE_SETTINGS`. |
+| Never | `READ_PHONE_STATE` (a refused app-op makes `isInCall` return false, which reads as no call), `RECOVERY`, `ACCESS_CACHE_FILESYSTEM` or `/data/ota_package` (the payload streams by URL), `INSTALL_PACKAGES`, `WRITE_SECURE_SETTINGS`. |
 | SELinux | Stock `priv_app` cannot reach `update_engine`: only `gmscore_app`, `system_app` (the stable service) and `system_server` can, and `update_engine` checks no caller itself. Two rules in system_ext private policy: `allow priv_app update_engine_service:service_manager find;` and `binder_call(priv_app, update_engine)`. On test keys that adds nothing, because the platform key and test key are public. Before release keys, move to a dedicated domain through system_ext `seapp_contexts` and drop this grant (the G7 pattern). |
-| Platform API | `android.os.UpdateEngine`: `bind`, `applyPayload(url, offset, size, headers)`, `unbind`. |
+| Platform API | `android.os.UpdateEngine`: `bind`, `applyPayload(url, offset, size, headers)`, `unbind`. `TelecomManager.isInCall`. |
 | Status | `content://ai.elizaos.updater.status`, `call("status")`, guarded by `ai.elizaos.updater.permission.READ_STATUS` (`signature\|knownSigner`, bound to the launcher certificate) and re-checked in `call()`. |
 
 Behaviour:
@@ -464,19 +502,29 @@ Behaviour:
 3. **Download**: `applyPayload` with exactly `FILE_HASH`, `FILE_SIZE`, `METADATA_HASH` and
    `METADATA_SIZE` and the client's own `NETWORK_ID`, which keeps the transfer off cellular. Nothing
    else passes, because `update_engine` would obey `POWERWASH`, `SPL_DOWNGRADE` and other headers.
-   `update_engine` downloads and applies on its own. A transfer lost to the network or a reboot
-   resumes when a later run calls `applyPayload` with the same hashes; `update_engine` reports
-   `NOT_ENOUGH_SPACE` itself, so there is no `allocateSpace`.
+   `update_engine` takes no wake lock, so the job stays open until `onPayloadApplicationComplete`
+   or `onStopJob`, and JobScheduler's wake lock keeps the CPU up. A job run lasts 10 to 30 min
+   (10 after three timeouts in 24 h); then a gap of 15 min times the attempts, to 5 h at most, has no
+   wake lock, and with the screen off `update_engine` can freeze until the next run. Nothing is lost
+   in a gap. A transfer lost to the network or a reboot resumes when a later run calls `applyPayload`
+   with the same hashes; `update_engine` reports `NOT_ENOUGH_SPACE` itself, so there is no
+   `allocateSpace`. The updater has no launcher activity, so Android keeps it in the active standby
+   bucket and repeated timeouts cannot restrict it.
 4. **Ready**: on `UPDATED_NEED_REBOOT`, one silent "Update ready" notification with a **Restart**
    action. There is no automatic or overnight restart yet.
-5. **Never during a call**: the audio mode is read immediately before rebooting. Only `MODE_NORMAL`
-   restarts; any ringing, call or communication mode does nothing and leaves the notification.
+5. **Never during a call**: `TelecomManager.isInCall()` and the audio mode are read immediately
+   before rebooting. Only no call in any state and `MODE_NORMAL` restart; anything else does nothing
+   and leaves the notification. `isInCall` is required because Telecom sets `MODE_RINGTONE` only when
+   the ringer takes audio focus, so a call ringing on a silenced phone stays in `MODE_NORMAL`. The
+   audio mode covers communication sessions Telecom does not know.
 6. **No error text**: no failure toast, dialog or notification anywhere. A failed run ends quietly
-   and the next one retries. Status is state only: up-to-date, downloading or ready, and a version.
+   and the next one retries. Status is state only: up-to-date, downloading or ready, and the booted
+   build's version.
    A later APK update can show it in Settings > About through a shared upstream plugin, not a new
    Alpha plugin.
-7. **After restart** the client does nothing: `update_engine` schedules the Virtual A/B merge itself
-   and the next run sees the new build.
+7. **After restart** the client does nothing: `update_engine` schedules the Virtual A/B merge
+   itself. A run during the merge reports up-to-date and asks its backoff for another look, and a
+   later run reads the channel.
 
 An unattended restart leaves the phone locked before its first unlock, when apps that are not
 direct-boot aware (Alpha's agent, reminders) cannot run. Resume on Reboot
@@ -485,7 +533,8 @@ reboot-escrow provider exists, which must be verified on stallion without Google
 is, the "Update ready" notification is the only restart path.
 
 Deferred until after the demo: the dedicated SELinux domain; a kill switch that acts on work already
-started; skipping a payload that failed permanently (today it re-downloads every period);
+started; skipping a payload that failed permanently (today each failure retries on the 15-minute
+linear backoff, to 5 h at most, until a run finishes without rescheduling);
 `suspend()` on a low battery; overnight restart; publishing incrementals; the Settings status row.
 
 ### 2.6 H-25 drills
@@ -503,7 +552,8 @@ steps 5 to 7):
 | `stockRecovery` | Unchanged: #673 H-25 step 4 (wipes, consent, #673 D2) | `verify-stock` passes |
 
 Also record in the same drill records: the kill switch (0 stops an unstarted update), a device
-outside the rollout bucket doing nothing, no restart during a ringing or active call, and a lost
+outside the rollout bucket doing nothing, no restart during a ringing or active call (with the
+ringer on and on a silenced phone), and a lost
 Wi-Fi network ending the transfer until a later run resumes it, never on cellular. Evidence, the
 `signedUpdateRecovery` gate and the channel's `drills` are recorded as #673 describes.
 
@@ -511,7 +561,8 @@ Wi-Fi network ending the transfer until a later run resumes it, never on cellula
 
 1. Unverified on stallion: that the target-files carries `SYSTEM/etc/security/otacerts.zip` with the
    test key's certificate (generate-ota.sh refuses otherwise). The whole updater is unverified on a
-   device: Soong build, policy, grants, `update_engine` calls and the notification.
+   device: Soong build, policy, grants, `update_engine` calls, the notification and how far a
+   screen-off transfer gets between job runs (step 9).
 2. A build whose date is not newer than the device's is refused by `update_engine`; the fix is a
    rebuild, never `--downgrade`.
 3. generate-ota.sh signs incrementals with key files only; managed signing needs a payload signer
