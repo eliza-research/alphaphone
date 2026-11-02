@@ -309,6 +309,8 @@ stock-recovery drill must exercise.
 system launcher bytes as HOME, recovery HOME, Clock handlers, WebView, a green or yellow verified boot state and,
 with `--listener`, the listener's privileges). These are drill tools: drill results and the
 known-good release are recorded in the channel by the release owner from executed drills.
+Field updates through `update_engine` (P-75), incremental OTAs and the channel manifest are in
+[OS updates through A/B OTA](runbooks/ota-updates.md).
 
 
 When the source tree already carries the reviewed SystemUI listener chip, pass
