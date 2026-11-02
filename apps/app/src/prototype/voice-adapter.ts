@@ -428,7 +428,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
           const value = await driver.stopRecording(); if (token !== generation) return;
           if (!value.recordingId || !Number.isFinite(value.durationMs)) throw new Error('Bad clip');
           clip = value; stage = 'recorded'; stopClock(); recordingEnded(value.recordingId, 'notes');
-        } catch (reason) { if (token === generation) releaseCapture(); throw reason; }
+        } catch (reason) { if (token === generation && !clip) releaseCapture(); throw reason; }
         if(chatDestination?.mode==='dictation')await transcribeClip(token);return;
       }
       // Manual review settles in this task (no extra await): an immediate Save is not lost to a busy act.

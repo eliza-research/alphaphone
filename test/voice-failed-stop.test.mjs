@@ -359,6 +359,28 @@ test('the chat recorder paints the clock and line styles that keep them hidden',
  const template=fs.readFileSync('apps/app/src/prototype/template.html','utf8');
  assert.match(template,/style="[^"]*\{\{chatRecorder\.clockCss\}\}">\{\{chatRecorder\.clock\}\}/);
  assert.match(template,/<p style="[^"]*\{\{line\.css\}\}">\{\{line\.t\}\}<\/p>/);
+ assert.match(template,/<span style="\{\{chatRecorder\.clockCss\}\}">\{\{chatRecorder\.primaryLabel\}\}<\/span>/);
+});
+test('Notes: the time limit landing while Stop is in flight keeps the clip its failed Stop would otherwise delete',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();const id=f.activeRecording;
+  let refuse;f.driver.stopRecording=()=>new Promise((_,reject)=>refuse=reject);
+  f.rec().stop();await f.clock.flush();
+  for(const callback of f.events.get('recordingStopped')||[])callback({recordingId:id,durationMs:59000});
+  await f.clock.flush();refuse(Error('Recording could not be saved'));await f.clock.flush();
+  assert.equal(f.rec().state,'recorded','the clip is kept');
+  assert.deepEqual(f.recordingCancels,[],'cancelRecording deletes the kept file natively');
+ }finally{f.close();await f.clock.advance(3000);}
+});
+test('a chat Stop with its capture unanswered paints no Notes recorder',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true,native:true,platform:'android',peak:.5});
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.nativeLiveVoiceReady=async()=>false;
+ try{
+  await f.shell.startVoice();await settle(f);assert.equal(f.renderChat().state,'listening');
+  f.holdCaptureCancel=true;f.renderChat().stop();await settle(f);
+  assert.equal(f.render().rec,undefined);
+ }finally{f.holdCaptureCancel=false;f.releaseCaptureCancel?.();f.close();await settle(f);}
 });
 test('dictation: leaving a held panel for another surface keeps the quiet panel, and the recorder ends it',async()=>{
  const f=dictating();
