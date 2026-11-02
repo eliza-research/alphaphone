@@ -14,17 +14,17 @@ function sendProposal(input:AgentSendContent){
 }
 /** The owner's Settings switches. Off refuses agent writes before any Google request; reads, receipts and the connection stay. */
 export type GoogleAgentAccess={gmailChanges:boolean;calendarEdits:boolean};
-/** Calendar read freshness in plugin-calendar: CALENDAR_FEED_FRESHNESS_MS. */
-const CALENDAR_LOOKUP_SHARE_MS=60_000;
+/** How long one read's fresh grant check and calendar list reach its next step. */
+const CALENDAR_READ_STEP_MS=5_000;
 export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:()=>GoogleAgentAccess=()=>({gmailChanges:true,calendarEdits:true})){
  const allowed=(kind:keyof GoogleAgentAccess)=>{if(access()[kind]!==true)throw Error(kind==='gmailChanges'?'Gmail changes are turned off in Settings › Google accounts. Google stays connected; nothing was changed.':'Calendar edits are turned off in Settings › Google accounts. Google stays connected; nothing was changed.');};
  const refuseWrite=()=>{throw Error('Gmail agent reads cannot change credentials or mail.');};
- // One Calendar read lists sources, then reads each feed, and each step would verify the owner and list calendars again:
- // nine Cloud round trips for one empty day. Reads of one credential share those two lookups for a minute. Every feed
- // still reads Google and re-checks its grant afterwards, so a revoked grant never returns one.
+ // One Calendar read lists sources, then reads each feed. Without this each step verifies the owner and lists calendars
+ // again: nine Cloud round trips for one empty day. The next step reuses the check the previous step just finished, and
+ // concurrent reads join one lookup. Every step still ends with its own fresh grant check, so nothing outlives a revoke.
  const shared=new Map<string,{expires:number;value:Promise<unknown>}>();
  const held=(key:string)=>(shared.get(key)?.expires??0)>Date.now();
- const share=(key:string,value:Promise<unknown>)=>shared.set(key,{expires:Date.now()+CALENDAR_LOOKUP_SHARE_MS,value});
+ const share=(key:string,value:Promise<unknown>)=>shared.set(key,{expires:Date.now()+CALENDAR_READ_STEP_MS,value});
  async function sharedLookup<T>(key:string,read:()=>Promise<T>):Promise<T>{
   // A failed lookup belongs to its caller, whose request may have ended: a joiner reads for itself.
   if(held(key))return (shared.get(key)!.value as Promise<T>).catch(read);
@@ -41,6 +41,7 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
   const current=async()=>{signal.throwIfAborted();if(JSON.stringify(await host.agentCredential())!==identity)throw Error('Cloud account changed while reading Gmail.');};
   stage='client';
   const client=new CloudProtocol('production',operation==='calendar'?host.agentCalendarOperation:operation?host.agentGmailOperation:host.agentRead,{acceptsReferences:true,read:async()=>{await current();return credential;},write:async()=>refuseWrite(),clear:async()=>refuseWrite()},async()=>refuseWrite());
+  const calendarRead=capability==='google.calendar.read',ownerKey=createHash('sha256').update(identity).digest('hex');
   const listOwned=async()=>{
    stage='identity';
    const owner=await client.identity(signal);await current();
@@ -48,7 +49,6 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
    stage='accounts';
    return client.gmailAccounts(signal);
   };
-  const calendarRead=capability==='google.calendar.read',ownerKey=createHash('sha256').update(identity).digest('hex');
   const listed=calendarRead?await sharedLookup(ownerKey,listOwned):await listOwned();
   stage='account-projection';
   const accounts=listed.filter(a=>a.connected&&a.connectionId&&a.grantedCapabilities.includes(capability)).map(account=>({account,grantId:account.connectionId!,scope:createHash('sha256').update(identity+':'+account.connectionId).digest('hex')}));
@@ -112,17 +112,15 @@ export function createManagedGoogleAgentHost(host:ManagedGoogleAgentPort,access:
    // merged Calendar: each account's own calendar and every calendar the owner shows in Google Calendar join the
    // agent feed by default (CalendarService keeps an explicit per-calendar choice once the owner makes one).
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar');
-   // Calendars already held read nothing new from Google, so there is no read to re-check.
-   const unread=accounts.some(({scope})=>!held(`${scope}:calendars`));
    const sources=(await Promise.all(accounts.map(async({account,grantId,scope})=>(await googleCalendars(client,grantId,scope,signal)).filter(row=>['reader','writer','owner'].includes(row.accessRole)).map(row=>({...row,provider:'google',side:'owner',grantId:`alpha-google:${scope}`,connectorAccountId:`alpha-google:${scope}`,managedGoogleConnectionId:grantId,accountEmail:account.label,includeInFeed:row.primary||row.selected,selectionVersion:1}))))).flat();
-   if(unread)await confirm(accounts.map(a=>a.grantId));return sources;
+   await confirm(accounts.map(a=>a.grantId));return sources;
    }catch(error){recordManagedGoogleFailure(error,'calendar-sources');throw error;}
   },
   async calendarFeed(input:{grantId:string;calendarId:string;timeMin:string;timeMax:string;timeZone:string},parent?:AbortSignal){
    const {client,signal,accounts,confirm}=await ownerAccounts(parent,'google.calendar.read','calendar');
    const owned=accounts.find(a=>input.grantId===`alpha-google:${a.scope}`);if(!owned)throw Error('Select a calendar from the current owner connection.');
    const {grantId,scope}=owned,readable=(rows:Awaited<ReturnType<typeof googleCalendars>>)=>rows.find(row=>row.calendarId===input.calendarId&&['reader','writer','owner'].includes(row.accessRole));
-   // A calendar added since the shared lookup is still readable.
+   // A calendar added since the previous step is still readable.
    let calendar=readable(await googleCalendars(client,grantId,scope,signal));
    if(!calendar){shared.delete(`${scope}:calendars`);calendar=readable(await googleCalendars(client,grantId,scope,signal));}
    if(!calendar)throw Error('This calendar is not currently readable.');
