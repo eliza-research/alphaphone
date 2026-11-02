@@ -80,7 +80,6 @@ test('a reply read with Read aloud can be stopped from its Stop reading control 
   const row = f.shell.renderVals().msgs[1];
   assert.equal(row.localSpeechControlLabel, 'Stop reading');
   assert.equal(row.localSpeechLabel, 'Read aloud');
-  assert.equal(row.localSpeechMessage, '');
   row.localSpeech(); await tick();
   assert.equal(f.signals[0].aborted, true);
   f.shell.renderVals().msgs[1].localSpeech(); await tick(); await tick();
@@ -88,6 +87,30 @@ test('a reply read with Read aloud can be stopped from its Stop reading control 
   f.say({id: 'u2', from: 'user', text: 'Typed follow-up'});
   await tick();
   assert.equal(f.signals[1].aborted, true, 'a new user message stops the reply being read');
+});
+
+test('Read aloud that fails, is unavailable or is stopped returns quietly to Read aloud; a finished read does too', async () => {
+  const quiet = row => { assert.equal(row.localSpeechControlLabel, 'Read aloud'); assert.equal(row.localSpeechActive, false); assert.doesNotMatch(JSON.stringify(row), /stopped|unavailable|failed|not have been read|still available/i); };
+  for (const outcome of ['failed', 'unavailable', 'stopped', 'finished']) {
+    const f = fixture(); f.hold = outcome === 'stopped';
+    if (outcome === 'failed') f.box.speakLocalText = async () => { throw Error('On-device speech failed.'); };
+    if (outcome === 'unavailable') f.box.createOnDeviceVoice = () => ({ready: async () => false, playbackReady: async () => false});
+    f.say({id: 'u1', from: 'user', text: 'First'}); f.say({id: 'a1', from: 'agent', text: 'Long reply.'});
+    f.shell.renderVals().msgs[1].localSpeech(); await tick(); await tick();
+    if (outcome === 'stopped') { assert.equal(f.shell.renderVals().msgs[1].localSpeechControlLabel, 'Stop reading'); f.shell.renderVals().msgs[1].localSpeech(); await tick(); }
+    assert.equal(f.spoken.length, outcome === 'unavailable' || outcome === 'failed' ? 0 : 1, outcome);
+    quiet(f.shell.renderVals().msgs[1]);
+  }
+});
+
+test('an unconfirmed Read aloud cleanup holds back one later read, not every read after it', async () => {
+  const f = fixture(); let hold = true;
+  f.box.speakLocalText = async (text, signal) => { f.spoken.push({text}); if (hold) await new Promise((_, reject) => signal.addEventListener('abort', () => reject(Object.assign(Error('unconfirmed'), {code: 'speech-cleanup-unconfirmed'})), {once: true})); };
+  f.say({id: 'u1', from: 'user', text: 'First'}); f.say({id: 'a1', from: 'agent', text: 'Long reply.'});
+  const tap = async () => { f.shell.renderVals().msgs[1].localSpeech(); await tick(); await tick(); };
+  await tap(); assert.equal(f.spoken.length, 1); await tap();
+  hold = false; await tap(); assert.equal(f.spoken.length, 1, 'that read reports the unconfirmed cleanup, quietly');
+  await tap(); assert.equal(f.spoken.length, 2, 'the next read plays');
 });
 
 test('Listen on an earlier reply is not stopped by user messages that were already there', async () => {

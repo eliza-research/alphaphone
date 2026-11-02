@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import vm from 'node:vm';
-import {stripTypeScriptTypes} from 'node:module';
-import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
+import {cloudVoiceViewFixture,load} from './fixtures/cloud-voice-view.mjs';
 import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 
 // Spoken model acknowledgements on the Pixel (native platform): the batch fallback, streaming
@@ -68,8 +66,7 @@ test('native batch: reply_ready preempts a playing ack and the reply waits for i
 
 // --- Streaming Cloud speech (the Pixel default on Cloud) and on-device live voice.
 function loadSession(f){
- const source=fs.readFileSync('.eliza/client-features/packages/voice/src/voice-assistant-session.ts','utf8').replace(/^import .*;\n/gm,'').replaceAll('export class','class').replaceAll('export const','const').replaceAll('export function','function').replaceAll('export interface','interface').replaceAll('export type','type');
- vm.runInNewContext('{'+stripTypeScriptTypes(source)+';globalThis.VoiceAssistantSession=VoiceAssistantSession;}',f.box);
+ load('../../../.eliza/client-features/packages/voice/src/voice-assistant-session.ts',f.box,['VoiceAssistantSession']);
  f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.randomId=()=>crypto.randomUUID();
  f.box.createHeardReporter=()=>({report:async()=>'not-needed'});
  const Session=f.box.VoiceAssistantSession;f.box.VoiceAssistantSession=class extends Session{constructor(...args){super(...args);f.session=this;}};
@@ -119,7 +116,7 @@ function onDeviceLiveFixture(){
   return {fullDuplex:true,close:async()=>{s.closes++;await s.closeGate?.(capture);capture.active=false;},cancel:async()=>{s.cancels++;capture.active=false;}};
  };
  f.box.createEndpointChain=()=>async()=>'unavailable';f.box.residentEndpoint=()=>undefined;f.box.clefEndpointStage=()=>undefined;
- f.box.createOnDeviceVoice=()=>({ready:async()=>true,playbackReady:async()=>true,speak:(text,signal,onStarted)=>s.speak(text,signal,onStarted)});
+ f.box.createOnDeviceVoice=()=>({ready:async()=>true,playbackReady:async()=>true,speak:s.speak});
  return Object.assign(f,{clock,s});
 }
 async function liveTurn(f,gapMs=0){
@@ -268,14 +265,14 @@ test('native batch: an ack whose Cloud speech request fails is silence; the repl
   progress(t.input);await t.clock.flush();assert.deepEqual(t.texts(),[ACK]);
   t.f.releaseReply();await t.clock.flush();
   assert.deepEqual(t.texts(),[ACK,REPLY],'no canned line in its place, and the reply plays');
-  assert.notEqual(t.f.renderChat()?.state,'error');
+  assert.ok(t.f.renderChat(),'the conversation goes on');
  }finally{await closeBatch(t);}
 });
 
 // The browser's clip loop speaks the ack through the same wrapper, so a failed ack is silence there
-// too (at 445e5744 it ended the web conversation). A failed reply still ends it, as before.
+// too. A failed reply still ends it.
 for(const failing of [ACK,REPLY])
-test(`browser batch: ${failing===ACK?'an ack whose Cloud speech request fails is silence; the reply is spoken and the conversation goes on':'a reply whose Cloud speech request fails still ends the conversation with its notice'}`,async()=>{
+test(`browser batch: ${failing===ACK?'an ack whose Cloud speech request fails is silence; the reply is spoken and the conversation goes on':'a reply whose Cloud speech request fails still ends the conversation, quietly'}`,async()=>{
  const t=await batchTurn({native:false,platform:'web'});const synthesize=t.f.driver.synthesize;
  t.f.driver.synthesize=async input=>{if(input.text!==failing)return synthesize(input);(t.f.speechInputs??=[]).push(input);throw Object.assign(Error('Cloud speech failed'),{code:'voice-http-502'});};
  try{
@@ -283,8 +280,8 @@ test(`browser batch: ${failing===ACK?'an ack whose Cloud speech request fails is
   // Microtasks drain before any timer, as in the app: the reply's speech and its failure settle first.
   t.f.releaseReply();for(let i=0;i<10;i++)await t.clock.flush();
   assert.deepEqual(t.texts(),[ACK,REPLY]);
-  if(failing===ACK)assert.notEqual(t.f.renderChat()?.state,'error');
-  else{assert.equal(t.f.renderChat()?.state,'error');assert.match(t.f.renderChat()?.lines?.[0]?.t,/\(502\)/);}
+  if(failing===ACK)assert.ok(t.f.renderChat(),'the conversation goes on');
+  else assert.equal(t.f.renderChat(),null,'voice ended quietly');
  }finally{await closeBatch(t);}
 });
 
@@ -394,7 +391,7 @@ function onDeviceBatchFixture(){
  f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
  const s=speaker();
  f.box.nativeLiveVoiceReady=async()=>false;
- f.box.createOnDeviceVoice=()=>({ready:async()=>true,playbackReady:async()=>true,transcribe:async()=>({text:'Add lunch with Sam tomorrow.'}),speak:(text,signal,onStarted)=>s.speak(text,signal,onStarted)});
+ f.box.createOnDeviceVoice=()=>({ready:async()=>true,playbackReady:async()=>true,transcribe:async()=>({text:'Add lunch with Sam tomorrow.'}),speak:s.speak});
  return Object.assign(f,{clock,s});
 }
 test('on-device batch: the model acknowledgement plays through on-device speech once, after the clip is retired, then the reply',async()=>{
@@ -422,8 +419,7 @@ test('on-device batch: the model acknowledgement plays through on-device speech 
 function socketFixture({echoCancelled=true}={}){
  const clock=voiceFakeClock(),f=viewFixture({cloudProfile:true,clock,holdReply:true});
  loadSession(f);
- const source=fs.readFileSync('.eliza/client-features/packages/voice/src/native-cloud-speech.ts','utf8').replace(/^import .*;\n/gm,'').replaceAll('export function','function').replaceAll('export interface','interface');
- vm.runInNewContext('{'+stripTypeScriptTypes(source)+';globalThis.createSharedCloudStreamingSpeech=createCloudStreamingSpeech;}',f.box);
+ load('../../../.eliza/client-features/packages/voice/src/native-cloud-speech.ts',f.box,['createCloudStreamingSpeech']);f.box.createSharedCloudStreamingSpeech=f.box.createCloudStreamingSpeech;
  const n={spoken:[],refused:[],cancels:0,stops:0,mutes:[],utterance:null,draining:false,holdCancel:false,physicalActive:false,lateOpenRetired:0};
  const port={
   async addListener(_event,callback){n.emit=callback;return {remove:async()=>{}};},
@@ -479,7 +475,7 @@ function watchReply(f){const send=f.shell.sendVoiceTurn.bind(f.shell),seen={};f.
 // message handler (its own owner/session check, a frame that does not parse, an oversized frame, an
 // unexpected event), so nothing the renderer receives ties that end to the ack. Until the bridge
 // reports a typed failure bound to the session and to the ack's own request, that end retires the
-// capture, the turn and the conversation at once, as any 'protocol' end did at 445e5744: the agent
+// capture, the turn and the conversation at once, as any 'protocol' end does: the agent
 // request is cancelled and its reply is never spoken. Only the ack's own speak call failing (a
 // refusal, below) is the ack's, and that is silence.
 test('speech socket: Cloud completes the ack without audio: the socket-wide failure ends the turn and the conversation at once',async()=>{
@@ -489,10 +485,9 @@ test('speech socket: Cloud completes the ack without audio: the socket-wide fail
   progress(input);await f.clock.flush();assert.deepEqual(n.spoken,[ACK]);
   n.complete();const abortedAtOnce=input.signal.aborted;await f.clock.flush();
   assert.equal(abortedAtOnce,true,'the request is cancelled with the capture end itself, not attributed to the ack');
-  assert.equal(f.renderChat()?.state,'error');assert.ok(n.stops>=1,'the failed socket is stopped');
-  assert.match(f.renderChat()?.lines?.[0]?.t,/^Voice stopped\./,'the existing stopped notice');
+  assert.equal(f.renderChat(),null);assert.ok(n.stops>=1,'the failed socket is stopped');
   f.releaseReply();await f.clock.flush();
-  assert.equal(seen.reply,undefined,'the cancelled request never completes');assert.equal(f.renderChat()?.state,'error');
+  assert.equal(seen.reply,undefined,'the cancelled request never completes');assert.equal(f.renderChat(),null);
   assert.deepEqual(n.spoken,[ACK],'nothing is spoken on the retired socket, and no canned line');
  }finally{await closeSocket(f);}
 });
@@ -503,9 +498,9 @@ test('speech socket: Cloud completes the ack without audio: a request that would
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();n.complete();await f.clock.flush();
-  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');const line=f.renderChat()?.lines?.[0]?.t;
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat(),null);
   f.releaseReply();await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.equal(f.renderChat()?.lines?.[0]?.t,line);assert.deepEqual(n.spoken,[ACK]);
+  assert.equal(f.renderChat(),null);assert.deepEqual(n.spoken,[ACK]);assert.deepEqual(f.shell.messages,[]);
  }finally{await closeSocket(f);}
 });
 
@@ -541,7 +536,7 @@ test('speech socket: a socket failure with no ack in flight still ends the conve
  try{
   const input=await socketTurn(f);
   n.cloudError();await f.clock.flush();
-  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat(),null);
   f.releaseReply();await f.clock.flush();assert.equal(seen.reply,undefined);
  }finally{await closeSocket(f);}
 });
@@ -552,11 +547,11 @@ test('speech socket: a socket failure after the ack played out cancels the reque
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();n.audioStart();n.complete();await f.clock.flush();
   n.cloudError();await f.clock.flush();
-  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat(),null);
  }finally{await closeSocket(f);}
 });
 
-// 'protocol' with no ack in flight, or after the ack played out: immediate, as at 445e5744.
+// 'protocol' with no ack in flight, or after the ack played out: immediate.
 for(const [name,before] of [['with no ack in flight',async()=>{}],['after the ack played out',async(f,input)=>{progress(input);await f.clock.flush();f.n.audioStart();f.n.complete();}]])
 test(`speech socket: a 'protocol' failure ${name} ends the conversation and cancels the request at once`,async()=>{
  const f=socketFixture(),n=f.n,seen=watchReply(f);
@@ -564,7 +559,7 @@ test(`speech socket: a 'protocol' failure ${name} ends the conversation and canc
   const input=await socketTurn(f);
   await before(f,input);await f.clock.flush();
   n.fail('protocol');await f.clock.flush();
-  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat()?.state,'error');
+  assert.equal(input.signal.aborted,true);assert.equal(f.renderChat(),null);
   f.releaseReply();await f.clock.flush();assert.equal(seen.reply,undefined);
  }finally{await closeSocket(f);}
 });
@@ -585,7 +580,7 @@ test('speech socket: an ack completed without audio has already ended the turn; 
  try{
   const input=await socketTurn(f);
   progress(input);await f.clock.flush();n.complete();await f.clock.flush();
-  assert.equal(input.signal.aborted,true,'the failure ended the turn before Stop');assert.equal(f.renderChat()?.state,'error');
+  assert.equal(input.signal.aborted,true,'the failure ended the turn before Stop');assert.equal(f.renderChat(),null);
   await f.shell.stopVoiceConversation();await f.clock.flush();
   assert.equal(f.renderChat()?.state,undefined,'Stop closes the conversation');
   f.releaseReply();await f.clock.flush();
@@ -618,10 +613,10 @@ test('speech socket: Cloud reports the ack echo after the ack audio ended; it ne
  }finally{await closeSocket(f);}
 });
 
-// --- Lifecycle: every capture end stays immediate, 'protocol' included, exactly as without an ack
-// (445e5744). Each case runs twice, with the ack playing and with no ack (a label that is silence),
+// --- Lifecycle: every capture end stays immediate, 'protocol' included, exactly as without an ack.
+// Each case runs twice, with the ack playing and with no ack (a label that is silence),
 // and the outcome at the moment of the end must match.
-const outcome=(f,input,seen)=>({aborted:input.signal.aborted,state:f.renderChat()?.state,line:f.renderChat()?.lines?.[0]?.t,replied:seen.reply!==undefined});
+const outcome=(f,input,seen)=>({aborted:input.signal.aborted,state:f.renderChat()?.state,replied:seen.reply!==undefined});
 async function sameAsWithoutAck(run){
  const withAck=await run(ACK),withoutAck=await run('');
  assert.equal(withAck.spoken,1,'the ack was playing');assert.equal(withoutAck.spoken,0);
@@ -648,7 +643,7 @@ test(`speech socket: '${code??'no code'}' while the ack ${audible?'plays':'waits
    return result;
   }finally{await closeSocket(f);}
  });
- assert.equal(atEnd.state,'error');
+ assert.equal(atEnd.state,undefined,'voice ended quietly');
 });
 
 async function sameClosedInputWithOrWithoutAck(run){
@@ -658,18 +653,20 @@ async function sameClosedInputWithOrWithoutAck(run){
  assert.equal(withAck.atEnd.aborted,false,'stale input never cancels the current request');
  return withAck.atEnd;
 }
-// Faults the native bridge reports with the same 'protocol' error event (RelayListener.onMessage's
-// one catch in patches/eliza/cloud-speech-native.patch), so none identifies the ack: each, while
-// the ack's turn is pending, cancels the agent request with the capture end itself and retires the
-// capture (the socket is stopped and hears nothing more), exactly as the same fault with no ack.
-const protocolFaults=['its own owner/session check failing (own.check)','a control frame that does not parse','an oversized control frame','an unexpected event in its dispatch','Cloud completing an utterance with no audio, or twice','an unknown fault'];
+// The native bridge reports every fault in its message handler with the one 'protocol' error
+// event (RelayListener.onMessage's one catch in patches/eliza/cloud-speech-native.patch): its own
+// owner/session check, a control frame that does not parse, an oversized control frame, an
+// unexpected event in its dispatch, Cloud completing an utterance with no audio or twice, and any
+// unknown fault. None identifies the ack: while the ack's turn is pending, 'protocol' cancels the
+// agent request with the capture end itself and retires the capture (the socket is stopped and
+// hears nothing more), exactly as with no ack.
 const retiredAtOnce=async(f,input,seen,fault)=>{
  const before=f.sends;fault();const abortedAtOnce=input.signal.aborted;await f.clock.flush();
  f.n.utter('Is this still heard?');await f.clock.advance(0);
  return {...outcome(f,input,seen),abortedAtOnce,socketStopped:f.n.stops>=1,heardAfter:f.sends-before};
 };
-for(const audible of [false,true])for(const fault of protocolFaults)
-test(`speech socket: ${fault} (reported as 'protocol') while the ack ${audible?'plays':'waits for its first audio'} cancels the request and retires the capture at once, as without an ack`,async()=>{
+for(const audible of [false,true])
+test(`speech socket: 'protocol' while the ack ${audible?'plays':'waits for its first audio'} cancels the request and retires the capture at once, as without an ack`,async()=>{
  const atEnd=await sameAsWithoutAck(async label=>{
   const f=socketFixture(),n=f.n,seen=watchReply(f);
   try{
@@ -682,8 +679,7 @@ test(`speech socket: ${fault} (reported as 'protocol') while the ack ${audible?'
    return result;
   }finally{await closeSocket(f);}
  });
- assert.deepEqual(atEnd,{aborted:true,state:'error',line:atEnd.line,replied:false,abortedAtOnce:true,socketStopped:true,heardAfter:0});
- assert.match(atEnd.line,/^Voice stopped\./);
+ assert.deepEqual(atEnd,{aborted:true,state:undefined,replied:false,abortedAtOnce:true,socketStopped:true,heardAfter:0});
 });
 
 // The renderer bridge's own owner/session check (native-cloud-speech.ts check()) failing on an event
@@ -730,7 +726,7 @@ test('speech socket: Mute during an ack, then a socket failure: handled as witho
    f.renderChat().toggleMute();await f.clock.flush();
    n.fail('protocol');await f.clock.flush();
    const muted=outcome(f,input,seen);
-   f.renderChat().toggleMute();await f.clock.flush();
+   f.renderChat()?.toggleMute?.();await f.clock.flush();
    const unmuted=outcome(f,input,seen);
    return {spoken,muted,unmuted};
   }finally{await closeSocket(f);}
@@ -738,7 +734,7 @@ test('speech socket: Mute during an ack, then a socket failure: handled as witho
  const withAck=await run(ACK),withoutAck=await run('');
  assert.equal(withAck.spoken,1);assert.equal(withoutAck.spoken,0);
  assert.deepEqual(withAck.muted,withoutAck.muted);assert.deepEqual(withAck.unmuted,withoutAck.unmuted);
- assert.equal(withAck.unmuted.state,'error','Unmute finds the socket gone');assert.equal(withAck.unmuted.aborted,true);
+ assert.equal(withAck.unmuted.state,undefined,'voice already ended quietly');assert.equal(withAck.unmuted.aborted,true);
 });
 
 // On-device live voice: its own speaker plays the ack, so no capture end is ever the ack's: all
@@ -767,7 +763,7 @@ test(`on-device live voice: ${name} while the ack ${audible?'plays':'waits for i
    return result;
   }finally{await closeLive(f);}
  });
- assert.equal(atEnd.state,'error');
+ assert.equal(atEnd.state,undefined,'voice ended quietly');
 });
 
 for(const [name,act] of fences)
@@ -1292,18 +1288,7 @@ test('speech socket: a \'protocol\' failure after a stale closed-capture start e
    return {spoken,atEnd:outcome(f,input,seen)};
   }finally{await closeSocket(f);}
  });
- assert.equal(atEnd.state,'error');
-});
-
-// --- The ack lives in the owning voice adapter: no Alpha cue module, and no live path claims a
-// retired capture (the helper takes null there; the clip loop still requires retirement).
-test('the ack is folded into the voice adapter: no cue module, and only the clip loop claims a retired capture',()=>{
- const adapter=fs.readFileSync('apps/app/src/prototype/voice-adapter.ts','utf8');
- assert.equal(fs.existsSync('apps/app/src/runtime/live-voice-cue.ts'),false);
- assert.doesNotMatch(adapter,/captureRetired:\(\)=>true/);
- assert.equal((adapter.match(/cueSpeech=\{captureRetired:/g)||[]).length,2);
- assert.match(adapter,/cueSpeech=\{captureRetired:null,/);
- assert.match(adapter,/cueSpeech=\{captureRetired:\(\)=>batchCaptureRetired,/);
+ assert.equal(atEnd.state,undefined,'voice ended quietly');
 });
 
 // --- Busy hold over the real speech socket bridge (the shared session from elizaOS
@@ -1314,22 +1299,21 @@ test('the ack is folded into the voice adapter: no cue module, and only the clip
 // once, also with nothing heard (idle); nothing reopens either way. The closed capture still
 // hears the socket's end (the bridge keeps the last listen as its lifecycle observer), so a
 // transport, expiry, protocol or owner failure during the hold ends the turn at once, also while
-// the ack is refused. A refusal alone, on a healthy socket, stays silence. These rows need a
-// projected shared session with the hold; the pinned one predates it.
+// the ack is refused. A refusal alone, on a healthy socket, stays silence.
 const busyHold={}; // Mandatory paired tests: the suite prerequisite rejects a legacy projection.
 const holdFaults=[
- ['a transport failure',f=>f.n.fail('connection-lost'),'error'],
- ['expiry',f=>f.n.fail('expired'),'error'],
- ['a protocol failure',f=>f.n.fail('protocol'),'error'],
- // An owner change closes the conversation (no error state), as with an open capture.
- ["the renderer bridge's owner check",f=>{f.agent='another-agent-session';f.n.emit({sessionId:f.n.sessionId,type:'level',peak:.2});},undefined],
+ ['a transport failure',f=>f.n.fail('connection-lost')],
+ ['expiry',f=>f.n.fail('expired')],
+ ['a protocol failure',f=>f.n.fail('protocol')],
+ // An owner change closes the conversation too, as with an open capture.
+ ["the renderer bridge's owner check",f=>{f.agent='another-agent-session';f.n.emit({sessionId:f.n.sessionId,type:'level',peak:.2});}],
 ];
 const holdStages=[
  ['before the ack',async()=>{}],
  ['while the ack is refused',async(f,input)=>{f.n.refuse=text=>text===ACK;progress(input);await f.clock.flush();assert.deepEqual(f.n.refused,[ACK]);assert.equal(input.signal.aborted,false,'a refusal alone is silence');}],
  ['before the final reply',async(f,input)=>{progress(input);await f.clock.flush();f.n.audioStart();f.n.complete();await f.clock.flush();assert.deepEqual(f.n.spoken,[ACK]);}],
 ];
-for(const [stage,before] of holdStages)for(const [fault,act,ended] of holdFaults)
+for(const [stage,before] of holdStages)for(const [fault,act] of holdFaults)
 test(`busy hold over the speech socket: ${fault} after the capture's confirmed close, ${stage}, ends the turn and the conversation at once`,busyHold,async()=>{
  const f=socketFixture(),n=f.n,seen=watchReply(f);
  try{
@@ -1338,7 +1322,7 @@ test(`busy hold over the speech socket: ${fault} after the capture's confirmed c
   await before(f,input);
   act(f);const abortedAtOnce=input.signal.aborted;await f.clock.flush();
   assert.equal(abortedAtOnce,true,'the request is cancelled with the socket end itself');
-  assert.equal(f.renderChat()?.state,ended);
+  assert.equal(f.renderChat(),null,'voice ended quietly');
   f.releaseReply();await f.clock.flush();
   assert.equal(seen.reply,undefined,'the cancelled request never completes');
   assert.equal(n.spoken.includes(REPLY),false,'the reply is never spoken');
@@ -1381,14 +1365,14 @@ test('busy hold over the speech socket: a close the native mute refuses ends the
  try{
   await f.shell.startVoice();await f.clock.flush();
   n.utter('Add lunch with Sam tomorrow.');await f.clock.advance(0);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
+  assert.equal(f.renderChat(),null);
   assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);assert.ok(n.stops>=1,'the socket is retired');
   await f.clock.advance(5000);assert.deepEqual(n.mutes,[false,true],'no replacement capture');
  }finally{await closeSocket(f);}
 });
 
 // The bridge's one 2.5 s close bound covers the native mute too: a mute it never answers rejects
-// the close, which ends the conversation with the microphone error; nothing is sent or reopened.
+// the close, which ends the conversation quietly; nothing is sent or reopened.
 test('busy hold over the speech socket: a close the native mute does not answer ends the conversation at the bridge bound; nothing is sent, spoken or reopened',busyHold,async()=>{
  const f=socketFixture(),n=f.n;n.closeMute=()=>new Promise(()=>{});
  try{
@@ -1396,7 +1380,7 @@ test('busy hold over the speech socket: a close the native mute does not answer 
   n.utter('Add lunch with Sam tomorrow.');await f.clock.advance(2499);
   assert.equal(f.renderChat()?.state,'thinking');assert.equal(f.sends,0);assert.deepEqual(n.mutes,[false,true]);
   await f.clock.advance(1);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
+  assert.equal(f.renderChat(),null);
   assert.ok(n.stops>=1,'the socket is retired');
   await f.clock.advance(5000);assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);assert.deepEqual(n.mutes,[false,true],'nothing reopens');
  }finally{await closeSocket(f);}
@@ -1414,7 +1398,7 @@ test('busy hold over the speech socket: Mute mid-speech, the final arrives, the 
   n.emit({sessionId:n.sessionId,type:'speech-end',text:'Add lunch with Sam tomorrow.'});
   refuse(Error('Microphone could not change state'));n.fail('capture');await f.clock.flush();
   await f.clock.advance(0);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
+  assert.equal(f.renderChat(),null);
   await f.clock.advance(5000);assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);assert.deepEqual(n.mutes,[false,true]);
  }finally{await closeSocket(f);}
 });
@@ -1429,7 +1413,7 @@ test(`busy hold over the speech socket: Mute mid-speech, the mute confirmed with
   n.emit({sessionId:n.sessionId,type:'speech-end',text:'Add lunch with Sam tomorrow.'});await f.clock.flush();
   assert.equal(f.sends,0);assert.deepEqual(n.mutes,[false,true]);
   n.fail(code);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');
+  assert.equal(f.renderChat(),null);
   await f.clock.advance(5000);assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);assert.deepEqual(n.mutes,[false,true]);
  }finally{await closeSocket(f);}
 });
@@ -1443,9 +1427,9 @@ test('busy hold on-device: Mute mid-speech, the final arrives, the Mute close re
   f.renderChat().toggleMute();await f.clock.flush();
   h.onSpeechEnd(20);h.onSegment('Add lunch with Sam tomorrow.');await f.clock.flush();
   reject(Error('Native transcription close was not confirmed.'));await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error','Mute is not left showing over the unconfirmed close');
+  assert.equal(f.renderChat(),null,'Mute is not left showing over the unconfirmed close');
   await f.clock.advance(1300);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
+  assert.equal(f.renderChat(),null);
   await f.clock.advance(5000);
   assert.equal(f.sends,0);assert.deepEqual(f.s.spoken(),[]);assert.equal(closes,1);assert.equal(listens,1,'no replacement capture');
  }finally{await closeLive(f);}
@@ -1456,10 +1440,10 @@ test('busy hold on-device: Mute mid-speech, the final arrives, the Mute close re
 // native-cloud-speech module and canonical VoiceAssistantSession, never a replacement controller.
 // The native port exposes explicit close/open/cancel gates and a physical-input ownership sentinel.
 const terminalActions=[
- ['transport',f=>f.n.fail('connection-lost'),'error'],
- ['expiry',f=>f.n.fail('expired'),'error'],
- ['protocol',f=>f.n.fail('protocol'),'error'],
- ['owner',f=>{f.agent='another-agent-session';f.n.emit({sessionId:f.n.sessionId,type:'level',peak:.2});},undefined],
+ ['transport',f=>f.n.fail('connection-lost')],
+ ['expiry',f=>f.n.fail('expired')],
+ ['protocol',f=>f.n.fail('protocol')],
+ ['owner',f=>{f.agent='another-agent-session';f.n.emit({sessionId:f.n.sessionId,type:'level',peak:.2});}],
 ];
 function assertSocketRetired(f,{sends=1,spoken,stops=1}={}){
  assert.equal(f.sends,sends,'no late or duplicate send');
@@ -1468,7 +1452,7 @@ function assertSocketRetired(f,{sends=1,spoken,stops=1}={}){
  assert.equal(f.n.stops,stops,'one idempotent socket retirement');
 }
 for(const [stage,draining] of [['final audio',false],['final cancellation drain',true]])
-for(const [fault,act,state] of terminalActions)
+for(const [fault,act] of terminalActions)
 test(`paired busy hold: ${fault} during ${stage} retires once without a late reopen or extra reply`,async()=>{
  const f=socketFixture(),n=f.n,seen=watchReply(f);
  try{
@@ -1479,7 +1463,7 @@ test(`paired busy hold: ${fault} during ${stage} retires once without a late reo
   act(f);await f.clock.flush();
   assert.notEqual(f.renderChat()?.state,'listening','a terminal event cannot resume listening');
   // An already delivered reply remains evidence; terminal handling must prevent further effects.
-  assert.equal(seen.reply?.text,REPLY);n.releaseCancel?.();await f.clock.flush();if(state)assert.equal(f.renderChat()?.state,state);
+  assert.equal(seen.reply?.text,REPLY);n.releaseCancel?.();await f.clock.flush();assert.equal(f.renderChat(),null,'voice ended quietly');
   n.utter(CORRECTION);await f.clock.advance(5000);
   assertSocketRetired(f,{spoken:[ACK,REPLY]});assert.deepEqual(n.mutes,[false,true]);
  }finally{await closeSocket(f);}
@@ -1541,17 +1525,16 @@ test(`paired idle Mute: ${mode} native close retires physical input and Unmute c
   await f.shell.startVoice();await f.clock.flush();assert.equal(n.physicalActive,true);
   n.closeMute=mode==='rejected'?async()=>{throw Error('Native mute unconfirmed');}:()=>new Promise(()=>{});
   f.renderChat().toggleMute();await f.clock.flush();if(mode==='unanswered')await f.clock.advance(2500);await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error','unconfirmed idle Mute is terminal');assertSocketRetired(f,{sends:0,spoken:[]});
+  assert.equal(f.renderChat(),null,'unconfirmed idle Mute is terminal');assertSocketRetired(f,{sends:0,spoken:[]});
   const calls=n.mutes.length;f.renderChat()?.toggleMute?.();n.utter(CORRECTION);await f.clock.advance(5000);
   assert.equal(n.mutes.length,calls,'Unmute cannot open over unretired input');assertSocketRetired(f,{sends:0,spoken:[]});
  }finally{await closeSocket(f);}
 });
 
 // Idle Mute (nothing heard, nothing waiting to be sent): a native mute the bridge refuses, or does
-// not answer within its 2.5 s bound, ends the conversation once with the microphone error and stops
+// not answer within its 2.5 s bound, ends the conversation quietly once and stops
 // the socket once; Unmute, also pressed while that mute is pending, reopens nothing and nothing is
 // sent. A Mute the native mute confirms stays quiet, and Unmute reopens the socket capture.
-const microphoneNotices=f=>(f.renderChat()?.lines||[]).filter(line=>/^The microphone stopped\./.test(line.t)).length;
 for(const [how,closeMute,boundMs,unmuteAtMs] of [
  ['refuses',async()=>{throw Error('Microphone could not change state');},0],
  ['never answers',()=>new Promise(()=>{}),2500],
@@ -1570,11 +1553,11 @@ test(`busy hold over the speech socket: an idle Mute whose native mute ${how} en
    assert.equal(f.renderChat()?.state,'listening');assert.deepEqual(n.mutes,[false,true],'nothing reopens while the mute is pending');
    await f.clock.advance(1);await f.clock.flush();
   }
-  assert.equal(f.renderChat()?.state,'error');assert.match(f.renderChat()?.lines?.[0]?.t,/^The microphone stopped\./);
-  assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1,'the socket is retired once');
+  assert.equal(f.renderChat(),null);
+  assert.deepEqual(f.shell.messages,[]);assert.equal(n.stops,1,'the socket is retired once');
   f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
   assert.deepEqual(n.mutes,[false,true],'nothing reopens');assert.equal(f.sends,0);assert.deepEqual(n.spoken,[]);
-  assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+  assert.deepEqual(f.shell.messages,[]);assert.equal(n.stops,1);
  }finally{await closeSocket(f);}
 });
 
@@ -1587,7 +1570,7 @@ test('busy hold over the speech socket: an idle Mute the native mute confirms st
   f.renderChat().toggleMute();await f.clock.flush();
   assert.equal(f.renderChat()?.muted,'false');assert.deepEqual(n.mutes,[false,true,false],'Unmute reopens the socket capture');
   n.utter('Add lunch with Sam tomorrow.');await f.clock.advance(0);
-  assert.equal(f.sends,1);assert.equal(f.sendInputs[0].text,'Add lunch with Sam tomorrow.');assert.equal(microphoneNotices(f),0);
+  assert.equal(f.sends,1);assert.equal(f.sendInputs[0].text,'Add lunch with Sam tomorrow.');assert.deepEqual(f.shell.messages,[]);
  }finally{await closeSocket(f);}
 });
 
@@ -1601,10 +1584,11 @@ test('busy hold over the speech socket: Mute while the capture reopens after the
   assert.deepEqual(n.mutes,[false,true,false],'the reopen waits for the native unmute');
   f.renderChat().toggleMute();await f.clock.flush();
   reopened();await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+  assert.equal(f.renderChat()?.state,'stopping','voice is ending; the panel holds until the capture is released');assert.equal(n.stops,1);
   f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
   assert.deepEqual(n.mutes,[false,true,false,true],'the reopened capture is closed at Mute and nothing opens again');
-  assert.equal(f.sends,1);assert.deepEqual(n.spoken,[REPLY]);assert.equal(microphoneNotices(f),1);assert.equal(n.stops,1);
+  assert.equal(f.renderChat(),null,'voice ended quietly');
+  assert.equal(f.sends,1);assert.deepEqual(n.spoken,[REPLY]);assert.deepEqual(f.shell.messages,[]);assert.equal(n.stops,1);
  }finally{await closeSocket(f);}
 });
 
@@ -1618,7 +1602,7 @@ test('busy hold over the speech socket: Stop while an idle Mute waits for the na
   await f.clock.advance(1499);assert.equal(stopped,false,'Stop waits for the pending native mute');
   await f.clock.advance(1);await stopping;assert.equal(stopped,true);assert.equal(f.renderChat()?.state,undefined,'voice closed, not failed');
   await f.clock.advance(5000);
-  assert.equal(microphoneNotices(f),0);assert.deepEqual(n.mutes,[false,true]);assert.equal(f.sends,0);assert.equal(n.stops,1);
+  assert.deepEqual(f.shell.messages,[]);assert.deepEqual(n.mutes,[false,true]);assert.equal(f.sends,0);assert.equal(n.stops,1);
  }finally{await closeSocket(f);}
 });
 
@@ -1630,7 +1614,7 @@ test('busy hold on-device: an idle Mute whose close rejects ends the conversatio
   f.renderChat().toggleMute();await f.clock.flush();
   assert.equal(f.renderChat()?.state,'listening');assert.equal(f.renderChat()?.muted,'true');
   reject(Error('Native transcription close was not confirmed.'));await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'error');assert.equal(microphoneNotices(f),1);
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);
   f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
   assert.equal(f.sends,0);assert.deepEqual(f.s.spoken(),[]);assert.equal(closes,1);assert.equal(cancels,1,'the failed capture is retired once');assert.equal(listens,1,'no replacement capture');
  }finally{await closeLive(f);}

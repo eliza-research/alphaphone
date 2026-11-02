@@ -45,7 +45,7 @@ export async function reviewBrowserReading(url:string,signal:AbortSignal,valid:(
   try{
    await speakLocalText(text,owner.signal,()=>{valid();if(active&&current===generation)status.textContent='Reading locally…';});
    if(active&&current===generation){stopSpeech();status.textContent='Reading finished.';}
-  }catch(error){if(active&&current===generation){stopSpeech();status.textContent=error instanceof Error?error.message:'Speech could not start. Try again.';}}
+  }catch{if(active&&current===generation){stopSpeech();status.textContent='';}}
  };
  try{valid();if(!active)return;layoutBrowserDialog(dialog,[read,stop,close]);document.body.append(dialog);dialog.showModal();field.focus();
  void browserReadingSource(url,sourceAbort.signal).then(result=>{if(!active||sourceAbort.signal.aborted)return;valid();sourcePending=false;if(result?.blocked){block();return;}if(blocked)return;read.disabled=false;if(edited)return;if(result){field.value=result.text;status.textContent=result.truncated?'First 5,000 characters of public page text. Review before reading.':'Public page text loaded. Review before reading.';}else status.textContent='Paste up to 5,000 characters from the page to read locally.';}).catch(()=>{if(active&&!sourceAbort.signal.aborted){sourcePending=false;block();}});

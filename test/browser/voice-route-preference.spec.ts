@@ -29,7 +29,7 @@ test('Cloud remains the default across reload and legacy local preferences canno
  await page.reload();await signedInCloud(page);await openRecorder(page);
  await expect(recorder(page)).toContainText('Transcribe with Eliza Cloud');
  await page.reload();await openRecorder(page);
- await expect(recorder(page)).toContainText('Sign in to Eliza Cloud to use voice.');
+ await expect(recorder(page)).not.toContainText('Sign in to Eliza Cloud to use voice.');
  await expect(page.getByRole('button',{name:'Connect Eliza Cloud',exact:true})).toBeEnabled();
  expect(cloud).toEqual([]);
 });

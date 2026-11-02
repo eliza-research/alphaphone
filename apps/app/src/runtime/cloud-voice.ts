@@ -22,34 +22,29 @@ export function cloudVoiceServiceLimit(error: unknown, now: number = Date.now())
   if (!facts) return null;
   return readServiceLimit({ status: 429, ...(facts.limitCode ? { code: facts.limitCode } : {}), ...(facts.retryAfterSeconds !== undefined ? { retryAfterSeconds: facts.retryAfterSeconds } : {}), ...(facts.resetAt !== undefined ? { resetAt: facts.resetAt } : {}) }, now);
 }
-function voiceLimitMessage(limit: ServiceLimit, now: number, recording: boolean): string {
-  const name = serviceNameNow(), kept = recording ? ' Your recording is kept.' : '';
+function voiceLimitMessage(limit: ServiceLimit, now: number): string {
+  const name = serviceNameNow();
   const resets = limit.resetsAt != null && limit.resetsAt > now ? new Date(limit.resetsAt).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null;
-  if (limit.kind === 'allowance-exhausted') return `Your ${name} plan's voice allowance is used up.${resets ? ` It resets ${resets}.` : limit.retryAfterMs != null ? ` It resets in ${retryDuration(limit.retryAfterMs)}.` : ''}${kept} Nothing is purchased automatically.`;
-  if (limit.kind === 'subscription-required') return `${name} voice needs an active ${name} plan. Manage your plan in Settings.${kept}`;
-  if (limit.kind === 'billing-refused') return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.${kept}`;
+  if (limit.kind === 'allowance-exhausted') return `Your ${name} plan's voice allowance is used up.${resets ? ` It resets ${resets}.` : limit.retryAfterMs != null ? ` It resets in ${retryDuration(limit.retryAfterMs)}.` : ''} Nothing is purchased automatically.`;
+  if (limit.kind === 'subscription-required') return `${name} voice needs an active ${name} plan. Manage your plan in Settings.`;
+  if (limit.kind === 'billing-refused') return `${name} declined cloud voice for your account's billing. Check your account in Settings, then retry.`;
   const wait = limit.retryAfterMs != null ? `Try again in ${retryDuration(limit.retryAfterMs)}.` : resets ? `Try again after ${resets}.` : 'Wait a moment, then try again.';
-  return `${name} voice reached your plan's request limit. ${wait}${kept}`;
+  return `${name} voice reached your plan's request limit. ${wait}`;
 }
 function serviceNameNow(): string {
   try { const environment = connectionController.getCloudEnvironment(); return environment ? cloudServiceName(environment) : 'Cloud'; } catch { return 'Cloud'; }
 }
 
-/** Native status codes retain recovery meaning without exposing a provider response body.
- * `recording`: the caller keeps the recorded clip for an explicit retry (Notes, Transcribe). */
-export function cloudVoiceFailure(error: unknown, context: { recording?: boolean } = {}): string | null {
+/** Native status codes retain recovery meaning without exposing a provider response body. */
+export function cloudVoiceFailure(error: unknown): string | null {
   const direct=connectionController.getSnapshot().residentInference==='direct';
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   if(direct&&typeof code==='string'&&/^voice-http-[45][0-9]{2}$/.test(code))return `Cartesia could not complete voice (${code.slice(-3)}). Check your own key or provider allowance; nothing was retried.`;
   if(developmentCloudVoiceEnabled&&!browserCloudResidentEnabled&&(code==='voice-http-401'||code==='voice-http-403'))return 'The developer agent’s Cloud speech authorization was refused. Check its server-side Cloud configuration, then retry.';
   if (code === 'voice-http-401' || code === 'voice-http-403') return 'Sign in to Cloud again in Settings, then retry voice.';
   if (code === 'voice-http-402') return 'Cloud declined cloud voice for your account\'s billing. Check your account in Settings, then retry.';
-  if (code === 'voice-http-429') { const now = Date.now(), limit = cloudVoiceServiceLimit(error, now); if (limit) return voiceLimitMessage(limit, now, context.recording === true); }
+  if (code === 'voice-http-429') { const now = Date.now(), limit = cloudVoiceServiceLimit(error, now); if (limit) return voiceLimitMessage(limit, now); }
   if (typeof code === 'string' && /^voice-http-[45][0-9]{2}$/.test(code)) return `Cloud voice could not complete this request (${code.slice(-3)}). Try again later.`;
-  if (code === 'voice-stt-decode') return 'This recording could not be prepared for transcription. Choose Record again.';
-  if (code === 'voice-stt-connect') return 'Cloud voice could not use your saved account. Sign in again in Settings. Your recording is kept.';
-  if (code === 'voice-stt-upload') return 'The recording upload could not be confirmed. Your recording is kept. Check your connection before trying again.';
-  if (code === 'voice-stt-response') return 'Cloud voice returned no usable transcript. Your recording is kept. Try again later.';
   return null;
 }
 

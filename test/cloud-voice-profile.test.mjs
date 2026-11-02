@@ -23,9 +23,9 @@ test('one explicit Talk action starts Cloud voice, keeps its disclosure, and sto
   assert.equal(f.uploads,0);assert.equal(f.cloudSpeech,0);assert.equal(f.sends,0);
  } finally {f.close();await f.tick();}
 });
-test('signed-out production Cloud speech offers sign-in without microphone or local fallback',async()=>{
+test('signed-out production Cloud Talk ends quietly without microphone, sign-in sheet or local fallback',async()=>{
  const f=cloudVoiceViewFixture({cloudProfile:true,account:null});
- try {f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;await f.shell.startVoice();const view=f.renderChat();assert.equal(view.state,'error');assert.equal(view.recoveryLabel,'');assert.equal(view.statusLines.length,0);assert.equal(view.voiceDetails,false);assert.equal(f.accountOpens,0,'failed Talk never opens sign-in automatically');assert.equal(typeof view.recover,'function','internal recovery classification remains available to Settings');assert.equal(f.starts,0);assert.equal(f.localFactories,0);}finally{f.close();await f.tick();}
+ try {f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;await f.shell.startVoice();assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.accountOpens,0,'failed Talk never opens sign-in automatically');assert.equal(f.starts,0);assert.equal(f.localFactories,0);}finally{f.close();await f.tick();}
 });
 test('native production Cloud voice pins host and Cartesia; staging and other output providers fail closed',()=>{
  const out=fs.mkdtempSync(path.join(os.tmpdir(),'alpha-cloud-speech-'));
@@ -154,7 +154,7 @@ test('Cloud profile sends one credential-bound recorded turn and speaks its matc
 });
 
 
-test('configured service name follows explicit Talk and signed-out recovery',async()=>{
+test('configured service name follows explicit Talk; a signed-out Talk ends quietly',async()=>{
  for(const account of ['cloud-account',null]){
   const f=cloudVoiceViewFixture({cloudProfile:true,account});
   try {
@@ -163,7 +163,7 @@ test('configured service name follows explicit Talk and signed-out recovery',asy
    await f.shell.startVoice();const view=f.renderChat();
    assert.doesNotMatch(JSON.stringify(view),/Eliza Cloud/);
    if(account){assert.match(view.cloudDisclosureText,/recordings and reply text to your Nebula account/);assert.match(view.cloudDisclosureText,/plan allowance/);assert.equal(view.state,'listening');}
-   else {assert.equal(view.state,'error');assert.equal(view.recoveryLabel,'');assert.equal(view.statusLines.length,0);assert.equal(view.voiceDetails,false);assert.equal(f.accountOpens,0,'no automatic sign-in from a failed Talk');assert.equal(typeof view.recover,'function');}
+   else {assert.equal(view,null);assert.equal(f.accountOpens,0,'no automatic sign-in from a failed Talk');}
    assert.equal(f.starts,account?1:0);assert.equal(f.uploads,0);assert.equal(f.localFactories,0);
   }finally{f.close();await f.tick();}
  }

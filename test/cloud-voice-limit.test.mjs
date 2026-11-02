@@ -34,20 +34,19 @@ function loadCloudVoice(f={}){
  return {box,notes};
 }
 
-test('a 429 shows plan-limit wording with the retry time and keeps the recording, never provider text',()=>{
+test('a 429 shows plan-limit wording with the retry time, never provider text',()=>{
  const {box}=loadCloudVoice();
  const limited=(data,message=SENTINEL)=>Object.assign(Error(message),{code:'voice-http-429',data});
- assert.equal(box.failure(limited({retryAfterSeconds:42,limitCode:'rate_limited'}),{recording:true}),"Eliza Cloud voice reached your plan's request limit. Try again in about 42 seconds. Your recording is kept.");
- // Reading a reply aloud has no recording to keep.
+ assert.equal(box.failure(limited({retryAfterSeconds:42,limitCode:'rate_limited'})),"Eliza Cloud voice reached your plan's request limit. Try again in about 42 seconds.");
  assert.equal(box.failure(limited({retryAfterSeconds:300})),"Eliza Cloud voice reached your plan's request limit. Try again in about 5 minutes.");
  // Without retry facts the wording still names the plan limit, never the bare status.
- assert.equal(box.failure(limited(undefined),{recording:true}),"Eliza Cloud voice reached your plan's request limit. Wait a moment, then try again. Your recording is kept.");
- const allowance=box.failure(limited({limitCode:'allowance_exhausted',resetAt:Date.now()+3*86_400_000}),{recording:true});
- assert.match(allowance,/^Your Eliza Cloud plan's voice allowance is used up\. It resets .+\. Your recording is kept\. Nothing is purchased automatically\.$/);
+ assert.equal(box.failure(limited(undefined)),"Eliza Cloud voice reached your plan's request limit. Wait a moment, then try again.");
+ const allowance=box.failure(limited({limitCode:'allowance_exhausted',resetAt:Date.now()+3*86_400_000}));
+ assert.match(allowance,/^Your Eliza Cloud plan's voice allowance is used up\. It resets .+\. Nothing is purchased automatically\.$/);
  assert.match(box.failure(limited({limitCode:'subscription_required'})),/needs an active Eliza Cloud plan/);
  // Only the validated facts are read: forged fields, provider bodies and messages never show.
  for(const data of [{retryAfterSeconds:42,message:SENTINEL},{limitCode:SENTINEL,retryAfterSeconds:'42'},{retryAfterSeconds:1e9},{resetAt:'tomorrow'}]){
-  const text=box.failure(limited(data),{recording:true});
+  const text=box.failure(limited(data));
   assert.doesNotMatch(text,new RegExp(SENTINEL));assert.doesNotMatch(text,/\(429\)/);
  }
  // Other HTTP codes keep their earlier wording.

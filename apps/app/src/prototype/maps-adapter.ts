@@ -43,7 +43,8 @@ export function installPrototypeMapsAdapter(Component: { prototype: Bag }, views
   let pendingHandoff: {query:string}|undefined;
   const active=()=>!disposed&&!document.hidden&&!!api?.isActive();
   const dropPlane=()=>{++mapGeneration;mapObserver?.disconnect();mapObserver=undefined;mapFailed=false;plane?.destroy();plane=undefined;planeElement=undefined;planeBasemap=undefined;};
-  const navigationVoice=new NavigationVoice(error=>screen.notify((error instanceof Error?error.message+' ':'')+'Voice guidance paused. Tap Enable voice guidance to retry.'));
+  // Failed guidance speech turns guidance off quietly; the toggle shows Enable voice guidance.
+  const navigationVoice=new NavigationVoice(()=>screen.refresh());
   const background=new BackgroundNavigation(registerPlugin<NavigationBridge>('AlphaMapsTransport'),()=>Capacitor.isNativePlatform());
   const screen: MapsScreenController = new MapsScreenController({
     connection: mapsConnection,

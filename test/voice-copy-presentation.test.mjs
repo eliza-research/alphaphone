@@ -9,7 +9,7 @@ import {JSDOM} from 'jsdom';
 import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
 
 // The actual production template and DCLogic renderer, closed presentation ports only.
-test('actual voice error clears input activity, keeps failure internal without a banner and retains uncertain cleanup',async()=>{
+test('actual voice view shows activity while healthy and a failure ends quietly, also when its stop is refused',async()=>{
  const template=fs.readFileSync('apps/app/src/prototype/template.html','utf8');
  const start=template.indexOf('<sc-if value="{{legacyChatRecorder}}">');
  const end=template.indexOf('<sc-if value="{{panelComposer}}">',start);
@@ -28,42 +28,32 @@ test('actual voice error clears input activity, keeps failure internal without a
   f.box.BatchVoiceConversation=class {
     constructor(options){f.batchOptions=options;}
     async start(){f.initialView=f.renderChat();f.batchOptions.onState({phase:'listening'});}
-    async stop(){if(f.cleanupError)throw f.cleanupError;}
+    async stop(){await f.stopGate;if(f.cleanupError)throw f.cleanupError;}
     recheck(){}
   };
   await f.shell.startVoice();
-  for(const state of ['starting','listening','error']){
-   const error=state==='error';
-   // A Cloud 503 is now waited out quietly (voice-calm-cloud-errors.test.mjs); a refused sign-in is terminal.
-   if(error)f.batchOptions.onState({phase:'error',error:Object.assign(new Error('PRIVATE_PROVIDER_BODY'),{code:'voice-http-401'})});
+  for(const state of ['starting','listening']){
    const model=state==='starting'?f.initialView:f.renderChat();
-   assert.equal(model.state,state);assert.equal(model.activity===null,error);
-   const html=render({inlineChatRecorder:true,chatRecorder:model});
-   const doc=new JSDOM(html).window.document,details=doc.querySelector('details');
-   const alert=doc.querySelector('[role="alert"]');
-   // Speech routing is disclosed in Settings > Voice; the live composer opens details only for an error support code.
-   if(error){
-    assert.equal(details,null,'no support code, so no details panel');
-    assert.equal(alert,null,'no voice error banner');assert.equal(model.lines[0].t,'Sign in to Cloud again in Settings, then retry voice.','failure remains classified internally');assert.doesNotMatch(doc.body.textContent,/Sign in to Cloud|401|PRIVATE/);
-    assert.equal(doc.querySelector('[role="status"][aria-label="Voice conversation status"]').textContent,'','the alert is not repeated in the status region');
-   }else{assert.equal(details,null,'no details panel during a healthy conversation');assert.equal(alert,null);}
+   assert.equal(model.state,state);assert.notEqual(model.activity,null);
+   const doc=new JSDOM(render({inlineChatRecorder:true,chatRecorder:model})).window.document;
+   // Speech routing is disclosed in Settings > Voice; the live composer has no details panel.
+   assert.equal(doc.querySelector('details'),null);assert.equal(doc.querySelector('[role="alert"]'),null);
    assert.ok(doc.querySelector('[aria-label="Stop voice conversation"]'));
-   assert.equal(doc.querySelectorAll('[data-alpha-voice-animation]').length,error?0:1);
-   assert.equal(doc.querySelectorAll('[aria-label="Voice activity"]').length,error?0:1);
-   if(error){assert.equal(model.muted,'mixed');assert.equal(model.muteLabel,'Microphone status unconfirmed');assert.equal(model.recoveryLabel,'');}
-
+   assert.equal(doc.querySelectorAll('[data-alpha-voice-animation]').length,1);
+   assert.equal(doc.querySelectorAll('[aria-label="Voice activity"]').length,1);
   }
-  // The same actual adapter must preserve uncertain cleanup instead of claiming mic-off.
-  f.cleanupError=Error('Cleanup could not be confirmed');
-  f.renderChat().stop();for(let count=0;count<10;count++)await f.tick();
-  const held=f.renderChat();assert.equal(held.state,'error');assert.equal(held.activity,null);
+  // A refused sign-in is terminal and ends voice quietly. While its stop is pending the panel says
+  // only that, and a refused stop ends the same way: never a claim of mic-off, never an error frame.
+  let settleStop;f.stopGate=new Promise(resolve=>settleStop=resolve);f.cleanupError=Error('Cleanup could not be confirmed');
+  f.batchOptions.onState({phase:'error',error:Object.assign(new Error('PRIVATE_PROVIDER_BODY'),{code:'voice-http-401'})});
+  for(let count=0;count<10;count++)await f.tick();
+  const held=f.renderChat();assert.equal(held.state,'stopping');assert.equal(held.problem,false);
   assert.equal(held.muted,'mixed');assert.equal(held.muteLabel,'Microphone status unconfirmed');
-  assert.equal(held.recoveryLabel,'');assert.match(held.lines[0].t,/Could not confirm voice media stopped/);
   const heldDoc=new JSDOM(render({inlineChatRecorder:true,chatRecorder:held})).window.document;
-  assert.equal(heldDoc.querySelectorAll('[data-alpha-voice-animation]').length,0);
-  assert.equal(heldDoc.querySelector('[role="alert"]'),null);assert.doesNotMatch(heldDoc.body.textContent,/Could not confirm|Close the app/);
-  await f.shell.startVoice();await f.tick();assert.equal(f.renderChat().state,'error','unknown media remains blocked, not falsely idle');assert.deepEqual(f.shell.messages,[],'repeated start while unsafe stays quiet');
+  assert.equal(heldDoc.querySelector('[role="alert"]'),null);assert.doesNotMatch(heldDoc.body.textContent,/Could not confirm|Close the app|PRIVATE/);
   assert.ok(heldDoc.querySelector('[aria-label="Stop voice conversation"]'));
+  settleStop();for(let count=0;count<10;count++)await f.tick();
+  assert.equal(f.renderChat(),null,'the refused stop ends voice quietly');assert.deepEqual(f.shell.messages,[]);
   assert.equal(f.starts,0);assert.equal(f.uploads,0);
   // Legacy dictation has named failure states, not just 'error'. Its failure flag must drive
   // the same quiet presentation without renaming the state or bypassing any action guard.
@@ -71,7 +61,7 @@ test('actual voice error clears input activity, keeps failure internal without a
   assert.match(adapter,/state: failure \|\| stage,\s+failed: Boolean\(error \|\| failure\)/);
   assert.match(adapter,/recorder\.problem=recorder\.state==='error'\|\|recorder\.failed===true/);
   for(const state of ['denied','no-speech','local-agent','recognition','permission-denied']){
-   const model={...held,state,failed:true,statusLines:[],lines:[{t:'INTERNAL_FAILURE_DETAIL'}],recoveryLabel:''};
+   const model={...held,state,failed:true,statusLines:[],lines:[{t:'INTERNAL_FAILURE_DETAIL'}]};
    const legacy=new JSDOM(render({legacyChatRecorder:true,chatRecorder:model})).window.document;
    assert.equal(legacy.querySelector('[role="alert"]'),null);
    assert.doesNotMatch(legacy.body.textContent,/INTERNAL_FAILURE_DETAIL/);

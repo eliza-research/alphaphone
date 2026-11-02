@@ -32,12 +32,17 @@ for(const platform of platforms)test(platform.platform+': actual Batch/session s
   assert.equal(f.starts,1,'Stop never resumes capture');
  }finally{f.releasePlaybackCleanup?.();f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
 });
-for(const platform of platforms)test(platform.platform+': actual ACK cleanup failure latches shell media error and blocks restart',async()=>{
+for(const platform of platforms)test(platform.platform+': actual ACK cleanup failure ends voice quietly; capture restarts only once the plugin answers a stop',async()=>{
  const {f,clock}=await startedCue({failCleanup:true,platform});
  try{
   f.renderChat().stop();await clock.flush();assert.equal(f.renderChat()?.state,'stopping');
-  f.releasePlaybackCleanup();await clock.flush();assert.equal(f.renderChat()?.state,'error');
+  f.holdPlaybackCleanup=false;f.releasePlaybackCleanup();await clock.flush();
+  assert.equal(f.renderChat(),null,'no held error panel');assert.deepEqual(f.shell.messages,[]);
   await f.shell.startVoice();await clock.flush();assert.equal(f.starts,1,'unconfirmed acknowledgement retirement is not permission to capture');
+  assert.equal(f.renderChat(),null,'that Talk ends quietly too');assert.deepEqual(f.shell.messages,[]);
+  f.playbackCleanupError=undefined;
+  await f.shell.startVoice();await clock.flush();assert.equal(f.starts,2,'the plugin answered: Talk works again');
+  assert.equal(f.renderChat()?.state,'listening');
   assert.equal(f.sends,1);assert.equal(f.audioSaves,0);
  }finally{f.releasePlaybackCleanup?.();f.releaseReply?.();await clock.flush();f.close();await clock.flush();}
 });

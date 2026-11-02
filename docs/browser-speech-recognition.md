@@ -26,9 +26,9 @@ transcribe it, and a reviewed transcript is sent only when the user presses Send
 (`local-agent-starting` while the resident starts) and never names an engine or model. There is
 no Web Speech fallback (P-43): without the agent, replies are read as text. `transcribeLocalRecording()` rejects with code
 `local-agent-required` ("Connect the local agent to transcribe on this computer."). The recorder
-shows the `local-agent` failure state: the recording is kept, and the user can connect the
-agent and transcribe again, or type the transcript. Nothing falls back to Cloud or to any other
-engine on its own.
+enters the `local-agent` failure state with no failure line: the recording is kept, and the user
+can connect the agent and transcribe again, or type the transcript. Nothing falls back to Cloud or
+to any other engine on its own.
 
 ## With the local agent
 
@@ -39,13 +39,15 @@ engine on its own.
 | Read aloud | `synthesizeSpeech()` posts text to `POST /api/tts/paradee`. The agent runs Paradee-8M on libelizainference through the shared Paradee worker (provider `libelizainference-paradee`). With no agent, read-aloud is unavailable and the reply stays as text. |
 | Cancel | Cancel, a hidden page (`visibilitychange`), `pagehide` or a change of agent session aborts the request. The agent sees the abort, and a late result is discarded. |
 
-| State (`data-voice-state` on the recorder) | Shown to the user |
+Voice failures show no text. The recorder keeps its normal line and offers these controls:
+
+| State (`data-voice-state` on the recorder) | Controls |
 | --- | --- |
-| `denied` | Microphone access is blocked, with site-settings guidance. Start recording retries. |
-| `no-microphone` | No usable microphone; connect or enable one. |
-| `local-agent` | Local transcription needs the local agent on this computer. The recording is kept; connect the agent and transcribe again, or type the transcript. |
-| `no-speech` | No speech detected. **Record again** or **Type transcript instead** (keeps the recording). |
-| `recognition` | Recognition failed for this clip; retry or type instead. |
+| `denied` | Start recording retries. |
+| `no-microphone` | Start recording retries. |
+| `local-agent` | The recording is kept: transcribe again, or **Type transcript instead**. |
+| `no-speech` | **Record again** or **Type transcript instead** (keeps the recording). |
+| `recognition` | The recording is kept: transcribe again, or **Type transcript instead**. |
 
 ## Provenance
 

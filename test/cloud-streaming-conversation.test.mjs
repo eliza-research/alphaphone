@@ -1,16 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
-import {stripTypeScriptTypes} from 'node:module';
-import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
+import {cloudVoiceViewFixture,load} from './fixtures/cloud-voice-view.mjs';
 import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 
 function fixture(streamError){
  const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,clock});
  f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.randomId=()=>crypto.randomUUID();
- const source=fs.readFileSync('.eliza/client-features/packages/voice/src/voice-assistant-session.ts','utf8').replace(/^import .*;\n/gm,'').replaceAll('export class','class').replaceAll('export const','const').replaceAll('export function','function').replaceAll('export interface','interface').replaceAll('export type','type');
- vm.runInNewContext('{'+stripTypeScriptTypes(source)+';globalThis.VoiceAssistantSession=VoiceAssistantSession;}',f.box);
+ load('../../../.eliza/client-features/packages/voice/src/voice-assistant-session.ts',f.box,['VoiceAssistantSession']);
  f.box.createHeardReporter=()=>({report:async()=> 'not-needed'});
  f.box.recordEndpointVoiceTiming=()=>{};f.box.activeVoiceTurn=()=>undefined;f.box.recordHeardVoiceTiming=()=>{};
  f.box.shouldRespondToVoiceTurn=()=>true;f.box.buildVoiceTurnSignal=()=>({});f.box.toSpeakableText=t=>t;
@@ -43,9 +39,21 @@ test('only an absent streaming route retains compatibility recording; auth and p
   try{
    await f.shell.startVoice();await f.clock.flush();
    assert.equal(f.starts,code==='cloud-http-404'?1:0,code);
-   assert.equal(f.uploads,0);assert.equal(f.sends,0);
+   assert.equal(f.uploads,0);assert.equal(f.sends,0);assert.deepEqual(f.shell.messages,[]);
+   // The fallback keeps listening with no leftover failure line; any other refusal ends voice.
+   if(code==='cloud-http-404'){const view=f.renderChat();assert.equal(view.state,'listening');assert.equal(view.lines[0].t,'Listening…');assert.doesNotMatch(JSON.stringify(view),/Voice stopped|connection|history/i);}
+   else assert.equal(f.renderChat(),null,code);
   }finally{f.close();await f.clock.flush();}
  }
+});
+
+test('a streaming route lost after it opened ends voice quietly and opens no recording',async()=>{
+ const f=fixture();
+ try{
+  await f.shell.startVoice();await f.clock.flush();assert.equal(f.renderChat().state,'listening');
+  f.getHandlers().onEnd(Object.assign(Error('Cloud streaming request failed'),{code:'cloud-http-404'}));await f.clock.flush();
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.starts,0);
+ }finally{f.close();await f.clock.flush();}
 });
 
 test('stopping streaming Talk retires capture and never falls back to batch recording',async()=>{

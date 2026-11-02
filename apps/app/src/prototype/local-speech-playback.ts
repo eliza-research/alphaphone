@@ -7,7 +7,7 @@ import { markVoiceTiming, abandonVoiceTurn, finishVoiceTurn } from '../runtime/v
 import { connectionController } from '../runtime/connection-ui';
 import { planLocalSpeech } from '../runtime/local-speech-text';
 import { createOnDeviceVoice } from '../runtime/local-voice';
-import { createCloudVoice, cloudVoiceFailure } from '../runtime/cloud-voice';
+import { createCloudVoice } from '../runtime/cloud-voice';
 import { selectVoiceRoute } from '../runtime/voice-selection';
 
 let cancelCurrent: (() => Promise<void>|void) | undefined;
@@ -18,9 +18,10 @@ function retainSpeechRetirement(pending:Promise<void>){
  const drain=Promise.all([previous,pending.catch(error=>{if(error?.code==='speech-cleanup-unconfirmed')throw error;})]).then(()=>{});
  speechRetirement=drain;void drain.then(()=>{if(speechRetirement===drain)speechRetirement=undefined;},()=>{});return drain;
 }
-export function stopLocalSpeechPlayback() { stopSpeaking(); const pending=cancelCurrent?.(); cancelCurrent = undefined; cancelOwner = undefined;return pending?retainSpeechRetirement(Promise.resolve(pending)):speechRetirement; }
+/** The next speech waits for this stop. An unconfirmed cleanup is handed to one caller, which answers for it. */
+export function stopLocalSpeechPlayback() { stopSpeaking(); const pending=cancelCurrent?.(); cancelCurrent = undefined; cancelOwner = undefined;const retiring=pending?retainSpeechRetirement(Promise.resolve(pending)):speechRetirement;void retiring?.catch(()=>{if(speechRetirement===retiring)speechRetirement=undefined;});return retiring; }
 type Shell = any;
-type Reading = { id: string; text: string; pending?:Promise<void>;current?:()=>boolean;controller?: AbortController; message: string };
+type Reading = { id: string; text: string; pending?:Promise<void>;current?:()=>boolean;controller?: AbortController };
 const speechBinding = () => JSON.stringify([connectionController.getSnapshot().session?.sessionId, connectionController.getCloudClient()?.sessionId, document.documentElement.dataset.connectionMode]);
 /**
  * The qualified local speech route (Android CPU engine, or this browser's local voice),
@@ -147,7 +148,7 @@ export function installLocalSpeechPlayback(Component: Shell) {
     const retiring=shell.stopVoiceConversation?.();
     const directReadAloud=developmentCartesiaVoiceEnabled;
     const cloud = selectVoiceRoute() === 'cloud'||directReadAloud;
-    const controller = new AbortController(), state: Reading = { id, text, controller, message: 'Waiting for the previous audio to stop…' };
+    const controller = new AbortController(), state: Reading = { id, text, controller };
     const current=()=>!(shell.S().msgs||[]).some((row:Shell)=>row.from==='user'&&!knownUsers.has(row.id))&&states.get(shell)===state&&!controller.signal.aborted&&shell.live!==false&&!document.hidden&&!connectionController.getSnapshot().open&&selection()===binding&&shell.S().view===view&&['sheet','full'].includes(shell.S().chat)&&(shell.S().msgs||[]).some((row:Shell)=>row.id===id&&row.text===text&&JSON.stringify(row.messageBinding)===messageBinding);
     state.current=current;states.set(shell,state);cancelOwner=shell;cancelCurrent=()=>{stop(shell);refresh(shell);return state.pending;};refresh(shell);
     try {
@@ -156,24 +157,18 @@ export function installLocalSpeechPlayback(Component: Shell) {
       if(!current())return;
       if (cloud && !developmentCloudVoiceEnabled && !directReadAloud && (!connectionController.getCloudEnvironment() || !connectionController.getCloudClient()?.credentialId)) { stop(shell);connectionController.openCloudAccount();return; }
       const voice = cloud ? createCloudVoice(directReadAloud?'direct':'cloud') : createOnDeviceVoice(); if (!voice) {stop(shell);return;}
-      state.message=cloud?'Preparing audio…':'Preparing audio on this phone…';refresh(shell);
       if ('playbackReady' in voice) {
         planLocalSpeech(text);
-        if (!await voice.playbackReady(controller.signal)) throw new Error('On-device speech models are unavailable. The written message is still available.');
+        if (!await voice.playbackReady(controller.signal)) return;
       }
       if (!current()) return;
-      state.message = 'Reading aloud…'; refresh(shell);
-      if(!current())return;
       const pending=state.pending=(cloud ? createCloudVoice(directReadAloud?'direct':'cloud').speak(spokenText, controller.signal) : speakOnDevice(spokenText, controller.signal));await pending;
-      if (current()) { state.controller = undefined; state.message = 'Finished reading.'; refresh(shell); }
     } catch (error) {
       if((error as {code?:string})?.code==='speech-cleanup-unconfirmed'&&state.pending)retainSpeechRetirement(state.pending);
-      if (!current()) return;
-      state.controller = undefined;
-      const recovery = cloud ? cloudVoiceFailure(error) : null;
-      state.message = controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError') ? 'Reading stopped.' : recovery || (error instanceof Error ? error.message + ' The complete message may not have been read.' : 'Reading stopped before completion. The written message is still available.');
-      refresh(shell);
-    } finally {if(states.get(shell)===state&&!current()){stop(shell);refresh(shell);}}
+    } finally {
+      // Finished, failed or stopped, reading ends quietly: the control returns to Read aloud.
+      if(states.get(shell)===state){if(current())state.controller=undefined;else stop(shell);refresh(shell);}
+    }
   }
   /** Observe the conversation for the dictated turn: send, first token, final reply. */
   function followVoiceTurn(shell: Shell) {
@@ -244,7 +239,6 @@ export function installLocalSpeechPlayback(Component: Shell) {
         messageActionsNotice: opened && menu ? menu.notice : '',
         messageActionsAnnouncement: opened && menu ? menu.announcement || '' : '',
         localSpeechAvailable: available && entry.from === 'agent', localSpeechLabel: 'Read aloud', localSpeechControlLabel:selected&&state?.controller?'Stop reading':'Read aloud',localSpeechIcon:selected&&state?.controller?out.ic.stop:out.ic.wave,localSpeechActive:!!(selected&&state?.controller),
-        localSpeechMessage: selected&&!state?.controller&&state?.message!=='Finished reading.' ? state?.message : '',
         localSpeech: () => { void listen(this, entry.id, entry.text, visibleText); }
       };
     });

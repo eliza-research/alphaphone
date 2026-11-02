@@ -10,7 +10,7 @@ import {cloudVoiceViewFixture} from './fixtures/cloud-voice-view.mjs';
 import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 
 // The actual voice adapter, production template and DCLogic renderer with closed ports only:
-// a Cloud voice 429/503 is waited out quietly, a terminal failure is said once and plainly.
+// a Cloud voice 429/503 is waited out quietly, any other failure ends voice quietly at once.
 const CALM=[]; // Exhausted transient waits close quietly; no voice error toast.
 const SLOP=/request limit|Last transcript|Try voice again|Wait a moment|HTTP 503|Voice is unavailable/;
 const limited=(data={retryAfterSeconds:3,limitCode:'rate_limited'})=>Object.assign(Error('PRIVATE_PROVIDER_BODY'),{code:'voice-http-429',data});
@@ -111,34 +111,22 @@ test('stopping voice during the quiet wait cancels the retry',async t=>{
  assert.equal(runs.length,1);assert.deepEqual(f.shell.messages,[]);
 });
 
-test('terminal failures keep one honest line without the transcript tail or a duplicated status',async t=>{
- for(const [error,expected] of [
-  [Object.assign(Error('PRIVATE'),{code:'voice-http-401'}),/^Sign in to Cloud again in Settings, then retry voice\.$/],
-  [limited({limitCode:'allowance_exhausted'}),/voice allowance is used up/],
- ]){
-  await t.test(String(error.code)+' '+(error.data?.limitCode||''),async t=>{
-   const {f,clock,runs,view,fail}=await voice(t);
+test('terminal failures end voice quietly back to Talk: no line, toast or retry',async t=>{
+ for(const error of [Object.assign(Error('PRIVATE'),{code:'voice-http-401'}),limited({limitCode:'allowance_exhausted'}),Error('PRIVATE_UNCLASSIFIED')]){
+  await t.test(String(error.code||error.message)+' '+(error.data?.limitCode||''),async t=>{
+   const {f,clock,runs,fail}=await voice(t);
    await fail(error);
-   const shown=view();
-   assert.equal(shown.model.state,'error');
-   assert.equal(shown.model.lines.length,1);assert.match(shown.model.lines[0].t,expected);
-   assert.doesNotMatch(shown.text,/Last transcript|so \./);
-   assert.equal(shown.text.split(shown.model.lines[0].t).length-1,0,'classified failure is not put on screen');
-   const status=shown.doc.querySelector('[role="status"][aria-label="Voice conversation status"]');
-   assert.equal(status.textContent,'','the visible alert is the only announcement');
-   assert.equal(shown.doc.querySelector('[role="alert"]'),null,'terminal failure is internal, not a banner');
-   await clock.advance(60_000);assert.equal(runs.length,1,'terminal failures are not retried');assert.deepEqual(f.shell.messages,[]);
+   assert.equal(f.renderChat(),null,'voice ended; the composer is back');
+   assert.deepEqual(f.shell.messages,[]);
+   await clock.advance(60_000);assert.equal(runs.length,1,'terminal failures are not retried');assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);
   });
  }
 });
 
-test('a denied microphone at start keeps its honest settings message, said once',async t=>{
- const {runs,view}=await voice(t,{startFailure:Object.assign(Error('denied'),{name:'NotAllowedError'})});
- const shown=view();
- assert.equal(shown.model.state,'error');assert.equal(shown.model.lines.length,1);
- assert.match(shown.model.lines[0].t,/microphone|settings/i);assert.doesNotMatch(shown.text,/Last transcript/);
- assert.equal(shown.doc.querySelector('[role="status"][aria-label="Voice conversation status"]').textContent,'');
- assert.equal(runs.length,1);
+test('a denied microphone at start ends voice quietly, once',async t=>{
+ const {f,clock,runs}=await voice(t,{startFailure:Object.assign(Error('denied'),{name:'NotAllowedError'})});
+ assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);
+ await clock.advance(60_000);assert.equal(runs.length,1);
 });
 
 test('a normal voice turn is unchanged',async t=>{
@@ -193,13 +181,13 @@ test('a refusal from the real loop never flashes the stopped state before the qu
  assert.equal(f.sends,1,'the answered turn is not sent again');
 });
 
-test('Try voice again after a terminal error starts the quiet waits over',async t=>{
+test('Talk after a terminal error starts the quiet waits over',async t=>{
  const {f,clock,runs,view,fail}=await voice(t);
  await fail(limited());await clock.advance(3_000);
  await fail(limited());await clock.advance(3_000);
  await fail(Object.assign(Error('PRIVATE'),{code:'voice-http-401'}));
- assert.equal(view().model.state,'error');
- view().model.recover();await clock.flush();assert.equal(runs.length,4);
+ assert.equal(f.renderChat(),null);
+ await f.shell.startVoice();await clock.flush();assert.equal(runs.length,4);
  await fail(limited());
  assert.notEqual(view().model.state,'error');assert.deepEqual(f.shell.messages,[],'a quiet wait, not the pause line');
  await clock.advance(3_000);assert.equal(runs.length,5);assert.equal(view().model.state,'listening');

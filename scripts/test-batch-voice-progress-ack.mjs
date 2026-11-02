@@ -53,6 +53,12 @@ test('hide/session/owner currentness blocks queued cue',async()=>{
 test('unconfirmed cleanup is not swallowed on final/Stop',async()=>{
  const f=fixture(),bad=Object.assign(Error('cleanup unconfirmed'),{code:'speech-cleanup-unconfirmed'});f.input.speak=async()=>{throw bad;};const a=f.make();a.progress(cue());await tick();await assert.rejects(a.finish(),e=>e===bad);await assert.rejects(a.stop(),e=>e===bad);
 });
+test('a cue whose own speech fails is silence: final and Stop still settle',async()=>{
+ for(const failure of [Object.assign(Error('Cloud speech failed'),{code:'voice-http-502'}),new DOMException('refused','AbortError')]){
+  const f=fixture();f.input.speak=async(text,signal)=>{f.calls.push({text,signal});throw failure;};const a=f.make();a.progress(cue());await tick();
+  await a.finish();await a.stop();assert.equal(f.calls.length,1);
+ }
+});
 test('reply after cue completed still has zero overlap or repeated cue',async()=>{
  const f=fixture(),a=f.make();a.progress(cue({label:'Checking calendar'}));await tick();await a.finish();a.progress(cue());await tick();assert.equal(f.calls.length,1);
 });

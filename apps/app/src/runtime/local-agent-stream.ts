@@ -97,9 +97,9 @@ export function createBatchProgressAcknowledgment(input: {
         if (!microphoneClear()) throw Error('Voice capture was not retired before acknowledgement.');
         try { await input.speak(label, cue.signal); }
         catch (error) {
-          // Normal selected playback may reject AbortError AFTER confirmed cleanup.
-          // Unconfirmed cleanup/provider errors are not hidden or converted into permission to listen.
-          if (!(cue.signal.aborted && error instanceof Error && error.name === 'AbortError')) throw error;
+          // A cue that fails to play is silence. Unconfirmed playback cleanup is never hidden or
+          // converted into permission to listen.
+          if ((error as { code?: unknown })?.code === 'speech-cleanup-unconfirmed') throw error;
         }
       });
       void pending.catch(() => {});

@@ -109,7 +109,7 @@ test('Unsigned recorder offers Cloud sign-in before any recording',async({page})
   await expect(page.getByRole('button',{name:'Connect Eliza Cloud',exact:true})).toBeEnabled();
   await expect(page.getByRole('button',{name:'Record without transcription',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Start recording',exact:true})).toHaveCount(0);
-  await expect(page.getByText('Sign in to Eliza Cloud to use voice.',{exact:true})).toBeVisible();
+  await expect(page.getByText('Sign in to Eliza Cloud to use voice.',{exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>(window as any).microphoneRequests)).toBe(0);
   await page.getByRole('button',{name:'Discard recording',exact:true}).click();
   await expect(page.getByRole('button',{name:'Start recording',exact:true})).toHaveCount(0);

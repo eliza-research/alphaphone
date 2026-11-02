@@ -434,9 +434,8 @@ The shared `LocalSpeechBridgePlugin.submit` rejects a non-2xx answer with `voice
 and no data, so Alpha's `submitLimited` settles a 429 itself: it closes the connection, marks the
 request resolved and rejects with the same code plus those facts (a cancelled request keeps the
 shared cancellation). Moving this data path into the shared request gate is upstream follow-up.
-`cloud-voice.ts` reads them as the shared `ServiceLimit` (`readServiceLimit`), shows plan-limit
-wording with the retry time ("... reached your plan's request limit. Try again in about 42
-seconds. Your recording is kept."), keeps the recorded clip for an explicit retry, and records the
+`cloud-voice.ts` reads them as the shared `ServiceLimit` (`readServiceLimit`). The recorder shows no
+failure line and keeps the recorded clip for an explicit retry, and `cloud-voice.ts` records the
 limit as the account panel's latest limit (`lastLimit` of the shared `useCloudSubscriptionSummary`)
 for the same signed-in Cloud session only. Nothing is retried automatically.
 
