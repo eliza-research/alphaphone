@@ -60,5 +60,5 @@ export function cloudVoiceViewFixture(options={}){
  const shell=new Shell(),api={...shell.api('notes'),get:()=>shell.notes,set:patch=>Object.assign(shell.notes,patch),ic:icons,storageReady:()=>f.storageReady!==false};
  const render=()=>views.notes.render(shell.notes,api);
  render();
- return Object.assign(f,{box,shell,driver,events,flushUpdates:()=>{const updates=f.updates||[];f.updates=[];for(const update of updates)update();},render,renderChat:()=>shell.renderVals().chatRecorder,changed:()=>{for(const callback of subscriptions)callback();},setHidden:hidden=>{box.document.hidden=hidden;for(const listener of [...visibilityListeners])listener();},close:()=>{views.notes.onLeave();shell.componentWillUnmount();},tick:()=>new Promise(resolve=>setTimeout(resolve,0))});
+ return Object.assign(f,{box,shell,driver,views,events,flushUpdates:()=>{const updates=f.updates||[];f.updates=[];for(const update of updates)update();},render,renderChat:()=>shell.renderVals().chatRecorder,changed:()=>{for(const callback of subscriptions)callback();},setHidden:hidden=>{box.document.hidden=hidden;for(const listener of [...visibilityListeners])listener();},close:()=>{views.notes.onLeave();shell.componentWillUnmount();},tick:()=>new Promise(resolve=>setTimeout(resolve,0))});
 }

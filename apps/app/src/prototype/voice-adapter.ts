@@ -217,7 +217,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   /** Queues owners' stops after those under way. The result refuses while any owner is held; once none is, the held panel ends. */
   const queueStops=(stops:()=>Promise<unknown>)=>{
     const queued=stopping=stopping.catch(()=>{}).then(stops).then(()=>{for(const failure of unreleased.values())throw failure;});
-    void queued.then(()=>{const held=retirement;if(queued!==stopping||!held)return;retirement=undefined;if(held.shell.live!==false)held.shell.setState((state:any)=>({...(composerBinding()===held.binding&&(state.view||null)===held.view&&state.chat===held.panelChat?{chat:held.returnChat}:{})}));},()=>{if(heldRecorder)refresh();});
+    void queued.then(()=>{const held=retirement;if(queued!==stopping||!held)return;retirement=undefined;if(held.shell.live!==false)held.shell.setState((state:any)=>({...(composerBinding()===held.binding&&(state.view||null)===held.view&&state.chat===held.panelChat?{chat:held.returnChat}:{})}));},()=>{});
     return queued;
   };
   /** What new media waits for: the stops under way, then a fresh answer from each held owner. */
@@ -255,7 +255,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     const recorder=captureStop();
     // A capture that may be open holds Notes from now on. A kept clip's microphone is already off.
     if(hadCapture&&!clip&&!chatShell)heldRecorder=recorder;
-    void queueStops(async () => { await ownerStop(()=>conversationStopped,previousOwner);if(previousSpeechOwner!==playbackStopped)await ownerStop(previousSpeechOwner);await ownerStop(()=>previousSpeech?.catch(keepUnconfirmedSpeech),previousSpeechOwner);await ownerStop(()=>previousNotesSpeech?.catch(keepUnconfirmedSpeech),playbackStopped);if(hadCapture){await ownerStop(recorder);if(!chatShell&&unreleased.has(recorder))heldRecorder=recorder;} });
+    void queueStops(async () => { await ownerStop(()=>conversationStopped,previousOwner);if(previousSpeechOwner!==playbackStopped)await ownerStop(previousSpeechOwner);await ownerStop(()=>previousSpeech?.catch(keepUnconfirmedSpeech),previousSpeechOwner);await ownerStop(()=>previousNotesSpeech?.catch(keepUnconfirmedSpeech),playbackStopped);if(hadCapture)await ownerStop(recorder); });
     if(chatShell&&(previousConversation||previousSpeech||hadCapture||heldRecorder||unreleased.size)){
       retirement={shell:chatShell,returnChat:previousChat!.chat,view:previousChat!.view,binding:previousChat!.binding,panelChat:chatShell.S().chat,approval:chatShell.pendingActionApproval,proposalId:chatShell.pendingActionApprovalProposalId};
     }else void mediaSettled().catch(()=>{}); // No panel offers a retry here: a failed owner is asked again at once.
@@ -1125,8 +1125,8 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
   };
   function recorderView(icons:Bag){
     // The voice panel's quiet line, on Notes and dictation: every control asks the unconfirmed recorder again.
-    // It fades in late on Notes, so the bridge's usual answer closes the panel before the line is seen.
-    if(heldRecorder){const ask=()=>{void mediaSettled().catch(()=>{});},late='animation:fade .2s .3s both';return {state:'stopping',failed:false,clock:'Voice',clockCss:'',live:false,paused:true,dotCss:'background:var(--mut)',levels:[],lines:[{ini:'',statusIcon:icons.info,t:'Stopping the microphone and audio…',chip:'background:var(--s2);color:var(--fg);'+late,css:late}],review:false,typeChoice:false,primaryLabel:'Stop recording',primaryIcon:icons.stop,primaryDisabled:false,pauseLabel:'Cancel recording',pauseIcon:icons.x,stop:ask,discard:ask,toggle:ask,keyboard:ask};}
+    // Its clock and line fade in late, so the bridge's usual answer ends the hold before either is seen.
+    if(heldRecorder){const ask=()=>{void mediaSettled().catch(()=>{});},late='animation:fade .2s .3s both';return {state:'stopping',failed:false,clock:'Voice',clockCss:late,live:false,paused:true,dotCss:'background:var(--mut)',levels:[],lines:[{ini:'',statusIcon:icons.info,t:'Stopping the microphone and audio…',chip:'background:var(--s2);color:var(--fg);'+late,css:late}],review:false,typeChoice:false,primaryLabel:'Stop recording',primaryIcon:icons.stop,primaryDisabled:false,pauseLabel:'Cancel recording',pauseIcon:icons.x,stop:ask,discard:ask,toggle:ask,keyboard:ask};}
     const token=generation,chat=chatDestination;
     const owned=()=>token===generation&&chatDestination===chat&&(!chat||chatCurrent());
     const seconds = stage === 'recording' ? (Date.now() - started) / 1000 : (clip?.durationMs || 0) / 1000;
@@ -1245,7 +1245,7 @@ export function installPrototypeVoiceAdapter(Component: any, views: Record<strin
     if(watch&&chatDestination?.shell===this&&(this.S().msgs||[]).some((m:Bag)=>m.from==='agent'&&!watch.has(String(m.id))&&String(m.text||'').trim())){conversationReplyWatch=undefined;markVoiceTiming('first-token');}
   };
   const immersive = notes.immersive;
-  notes.immersive = (state: Bag, current: Bag) => stage !== 'closed'&&!chatDestination ? { noPill: true } : immersive?.(state, current);
+  notes.immersive = (state: Bag, current: Bag) => (stage !== 'closed'||heldRecorder)&&!chatDestination ? { noPill: true } : immersive?.(state, current);
   notes.back = (state: Bag, current: Bag) => { if (stage !== 'closed'&&!chatDestination) { cleanup(); return true; } return back?.(state, current); };
   const noteReadingChanged=()=>{if(api)api.setView('notes',{noteReadingRevision:Date.now()});};
   window.addEventListener('alpha:note-reading',noteReadingChanged);

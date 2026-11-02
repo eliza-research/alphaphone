@@ -3999,13 +3999,13 @@
   <sc-if value="{{legacyChatRecorder}}">
     <section data-alpha-chat-recorder data-voice-state="{{chatRecorder.state}}" role="region" aria-label="{{chatRecorder.regionLabel}}" style="display:flex;flex-direction:column;flex:{{chatRecorder.flex}};min-height:0;padding:8px 20px 20px;box-sizing:border-box;gap:12px">
       <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-        <span class="serif" style="flex:1;font-size:{{chatRecorder.clockSize}}px;line-height:1;font-variant-numeric:tabular-nums">{{chatRecorder.clock}}</span>
+        <span class="serif" style="flex:1;font-size:{{chatRecorder.clockSize}}px;line-height:1;font-variant-numeric:tabular-nums;{{chatRecorder.clockCss}}">{{chatRecorder.clock}}</span>
         <button class="ib" aria-label="Switch to keyboard" onClick="{{chatRecorder.keyboard}}"><svg class="i" viewBox="0 0 24 24"><path d="{{ic.kbd}}"></path></svg></button>
         <button class="ib" aria-label="{{chatRecorder.closeControlLabel}}" onClick="{{chatRecorder.closeControl}}"><svg class="i" viewBox="0 0 24 24"><path d="{{chatRecorder.closeControlIcon}}"></path></svg></button>
       </div>
       <div class="scr" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;gap:12px;touch-action:pan-y">
         <sc-if value="{{chatRecorder.live}}"><div role="img" aria-label="Recording activity" style="display:flex;align-items:center;gap:3px;min-height:40px;flex-shrink:0"><sc-for list="{{chatRecorder.levels}}" as="level"><span style="flex:1;height:{{level.h}}px;border-radius:2px;background:var(--acct)"></span></sc-for></div></sc-if>
-        <div role="status" aria-label="Voice conversation status" style="font-size:14px;line-height:1.45;color:var(--mut);overflow-wrap:anywhere"><sc-for list="{{chatRecorder.statusLines}}" as="line"><p style="margin:0">{{line.t}}</p></sc-for></div>
+        <div role="status" aria-label="Voice conversation status" style="font-size:14px;line-height:1.45;color:var(--mut);overflow-wrap:anywhere"><sc-for list="{{chatRecorder.statusLines}}" as="line"><p style="margin:0;{{line.css}}">{{line.t}}</p></sc-for></div>
         <sc-if value="{{chatRecorder.interimTranscript}}"><p data-alpha-voice-interim aria-label="Heard so far, not sent" style="margin:0;font-size:15px;line-height:1.45;color:var(--mut);font-style:italic;overflow-wrap:anywhere">{{chatRecorder.interimTranscript}}</p></sc-if>
         <sc-if value="{{chatRecorder.lastTranscript}}"><p aria-label="Your voice message" style="margin:0;font-size:15px;line-height:1.45;color:var(--mut);overflow-wrap:anywhere">{{chatRecorder.lastTranscript}}</p></sc-if>
         <sc-if value="{{chatRecorder.lastReply}}"><p aria-label="Alpha voice reply" style="margin:0;font-size:16px;line-height:1.5;color:var(--fg);overflow-wrap:anywhere">{{chatRecorder.lastReply}}</p></sc-if>

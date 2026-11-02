@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {cloudVoiceViewFixture,load} from './fixtures/cloud-voice-view.mjs';
 import {voiceFakeClock} from './fixtures/shared-batch-voice.mjs';
 
@@ -152,13 +153,16 @@ test('Notes: a held recorder is asked again on a timer, and nothing paid or new 
   assert.equal(f.starts,1);assert.equal(f.uploads,0);assert.equal(f.cloudSpeech,0);assert.equal(f.sends,0);
  }finally{f.captureCancelError=undefined;f.close();await f.clock.advance(3000);}
 });
-test('Notes: a normal Cancel stays open one bridge hop with its line still hidden, closes on the answer, and asks the recorder once',async()=>{
+/** The one repaint before a recorder's usual answer: nothing written on it shows yet. */
+const unseen=view=>{assert.equal(view.state,'stopping');assert.match(view.clockCss,/\.3s/,'the clock fades in only after the usual answer');assert.match(view.lines[0].css,/\.3s/,'so does the line');assert.match(view.lines[0].chip,/\.3s/);};
+const noPill=f=>f.views.notes.immersive({},{})?.noPill;
+test('Notes: a normal Cancel stays open one bridge hop with its clock and line still hidden and no pill, closes on the answer, and asks the recorder once',async()=>{
  const f=await notesRecording();
  try{
   f.rec().stop();await f.clock.flush();f.rec().discard();
-  assert.equal(f.rec().state,'stopping','this is the one repaint before the answer');assert.match(f.rec().lines[0].css,/\.3s/,'the line fades in only after the usual answer');assert.match(f.rec().lines[0].chip,/\.3s/);
+  unseen(f.rec());assert.equal(noPill(f),true,'the pill stays away while the panel is up');
   await f.clock.flush();
-  assert.equal(f.activeRecording,null);assert.equal(f.rec(),undefined);assert.equal(f.recordingCancels.length,1);
+  assert.equal(f.activeRecording,null);assert.equal(f.rec(),undefined);assert.equal(f.recordingCancels.length,1);assert.equal(noPill(f),undefined,'closed, the pill is back');
   await f.clock.advance(20000);assert.equal(f.recordingCancels.length,1);
   f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');assert.equal(f.starts,2);
  }finally{f.close();await f.clock.advance(3000);}
@@ -189,8 +193,28 @@ test('a kept clip has its microphone off: discarding it closes at once, with not
  const f=await notesRecording();
  try{
   f.rec().stop();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recorded');
-  f.rec().discard();assert.equal(f.rec(),undefined,'no stopping panel over a finished recording');await f.clock.flush();assert.equal(f.rec(),undefined);
+  f.rec().discard();assert.equal(f.rec(),undefined,'no stopping panel over a finished recording');assert.equal(noPill(f),undefined);await f.clock.flush();assert.equal(f.rec(),undefined);
  }finally{f.close();await f.clock.advance(3000);}
+});
+test('a kept clip whose cancel is refused closes all the same, and new media still waits for its recorder',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recorded');
+  f.captureCancelError=Error('Recorder stop refused');f.rec().discard();await f.clock.flush();assert.equal(f.rec(),undefined,'its microphone is off: no stopping line');
+  const asked=f.recordingCancels.length;f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();
+  assert.ok(f.recordingCancels.length>asked,'the recorder was asked first');assert.equal(f.starts,1,'no capture over its refusal');
+  f.captureCancelError=undefined;f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');assert.equal(f.starts,2);
+ }finally{f.captureCancelError=undefined;f.close();await f.clock.advance(3000);}
+});
+test('Record again asks the recorder that made the clip, not the driver enter picks next',async()=>{
+ let agentCancels=0,alphaCancels=0;const counted=count=>driver=>({...driver,cancelRecording:async()=>{count();await driver.cancelRecording();}});
+ const f=cloudVoiceViewFixture({cloudProfile:false,plugins:{DevelopmentAgent:counted(()=>agentCancels++),AlphaVoiceCloud:counted(()=>alphaCancels++)}}),rec=()=>f.render().rec;
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,testMocksEnabled:true,developmentCloudRealtimeVoiceEnabled:true});
+ try{
+  f.render().record();await settle(f);rec().stop();await settle(f);rec().stop();await settle(f);assert.equal(rec().state,'recorded');
+  f.box.developmentCloudRealtimeVoiceEnabled=false;rec().toggle();await settle(f);
+  assert.equal(agentCancels,1,'the clip is DevelopmentAgent\'s');assert.equal(alphaCancels,0,'the next driver answers for nothing of its');
+ }finally{f.close();await settle(f);}
 });
 
 // A capture that ended without its clip: only that recorder can say it is off.
@@ -271,6 +295,36 @@ test('Notes: a plain denied start asks its recorder once, holds nothing, and kee
   f.startError=undefined;f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');
  }finally{f.startError=undefined;f.close();await f.clock.advance(3000);}
 });
+test('Notes: while a plain denied start or a too-short Stop waits for its recorder, nothing written shows and no pill returns',async()=>{
+ const f=await notesRecording({startError:Object.assign(Error('denied'),{code:'permission-denied'})});
+ try{
+  f.holdCaptureCancel=true;f.rec().stop();await f.clock.flush();unseen(f.rec());assert.equal(noPill(f),true);
+  f.holdCaptureCancel=false;f.releaseCaptureCancel();await f.clock.flush();assert.equal(f.rec().routeLabel,'Open app settings');assert.equal(f.rec().clockCss,'');
+  f.startError=undefined;f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');
+  refuseStop(f);f.holdCaptureCancel=true;f.rec().stop();await f.clock.flush();unseen(f.rec());
+  f.holdCaptureCancel=false;f.releaseCaptureCancel();await f.clock.flush();assert.equal(f.rec().state,'ready');assert.equal(f.rec().clockCss,'');
+ }finally{f.holdCaptureCancel=false;f.releaseCaptureCancel?.();f.close();await f.clock.advance(11000);}
+});
+test('Notes: a start that fails after Cancel is that Cancel\'s to finish: its recorder is asked once and holds no later panel',async()=>{
+ const f=await notesRecording({holdStart:true});
+ try{
+  f.rec().stop();await f.clock.flush();assert.equal(f.starts,1);f.rec().discard();await f.clock.flush();assert.equal(f.rec().state,'stopping');
+  f.startError=Error('Capture start failed');f.holdStart=false;f.releaseStart({recordingId:'late-clip',maxDurationMs:59000});await f.clock.flush();
+  assert.equal(f.recordingCancels.length,1,'the late failure asks nothing of its own');assert.equal(f.rec(),undefined);assert.deepEqual(f.shell.messages,[]);
+  f.startError=undefined;f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');assert.equal(f.recordingCancels.length,1);
+ }finally{f.startError=undefined;f.close();await f.clock.advance(3000);}
+});
+test('Notes: a Stop that fails after Cancel leaves the next recording alone',async()=>{
+ const f=await notesRecording();
+ try{
+  f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');
+  let refuse;const stop=f.driver.stopRecording;f.driver.stopRecording=()=>new Promise((_,reject)=>refuse=reject);
+  f.rec().stop();await f.clock.flush();f.rec().discard();await f.clock.flush();assert.equal(f.rec(),undefined);
+  f.driver.stopRecording=stop;f.render().record();await f.clock.flush();f.rec().stop();await f.clock.flush();assert.equal(f.rec().state,'recording');const owned=f.activeRecording,asked=f.recordingCancels.length;
+  refuse(Error('Stop failed'));await f.clock.flush();
+  assert.equal(f.rec().state,'recording');assert.equal(f.activeRecording,owned,'its capture is still open');assert.equal(f.recordingCancels.length,asked,'nothing was asked of it');
+ }finally{f.close();await f.clock.advance(3000);}
+});
 function dictating(){
  const clock=voiceFakeClock(),f=cloudVoiceViewFixture({cloudProfile:true,clock});
  Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,HTMLElement:class {},nativeLiveVoiceReady:async()=>false});
@@ -289,6 +343,22 @@ test('dictation: a failed Stop that its recorder refuses stays on the quiet pane
   assert.equal(f.activeRecording,null);assert.equal(f.panel().state,'ready');assert.equal(f.panel().primaryLabel,'Start recording');
   f.panel().discard();await f.clock.flush();assert.equal(f.panel(),null);assert.equal(f.shell.state.chat,'sheet');
  }finally{f.captureCancelError=undefined;f.close();await f.clock.advance(3000);}
+});
+for(const [name,end] of [
+ ['a plain denied start',async f=>{f.startError=Object.assign(Error('denied'),{code:'permission-denied'});f.panel().stop();await f.clock.flush();}],
+ ['a too-short Stop',async f=>{f.panel().stop();await f.clock.flush();const stop=f.driver.stopRecording;refuseStop(f);f.panel().stop();await f.clock.flush();f.driver.stopRecording=stop;}],
+])test(`dictation: while ${name} waits for its recorder nothing written shows, and its answer returns to ready`,async()=>{
+ const f=dictating();
+ try{
+  f.shell.startTranscription();await f.clock.flush();f.holdCaptureCancel=true;await end(f);
+  unseen(f.panel());assert.equal(f.panel().statusLines[0].css,f.panel().lines[0].css,'the status line carries the delay');
+  f.holdCaptureCancel=false;f.releaseCaptureCancel();await f.clock.flush();assert.notEqual(f.panel().state,'stopping');assert.equal(f.panel().primaryLabel,'Start recording');assert.equal(f.panel().clockCss,'');assert.equal(f.panel().lines[0].css,'');
+ }finally{f.startError=undefined;f.holdCaptureCancel=false;f.releaseCaptureCancel?.();f.close();await f.clock.advance(11000);}
+});
+test('the chat recorder paints the clock and line styles that keep them hidden',()=>{
+ const template=fs.readFileSync('apps/app/src/prototype/template.html','utf8');
+ assert.match(template,/style="[^"]*\{\{chatRecorder\.clockCss\}\}">\{\{chatRecorder\.clock\}\}/);
+ assert.match(template,/<p style="[^"]*\{\{line\.css\}\}">\{\{line\.t\}\}<\/p>/);
 });
 test('dictation: leaving a held panel for another surface keeps the quiet panel, and the recorder ends it',async()=>{
  const f=dictating();
