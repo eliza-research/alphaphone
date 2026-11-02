@@ -46,7 +46,7 @@ for(const reason of ['SDK microphone stop rejected','Developer voice retirement 
   test(`actual realtime cleanup failure remains latched: ${reason}`,async()=>{
     const f=await direct({failure:Error(reason)});try{
       await assert.rejects(f.shell.stopVoiceConversation(),new RegExp(reason));await f.tick();
-      assert.equal(f.renderChat().state,'error');assert.equal(f.renderChat().muteLabel,'Microphone status unconfirmed');
+      assert.equal(f.renderChat().state,'stopping');assert.equal(f.renderChat().muteLabel,'Microphone status unconfirmed');
       assert.deepEqual(f.recordingCancels,[]);await f.shell.startVoice();assert.equal(f.getStopCalls(),1);
     }finally{f.close();}
   });
@@ -64,7 +64,7 @@ for(const fails of [false,true])test(`ordinary dictation preserves owned recorde
     const owned=f.activeRecording;f.recordingCancels.length=0;
     if(fails)f.captureCancelError=Error('Owned capture did not stop');
     const stopped=f.shell.stopVoiceConversation();
-    if(fails){await assert.rejects(stopped,/Owned capture did not stop/);await f.tick();assert.equal(f.renderChat().state,'error');}
+    if(fails){await assert.rejects(stopped,/Owned capture did not stop/);await f.tick();assert.equal(f.renderChat().state,'stopping');}
     else{await stopped;await f.tick();assert.equal(f.activeRecording,null);assert.equal(f.renderChat(),null);}
     assert.deepEqual(f.recordingCancels,[owned]);assert.equal(f.sends,0);
   }finally{f.close();}

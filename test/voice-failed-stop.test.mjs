@@ -20,44 +20,96 @@ function session(options){
 }
 
 for(const platform of platforms){
- test(`${platform.platform}: a refused session stop ends voice quietly and Talk starts again`,async()=>{
+ test(`${platform.platform}: a refused session stop keeps the quiet panel until its recorder confirms, and only then Talk starts`,async()=>{
   const f=session(platform);
   try{
    await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');
    f.stopError=Error('Session stop refused');f.renderChat().stop();await settle(f);
-   assert.equal(f.renderChat(),null,'no held panel: the composer is back');assert.deepEqual(f.shell.messages,[]);
-   assert.equal(f.shell.state.chat,'sheet');assert.equal(forcedStops(f),1,'the plugin confirmed the release');
-   assert.equal(f.sessions,1,'nothing starts by itself');
+   assert.equal(f.renderChat().state,'stopping','unconfirmed: the panel stays');assert.equal(f.renderChat().problem,false);assert.deepEqual(f.shell.messages,[]);
+   assert.equal(forcedStops(f),0,'no other stop stands in for the owner');assert.equal(f.sessions,1,'nothing starts by itself');
+   await f.shell.startVoice();await settle(f);assert.equal(f.sessions,1,'no Talk over it');
+   f.renderChat().stop();await settle(f);
+   assert.equal(f.renderChat(),null,'its recorder confirmed: the composer is back');assert.equal(f.shell.state.chat,'sheet');assert.deepEqual(f.shell.messages,[]);
+   assert.equal(forcedStops(f),0);assert.equal(f.sessions,1,'nothing starts by itself');
    f.stopError=undefined;await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sessions,2);
-   f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);assert.equal(forcedStops(f),1,'a confirmed stop forces nothing');
+   f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);assert.equal(forcedStops(f),0,'a confirmed stop forces nothing');
   }finally{f.close();await settle(f);}
  });
 
- test(`${platform.platform}: while the plugin refuses too, Talk stays quiet and starts nothing; its next answer lets Talk start`,async()=>{
+ test(`${platform.platform}: while the recorder refuses too, Stop keeps the panel and Talk starts nothing; its answer ends both`,async()=>{
   const f=session(platform);
   try{
    await f.shell.startVoice();
-   f.stopError=Error('Session stop refused');f.captureCancelError=Error('Plugin stop refused');f.renderChat().stop();await settle(f);
-   assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);const asked=f.recordingCancels.length;
-   await f.shell.startVoice();await settle(f);
-   assert.equal(f.sessions,1,'an unanswered stop is no permission for new media');assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);
-   if(f.native)assert.ok(f.recordingCancels.length>asked,'Talk asked the plugin again');
+   f.stopError=Error('Session stop refused');f.captureCancelError=Error('Recorder stop refused');f.renderChat().stop();await settle(f);
+   assert.equal(f.renderChat().state,'stopping');assert.deepEqual(f.shell.messages,[]);const asked=f.recordingCancels.length;
+   f.renderChat().stop();await settle(f);
+   assert.ok(f.recordingCancels.length>asked,'Stop asked the recorder again');assert.equal(f.renderChat().state,'stopping','a refusal keeps it');assert.deepEqual(f.shell.messages,[]);
+   await f.shell.startVoice();await settle(f);assert.equal(f.sessions,1,'an unanswered stop is no permission for new media');
    f.stopError=f.captureCancelError=undefined;
+   f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);
    await f.shell.startVoice();await settle(f);assert.equal(f.sessions,2);assert.equal(f.renderChat().state,'listening');
   }finally{f.stopError=f.captureCancelError=undefined;f.close();await settle(f);}
  });
 }
 
-test('new media waits for the plugin to answer a failed stop',async()=>{
+test('new media waits for the recorder to answer a failed stop',async()=>{
  const f=session({native:true,platform:'android'});
  try{
   await f.shell.startVoice();
-  f.stopError=Error('Session stop refused');f.holdPlaybackCleanup=true;f.renderChat().stop();await settle(f);
-  assert.equal(f.renderChat().state,'stopping','still stopping: the forced stop has not answered');
+  f.stopError=Error('Session stop refused');f.renderChat().stop();await settle(f);
+  f.holdCaptureCancel=true;f.renderChat().stop();await settle(f);
+  assert.equal(f.renderChat().state,'stopping','still stopping: the owner has not answered');
   await f.shell.startVoice();await settle(f);assert.equal(f.sessions,1,'no second session over an unanswered stop');
-  f.holdPlaybackCleanup=false;f.releasePlaybackCleanup();await settle(f);assert.equal(f.renderChat(),null);
+  f.holdCaptureCancel=false;f.releaseCaptureCancel();await settle(f);assert.equal(f.renderChat(),null);
   f.stopError=undefined;await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sessions,2);
  }finally{f.stopError=undefined;f.close();await settle(f);}
+});
+
+test('the actual clip loop keeps its capture held past a refused recorder, and only that recorder ends it',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true,native:true,platform:'android',peak:.5});
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.nativeLiveVoiceReady=async()=>false;
+ try{
+  await f.shell.startVoice();await settle(f);assert.equal(f.renderChat().state,'listening');
+  const owned=f.activeRecording;assert.ok(owned);
+  f.captureCancelError=Error('Recorder stop refused');f.renderChat().stop();await settle(f);
+  assert.equal(f.activeRecording,owned,'the fixture capture is still open');assert.equal(f.renderChat().state,'stopping');assert.deepEqual(f.shell.messages,[]);
+  await f.shell.startVoice();await settle(f);assert.equal(f.starts,1,'no capture over an open one');
+  f.captureCancelError=undefined;f.renderChat().stop();await settle(f);
+  assert.equal(f.activeRecording,null,'the recorder closed it');assert.equal(f.renderChat(),null);
+  await f.shell.startVoice();await settle(f);assert.equal(f.starts,2);assert.equal(f.renderChat().state,'listening');
+ }finally{f.captureCancelError=undefined;f.close();await settle(f);}
+});
+
+test('DevelopmentAgent: its refused stop is asked of DevelopmentAgent, and AlphaVoiceCloud is not asked for it',async()=>{
+ let refused=true,agentCancels=0,alphaCancels=0;const owned=driver=>({...driver,cancelRecording:async()=>{agentCancels++;if(refused)throw Error('Agent stop refused');await driver.cancelRecording();}});
+ const alpha=driver=>({...driver,cancelRecording:async()=>{alphaCancels++;await driver.cancelRecording();}});
+ const f=cloudVoiceViewFixture({cloudProfile:false,plugins:{DevelopmentAgent:owned,AlphaVoiceCloud:alpha}}),rec=()=>f.render().rec;
+ // The developer realtime profile is the one that records through DevelopmentAgent.
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,testMocksEnabled:true,developmentCloudRealtimeVoiceEnabled:true});
+ try{
+  f.render().record();await settle(f);rec().stop();await settle(f);
+  assert.equal(rec().state,'recording');assert.equal(f.starts,1);
+  rec().discard();await settle(f);
+  assert.equal(agentCancels,2,'the stop, then its own repeat');assert.equal(alphaCancels,0,'no other plugin stands in for it');
+  f.render().record();await settle(f);rec().stop();await settle(f);
+  assert.equal(f.starts,1,'no capture while DevelopmentAgent refuses');assert.equal(alphaCancels,0);
+  refused=false;rec().stop();await settle(f);assert.equal(rec().state,'recording');assert.equal(f.starts,2);
+ }finally{refused=false;f.close();await settle(f);}
+});
+
+test('ordinary dictation: Stop on the held panel asks the same recorder again, and only its answer ends the panel',async()=>{
+ const f=cloudVoiceViewFixture({cloudProfile:true});
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.HTMLElement=class {};f.box.nativeLiveVoiceReady=async()=>false;
+ try{
+  f.shell.startTranscription();await settle(f);f.renderChat().stop();await settle(f);
+  const owned=f.activeRecording;assert.ok(owned);f.captureCancelError=Error('Owned capture did not stop');
+  await assert.rejects(f.shell.stopVoiceConversation(),/Owned capture did not stop/);await settle(f);
+  assert.deepEqual(f.recordingCancels,[owned]);assert.equal(f.renderChat().state,'stopping');
+  f.renderChat().stop();await settle(f);
+  assert.deepEqual(f.recordingCancels,[owned,owned]);assert.equal(f.renderChat().state,'stopping','a refusal keeps it');
+  f.captureCancelError=undefined;f.renderChat().stop();await settle(f);
+  assert.equal(f.activeRecording,null);assert.equal(f.renderChat(),null);assert.equal(f.sends,0);
+ }finally{f.captureCancelError=undefined;f.close();await settle(f);}
 });
 
 test('a normal Stop holds the panel until release and forces no plugin stop',async()=>{
@@ -193,13 +245,61 @@ test(`realtime voice: a normal Stop asks no generic recorder that ${name}, and f
  }finally{f.close();await settle(f);}
 });
 
-test('realtime voice: a client stop that rejects ends voice quietly, and only an explicit Talk opens the next session',async()=>{
+test('realtime voice: a client stop that rejects keeps the quiet panel, only that client can end it, and only an explicit Talk opens the next session',async()=>{
  const f=realtime(()=>({revoked:true}));
  try{
   await f.shell.startVoice();
   f.sdk.stopError=Error('Client stop rejected');f.renderChat().stop();await settle(f);
-  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.sdk.clients,1,'no second paid session by itself');
-  f.sdk.stopError=undefined;await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sdk.clients,2);
+  assert.equal(f.renderChat().state,'stopping');assert.equal(f.renderChat().problem,false);assert.deepEqual(f.shell.messages,[]);
+  assert.equal(f.pluginCancels||0,0,'AlphaVoiceCloud does not own these tracks');assert.equal(f.recordingCancels.length,0);assert.equal(f.sdk.stops,1);
+  await f.shell.startVoice();await settle(f);assert.equal(f.sdk.clients,1,'no Talk over an unconfirmed microphone');
+  f.renderChat().stop();await settle(f);assert.equal(f.sdk.stops,2,'Stop asked the client again');assert.equal(f.renderChat().state,'stopping','a refusal keeps it');
+  f.sdk.stopError=undefined;f.renderChat().stop();await settle(f);assert.equal(f.sdk.stops,3);
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.sdk.clients,1,'no second paid session by itself');assert.equal(f.revokes().length,1,'its ticket is revoked once');
+  await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sdk.clients,2);
+ }finally{f.sdk.stopError=undefined;f.close();await settle(f);}
+});
+
+test('realtime voice: a relay that refuses the ticket does not hold voice once the client confirmed release, and a client refusal is not excused by a confirmed ticket',async()=>{
+ const f=realtime(()=>{throw Object.assign(Error('Relay unavailable'),{status:503});});
+ try{
+  await f.shell.startVoice();f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null,'revocation failed, local release confirmed: quiet');
+  const held=realtime(()=>({revoked:true}));
+  try{
+   await held.shell.startVoice();held.sdk.stopError=Error('Client stop rejected');held.renderChat().stop();await settle(held);
+   assert.equal(held.revokes().length,1,'the ticket is retired whichever way the client answered');assert.equal(held.renderChat().state,'stopping','that says nothing for the microphone');
+  }finally{held.sdk.stopError=undefined;held.close();await settle(held);}
+ }finally{f.close();await settle(f);}
+});
+
+test('a quiet Cloud wait whose stop is refused keeps the quiet panel and opens no session',async()=>{
+ const f=session({native:true,platform:'android'});
+ try{
+  await f.shell.startVoice();f.stopError=Error('Session stop refused');f.captureCancelError=Error('Recorder stop refused');
+  f.batchOptions.onState({phase:'error',error:Object.assign(Error('Warming'),{code:'voice-http-503'})});await settle(f);
+  await new Promise(resolve=>setTimeout(resolve,2100));await settle(f);
+  assert.equal(f.renderChat().state,'stopping','the composer does not return over an unconfirmed stop');assert.equal(f.sessions,1,'no second session');assert.deepEqual(f.shell.messages,[]);
+  f.stopError=f.captureCancelError=undefined;f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);assert.equal(f.sessions,1);
+ }finally{f.stopError=f.captureCancelError=undefined;f.close();await settle(f);}
+});
+
+test('a later stop with nothing to do clears no held owner',async()=>{
+ const f=realtime(()=>({revoked:true}));
+ try{
+  await f.shell.startVoice();f.sdk.stopError=Error('Client stop rejected');f.renderChat().stop();await settle(f);
+  f.render().record();await settle(f);f.render().rec?.discard();await settle(f);
+  assert.equal(f.renderChat().state,'stopping');await assert.rejects(f.shell.stopVoiceConversation(),/Client stop rejected/);
+ }finally{f.sdk.stopError=undefined;f.close();await settle(f);}
+});
+
+test('a held panel left on a closed shell moves to the next shell, which starts no media until its owner confirms',async()=>{
+ const f=realtime(()=>({revoked:true}));
+ try{
+  await f.shell.startVoice();f.sdk.stopError=Error('Client stop rejected');f.renderChat().stop();await settle(f);
+  f.shell.live=false;const next=new f.shell.constructor();next.state={...f.shell.state};
+  await next.startVoice();await settle(f);assert.equal(f.sdk.clients,1,'its owner still refuses');assert.equal(next.renderVals().chatRecorder.state,'stopping');
+  f.sdk.stopError=undefined;next.renderVals().chatRecorder.stop();await settle(f);assert.equal(next.renderVals().chatRecorder,null);
+  await next.startVoice();await settle(f);assert.equal(f.sdk.clients,2);
  }finally{f.sdk.stopError=undefined;f.close();await settle(f);}
 });
 
@@ -236,7 +336,7 @@ async function refused(options){
  await f.shell.startVoice();
  f.stopError=Error('Session stop refused');f.captureCancelError=Error('Plugin stop refused');f.renderChat().stop();await settle(f);
  f.stopError=undefined;
- assert.equal(f.renderChat(),null);
+ assert.equal(f.renderChat().state,'stopping');
  return f;
 }
 const healthy=f=>{f.captureCancelError=undefined;};
