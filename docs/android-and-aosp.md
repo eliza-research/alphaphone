@@ -216,8 +216,9 @@ update and recovery gates below.
    camera, suspend/resume, charging, keys, auth/agent reconnect, accessibility and
    recovery. Record image/APK/source hashes. Image signing, the OTA package and its
    version/hash compatibility record come from `scripts/sign-aosp-release.mjs` on the image
-   host ([Pixel 10a staging and release signing](pixel10a-staging.md)); the one update channel
-   is `android/aosp/pixel10a-ota-channel.json`. The operator update client, interrupted-update
+   host ([Pixel 10a staging and release signing](pixel10a-staging.md)); the one OS update channel
+   is `android/aosp/pixel10a-ota-channel.json` (the Alpha APK alone also has the owner-confirmed
+   [one-tap app update](#one-tap-app-update)). The operator update client, interrupted-update
    resume, slot fallback and stock-recovery checks are `scripts/aosp-ota-update.mjs`, and
    `scripts/verify-pixel10a-image.mjs` checks a booted image; all are bindings of shared
    Pixel 10a tooling. `scripts/aosp-retain-known-good.mjs` (the shared `retain-known-good`
@@ -278,26 +279,39 @@ kiosk is not enabled by default; preserve a recovery route and normal Android se
 
 ## One-tap app update
 
-Settings shows a **Software update** row on Android: the installed version, **Install update**
-with the newer version when the manifest offers one, and **Check for updates**. It updates the
-Alpha APK only; the unattended OS update through `update_engine` (P-75) stays a separate,
-privileged client. Alpha itself stays nonprivileged: it declares only `REQUEST_INSTALL_PACKAGES`,
-Android asks the owner to allow installs from Alpha (opened from the Install tap) and to confirm
-each update, and Android installs only an APK of `ai.elizaresearch.alphaphone` signed like the
-installed app. There is no silent install, background service or error text: a failed check or
-install leaves the row on the installed version and a later check or tap retries.
+On Android, Settings offers **Install update** with the newer version when the last manifest offers
+one for this install, and **Check for updates**; About keeps the installed version. It updates the
+Alpha APK only, beside the OS channel above: the unattended OS update through `update_engine`
+(P-75) stays a separate, privileged client, and whether field devices should also get this second,
+owner-confirmed APK channel is an owner decision (P-75 (5)). Alpha itself stays nonprivileged: it
+declares only `REQUEST_INSTALL_PACKAGES`, Android asks the owner to allow installs from Alpha
+(opened from the Install tap) and to confirm each update, and Android installs only an APK of
+`ai.elizaresearch.alphaphone` signed like the installed app. There is no silent install,
+background service or error text: a failed check or install leaves Settings as it was and a
+later start, resume or tap retries.
+
+That Android permission is **Install unknown apps** for Alpha Phone. It is per app (UID) and stays
+until the owner turns it off in Android Settings, Apps, Special app access, Install unknown apps,
+Alpha Phone. While it is on, any code in Alpha's process can ask Android to install any package,
+always behind Android's own confirmation. Turn it off after an update when that matters; the next
+Install tap opens the page again.
 
 The one manifest URL is `updateManifestUrl` in `app.config.json`; `android/app/product.gradle`
 requires HTTPS and emits it as `BuildConfig.ALPHA_UPDATE_MANIFEST_URL`. The default,
 `https://github.com/eliza-research/alphaphone/releases/latest/download/alpha-update-stable.json`,
 resolves to the newest full (not draft, not prerelease) GitHub release. The app checks on start
-and resume at most once a day (`apps/app/src/runtime/app-update.ts`), and on Check for updates.
+and resume at most once a day after the last answered check, one check at a time, and on Check
+for updates (`apps/app/src/prototype/settings-adapter.ts`, `AlphaDevicePlugin.checkForUpdate`). A
+failed check records nothing, so the next start or resume checks again. A 404 is an answer: nothing
+is published or the release was withdrawn, and any earlier offer goes away.
 
 ```json
 {
   "schema": "alpha-update/v1",
   "versionCode": 2,
   "versionName": "0.1.1",
+  "variant": "launcher",
+  "signerSha256": "64 lowercase hex characters: apksigner's certificate SHA-256 digest",
   "apkUrl": "https://github.com/eliza-research/alphaphone/releases/download/TAG/alpha-phone-2.apk",
   "sha256": "64 lowercase hex characters of the APK",
   "sizeBytes": 400000000,
@@ -305,12 +319,32 @@ and resume at most once a day (`apps/app/src/runtime/app-update.ts`), and on Che
 }
 ```
 
-Only a `versionCode` above the installed one is offered. `apkUrl` must be HTTPS (redirects stay
-on HTTPS); `AlphaUpdatePlugin` downloads at most `sizeBytes` (1 GiB at most) to the app cache,
-refuses any other length or SHA-256, and only then opens a PackageInstaller session for this
-package. Publish an update by building with `ELIZAOS_VERSION_CODE` above the installed
-versionCode, signing with the installed app's key (release key per P-16 for field builds), and
-attaching the APK and the manifest to the release.
+A manifest is offered only to an install with a lower `versionCode`, of its `variant` (`launcher`
+or `standalone`, as `ElizaSystem.getBuildInfo` reports) and signed by the certificate it names
+(`appSigner` in `AlphaDevice.snapshot`). The flavors share the package and signer, so Android
+would install either over the other, and a standalone APK over the launcher image loses the HOME,
+Phone, Contacts and SMS admission; a device signed otherwise (a debug build, a lab-key build
+reading a release-key manifest, or the reverse) is offered nothing rather than downloading an APK
+Android refuses. One manifest URL therefore serves one flavor and one signer; the default serves
+the launcher image.
+
+`apkUrl` must be HTTPS (redirects stay on HTTPS). The plugin first abandons any earlier
+PackageInstaller session of Alpha's that never reached the owner (Android blocks the
+confirmation while Alpha is in the background), downloads at most `sizeBytes` (1 GiB at most)
+to the app cache, refuses any other length or SHA-256, and then reads the archive: it must be
+`ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
+because Android would otherwise accept a same-versionCode reinstall. Only then does it open a
+session for this package. The archive check needs a file, so the cached copy stays until the
+session has its own copy (up to twice `sizeBytes` of free space for that moment). A dismissed
+Android confirmation downloads again on the next tap.
+
+Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
+installed versionCode, signing with the installed app's key, and attaching the APK and the
+manifest to the release. Field builds use the release key, distinct from developer keys (P-16,
+P-58); publishing a lab-key APK as the public repository's latest release needs the owner's
+approval. The system copy in `/product/app/AlphaPhone` and these updates share versionCode
+order: an APK update lives in `/data` and outranks an OS image whose Alpha has a lower
+versionCode, so give each OS build's Alpha a versionCode above every APK update published before it.
 
 ## One live MainActivity on the launcher flavor
 
