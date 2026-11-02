@@ -171,3 +171,70 @@ row('live dictation: a refused discard holds the panel, the repeat asks the same
   refused=false;f.renderChat().stop();await settle(f);assert.equal(open,0);assert.equal(f.renderChat(),null);
  }finally{refused=false;f.close();await settle(f);}
 });
+
+/** Dictation over the real native live voice; `n` is the synthetic bridge. */
+async function nativeDictation(){
+ const {createNativeLiveVoice}=await tsImport(new URL('../'+shared+'voice/src/native-live-voice.ts',import.meta.url).href,{parentURL:import.meta.url});
+ const n={open:new Set(),refused:false,starts:0,stops:0};
+ const port={async liveCaptureStatus(){return {available:true,nativeTransport:true};},async addListener(){return {remove:async()=>{}};},
+  async startLiveCapture({captureId}){n.starts++;if(n.denied)throw n.denied;n.open.add(captureId);if(n.failStart)throw n.failStart;return {captureId,sampleRate:16000,echoCancelled:false,nativeAsr:true};},
+  async stopLiveCapture({captureId}){n.stops++;if(n.refused)throw Error('stopLiveCapture refused');n.open.delete(captureId);return {captureId,durationMs:1,serverClosed:true};}};
+ const voice=createNativeLiveVoice({port,available:()=>true,resident:()=>({sessionId:'agent-session',ownerId:'synthetic-owner',request:async()=>({})})});
+ const f=cloudVoiceViewFixture({cloudProfile:false,native:true,platform:'android'});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,HTMLElement:class {},nativeLiveVoiceReady:async()=>true,createNativeLiveDictation:()=>voice.dictation()});
+ return Object.assign(f,{n});
+}
+row('live dictation: a failed open whose native stop refused holds the panel, Discard holds, the next Transcribe opens nothing, and only its answer frees it',async()=>{
+ const f=await nativeDictation(),{n}=f;
+ try{
+  n.refused=true;n.failStart=Error('start failed after the input opened');
+  f.shell.startTranscription();await settle(f);
+  assert.equal(f.renderChat().state,'stopping');assert.notEqual(f.renderChat().primaryLabel,'Start recording');assert.equal(n.open.size,1);assert.equal(n.starts,1);assert.deepEqual(f.shell.messages,[]);
+  const asked=n.stops;f.renderChat().discard();await settle(f);assert.equal(f.renderChat().state,'stopping','Discard holds');assert.ok(n.stops>asked,'Discard reached the bridge');
+  n.failStart=undefined;f.shell.startTranscription();await settle(f);assert.equal(n.starts,1,'no second capture over it');assert.equal(n.open.size,1);
+  n.refused=false;f.renderChat().discard();await settle(f);assert.equal(n.open.size,0);assert.equal(f.renderChat().state,'ready');
+  f.renderChat().stop();await settle(f);assert.equal(n.starts,2);assert.equal(f.renderChat().state,'recording');
+ }finally{n.refused=false;n.failStart=undefined;f.close();await settle(f);}
+});
+row('live dictation: a plain denied start asks once and holds nothing',async()=>{
+ const f=await nativeDictation(),{n}=f;
+ try{
+  n.denied=Object.assign(Error('denied'),{code:'permission-denied'});
+  f.shell.startTranscription();await settle(f);
+  assert.equal(n.stops,1);assert.equal(n.open.size,0);assert.notEqual(f.renderChat().state,'stopping');assert.deepEqual(f.shell.messages,[]);
+  f.renderChat().discard();await settle(f);assert.equal(f.renderChat(),null);assert.equal(n.stops,1);
+  n.denied=undefined;f.shell.startTranscription();await settle(f);assert.equal(n.starts,2);assert.equal(f.renderChat().state,'recording');
+ }finally{f.close();await settle(f);}
+});
+
+/** Dictation over the real live dictation, on a capture this row controls. */
+async function controlledDictation(options){
+ const {createLiveDictation}=await tsImport(new URL('../'+shared+'voice/src/live-voice-session.ts',import.meta.url).href,{parentURL:import.meta.url});
+ const c={live:0,cancels:0,refused:false,opens:0};
+ const capture=async input=>{c.opens++;c.live++;c.lost=input.onLost;return {startedAt:0,echoCancelled:false,speaking:()=>false,close:async()=>{if(c.closeError)throw c.closeError;c.live--;return {durationMs:1};},cancel:async()=>{c.cancels++;if(c.refused)throw Error('stopLiveCapture refused');c.live--;}};};
+ const f=cloudVoiceViewFixture({cloudProfile:false,native:true,platform:'android'});
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,HTMLElement:class {},nativeLiveVoiceReady:async()=>true,createNativeLiveDictation:()=>createLiveDictation(capture,options)});
+ f.shell.startTranscription();await settle(f);assert.equal(f.renderChat().state,'recording');
+ return Object.assign(f,{c});
+}
+for(const [name,options,end] of [
+ ['a Stop whose finalize fails',undefined,async f=>{f.c.closeError=Error('close unconfirmed');f.renderChat().stop();await settle(f);}],
+ ['a lost capture',undefined,async f=>{f.c.lost(Error('route gone'));await settle(f);}],
+ ['a timer finish that fails',{maxDurationMs:1000},async f=>{f.c.closeError=Error('close unconfirmed');await new Promise(resolve=>setTimeout(resolve,1100));await settle(f);}],
+])row(`live dictation: ${name} with its cancel refused holds the quiet panel, Discard asks again, and only its answer returns to ready`,async()=>{
+ const f=await controlledDictation(options),{c}=f;
+ try{
+  c.refused=true;await end(f);
+  assert.equal(f.renderChat().state,'stopping');assert.notEqual(f.renderChat().primaryLabel,'Start recording');assert.equal(c.live,1);assert.deepEqual(f.shell.messages,[]);
+  const asked=c.cancels;assert.ok(asked>=1);f.renderChat().discard();await settle(f);assert.equal(c.cancels,asked+1);assert.equal(f.renderChat().state,'stopping');
+  f.shell.startTranscription();await settle(f);assert.equal(c.opens,1,'no capture over it');
+  c.refused=false;f.renderChat().discard();await settle(f);assert.equal(c.live,0);assert.equal(f.renderChat().state,'ready');assert.equal(f.renderChat().primaryLabel,'Start recording');
+ }finally{c.refused=false;f.close();await settle(f);}
+});
+row('live dictation: a too-short Stop that the capture confirms returns to ready with no line',async()=>{
+ const f=await controlledDictation(),{c}=f;
+ try{
+  c.closeError=Error('too short');f.renderChat().stop();await settle(f);
+  assert.equal(c.live,0);assert.equal(c.cancels,1,'one capture answer');assert.equal(f.renderChat().state,'ready');assert.doesNotMatch(f.renderChat().lines[0].t,/^Stopping/);assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await settle(f);}
+});
