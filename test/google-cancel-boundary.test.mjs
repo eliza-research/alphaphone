@@ -38,6 +38,20 @@ test('a committed cancellation response is parsed and reconciled without abortin
  f.polls.get(id).resolve(committed);await running.browserResult();
 });
 
+test('a Cancel right after the host commits reports the commit and sends no cleanup cancel',{timeout:3000},async()=>{
+ const f=googleCancelBoundary(root),running=f.begin();await flush();const id=f.started[0],committed=f.outcome(id),held=Promise.withResolvers();
+ f.setCancel(async()=>{await held.promise;return f.response({});});
+ f.polls.get(id).resolve(committed);await flush();
+ assert.equal(await f.client.cancelGoogleSignIn(),true);held.resolve();
+ assert.deepEqual(await running.result,committed);assert.equal(f.cancelCalls,0);
+});
+
+test('an attempt that ends without a commit still retires its host attempt',{timeout:3000},async()=>{
+ const f=googleCancelBoundary(root),running=f.begin();await flush();
+ f.polls.get(f.started[0]).reject(Error('poll lost'));
+ await assert.rejects(running.result,/poll lost/);assert.equal(f.cancelCalls,1);
+});
+
 test('a delayed cancellation response for A cannot abort replacement B',{timeout:3000},async()=>{
  const f=googleCancelBoundary(root),a=f.begin();await flush();const idA=f.started[0],replyA=Promise.withResolvers();let held=false;
  f.setCancel(async data=>{if(data.attemptId===idA&&!held){held=true;return replyA.promise;}return f.response({status:'cancelled'});});

@@ -589,7 +589,7 @@ function detachCloudTarget() { if (testMocksEnabled && active?.kind === 'cloud')
 // Only the Android transport admits Cloud's self-revocation DELETE; elsewhere sign-out reports a local removal.
 // Product builds construct only the managed-services adapter; the hosted-agent fixture exists only with test mocks.
 function makeCloud(environment: CloudEnvironment): CloudProtocol { return testMocksEnabled ? new DevelopmentCloudAgentProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }) : new CloudProtocol(environment, nativeCloudRequest, cloudCredentialStore, openConnectionBrowser, { deleteRequests: cloudSelfRevocationSupported, signIn: cloudSignIn }); }
-/** The client for an in-app sign-in in this environment; replaced when the environment changes. */
+/** The client for an in-app sign-in and its admission in this environment; replaced when the environment changes. */
 function signInClient(environment: CloudEnvironment): CloudProtocol {
   if (cloud.environment !== environment) cloud = makeCloud(environment);
   return cloud;
@@ -982,8 +982,8 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
   stopEntitlementRefresh();
   update({residentSubscription:{kind:'checking'},redeemError:''});
   const environment=residentEnvironment();
-  cloud = makeCloud(environment);
-  const client=cloud;
+  // A same-environment admission keeps the client, so a Google adoption is not fenced as replaced.
+  const client=signInClient(environment);
   let account:NonNullable<typeof service>|null=null,checked:Awaited<ReturnType<typeof checkEntitlement>>|null=null;
   const binding=residentBindingController(environment,client,{verified:value=>{account=value;},checked:value=>{checked=value;}});
   const admission=await binding.admit(signal);
