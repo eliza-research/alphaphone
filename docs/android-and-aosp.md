@@ -373,8 +373,8 @@ lists the session and is not past asking. What a tap cannot see is under the win
 
 A reboot can leave a session Android will not install. Android saves neither progress nor its active count, and
 from Android 11 it writes a session at sealing, before marking the commit, so a session comes back committed only
-if a later write recorded the mark (Android 10 marks first, so always; from Android 12, API 31, a second commit
-writes it, as Alpha's own commit at 0.8 below does). It then reads committed at progress 0, because staging counts
+if a later write recorded the mark (Android 10 marks first, so always; from Android 12, API 31, a commit of a
+session already marked writes it, as Alpha's own commit at 0.8 below does). It then reads committed at progress 0, because staging counts
 only in the hold that marks a commit (AOSP 10 to 17). Android 11 and later do not validate such a session again,
 and its commit fails, read from AOSP: system_server dies on 11, nothing shows and no status comes on 12 and 13, and
 on 14 to 17 the confirmation shows and its accept fails, or on 14 can kill system_server. Android 10 validates it
@@ -456,8 +456,7 @@ second status and lowers Android's count by one, and the install goes on.
 For Root's review, not built. Today that session stays fenced, the first entry under what can hold a session
 fenced, and Android's list is the only end Alpha acts on. Alpha's own commit at 0.8 leads there: from Android 12
 (API 31) it writes the mark, so a session a reboot would have restored unmarked, which a tap commits, comes back
-committed instead. A tap could once give that session up and no longer can, so that commit's cost belongs in this
-decision. Signals an app has, read from AOSP 10 to 17:
+committed instead. No tap gives that session up, so that commit's cost belongs in this decision. Signals an app has, read from AOSP 10 to 17:
 
 | Signal | SDK | What it can prove |
 | --- | --- | --- |

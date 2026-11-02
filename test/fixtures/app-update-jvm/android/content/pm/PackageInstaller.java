@@ -51,9 +51,10 @@ public class PackageInstaller {
    if(session.ended)throw new IllegalStateException("Session gone");
    boolean again=session.sealed;
    session.sealed=true;committed.add(id);
+   // Android 10 marks a commit before its first write. Later ones write first, so only a later write records the mark: from sdk 31 a second commit writes before it validates, so it records a mark already there.
+   if(again&&sdk>=31)write();
    if(!validating)validate(id);
-   // Android 10 marks a commit before its first write. Later ones write first, so only a later write records the mark, and a second commit makes one from sdk 31.
-   if(sdk==29||again&&sdk>=31)write();
+   if(sdk==29)write();
    // handleInstall on an accepted session sends no confirmation. Through sdk 33 it then ends the session at any stage: relinquished
    // up to 32, files in use on 33. It activates again from sdk 34; sdk 34 and 35 then stop at mVerificationInProgress, and 36 and 37
    // reach parseApk, which fails a session whose stage directory is in use and destroys it.

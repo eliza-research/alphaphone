@@ -667,7 +667,23 @@ public final class UpdateFlowTest {
   installer.destroy(one);installer.destroy(two);
   check(tap(next).resolved.get()==1&&installer.committed.equals(List.of(left)),"and a session a tap can still ask for goes on once Android ends those");
  }
- /** Named in docs/android-and-aosp.md: a second commit writes the mark from Android 12, so a session committed again at 0.8 and left at a reboot comes back fenced, and on 11 it still comes back for a tap to commit. */
+ /** A commit writes before it marks, so a session restored unmarked and committed by a tap comes back unmarked, and a tap asks again. */
+ private static void aRestoredUnmarkedCommitStaysRecoverable(File cache)throws Exception{
+  for(int sdk=30;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   installer.sdk=sdk;
+   tap(bridge(context,Lifecycle.State.RESUMED));
+   int pending=committed(context);
+   installer.reboot();
+   check(tap(restarted(context)).resolved.get()==1&&installer.committed.equals(List.of(pending,pending)),"a tap commits a session restored unmarked:"+run);
+   installer.reboot();
+   check(!installer.getSessionInfo(pending).isCommitted(),"and its write came before the mark, so it comes back unmarked:"+run);
+   check(tap(restarted(context)).resolved.get()==1&&installer.committed.equals(List.of(pending,pending,pending))&&installer.abandoned.isEmpty(),"so a tap asks again:"+run);
+  }
+ }
+ /** Named in docs/android-and-aosp.md: a commit of a session already marked writes the mark from Android 12, so a session committed again at 0.8 and left at a reboot comes back fenced, and on 11 it still comes back for a tap to commit. */
  private static void aCommitAt08WritesTheMarkFromAndroid12(File cache)throws Exception{
   for(int sdk=30;sdk<=37;sdk++){
    String run=" sdk "+sdk;
@@ -1236,6 +1252,7 @@ public final class UpdateFlowTest {
    aSessionARebootRestoredUncommittedIsCommittedAgain(cache);
    aSessionARebootRestoredCommittedStaysFenced(cache);
    aCommitAt08WritesTheMarkFromAndroid12(cache);
+   aRestoredUnmarkedCommitStaysRecoverable(cache);
    aStatusLostToADeadProcessFreesTheNextTap(cache);
    aLaterUpdateInstalls(cache);
    aTerminalStatusAllowsANewTap(cache);
