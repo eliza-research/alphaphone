@@ -12,8 +12,10 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.net.SocketException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
@@ -21,29 +23,77 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.cert.Certificate;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
  * Host-JVM run of AlphaDevicePlugin's update members, compiled from the plugin source by
  * test/app-update.test.mjs against the stubs in test/fixtures/app-update-jvm: one Context is one process whose
- * bridges all hear each broadcast, and the HTTPS download is served in memory. Not Android, PackageInstaller
- * or network evidence: the stubs state what Android does, they do not prove it.
+ * bridges all hear each broadcast, and the HTTPS download is served in memory, with the plugin's one-hour deadline
+ * shortened to three seconds. Not Android, PackageInstaller or network evidence: the stubs state what Android does,
+ * they do not prove it.
  */
 public final class UpdateFlowTest {
  private static final byte[] APK="the offered update".getBytes(java.nio.charset.StandardCharsets.UTF_8);
  private static byte[] served=APK;
+ private interface Body {InputStream open(Served connection);}
+ private static final Body IN_MEMORY=connection->new ByteArrayInputStream(served);
+ private static volatile Body body=IN_MEMORY;
+ private static final List<Served> connections=new CopyOnWriteArrayList<>();
+ private static final Thread MAIN=Thread.currentThread();
  private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
  private static String sha256(byte[] bytes)throws Exception{return String.format("%064x",new BigInteger(1,MessageDigest.getInstance("SHA-256").digest(bytes)));}
  private static final class Served extends HttpsURLConnection {
-  Served(URL url){super(url);}
+  final CountDownLatch closed=new CountDownLatch(1);
+  Served(URL url){super(url);connections.add(this);}
   @Override public int getResponseCode(){return 200;}
-  @Override public InputStream getInputStream(){return new ByteArrayInputStream(served);}
+  @Override public InputStream getInputStream(){return body.open(this);}
   @Override public void connect(){}
-  @Override public void disconnect(){}
+  /** Closing a TLS socket writes to it, which Android refuses on the main thread. */
+  @Override public void disconnect(){if(Thread.currentThread()==MAIN)throw new RuntimeException("NetworkOnMainThreadException");closed.countDown();}
   @Override public boolean usingProxy(){return false;}
   @Override public String getCipherSuite(){return "";}
   @Override public Certificate[] getLocalCertificates(){return new Certificate[0];}
   @Override public Certificate[] getServerCertificates(){return new Certificate[0];}
+ }
+ /** A socket read in flight: an interrupt does not end it, only disconnect does, or the release that lets its bytes arrive. */
+ private static final class Held implements Body {
+  final CountDownLatch reading=new CountDownLatch(1),released=new CountDownLatch(1);
+  @Override public InputStream open(Served connection){
+   InputStream bytes=new ByteArrayInputStream(APK);
+   return new InputStream(){
+    @Override public int read()throws IOException{throw new IOException("A download reads whole buffers");}
+    @Override public int read(byte[] buffer,int offset,int length)throws IOException{
+     reading.countDown();
+     boolean interrupted=false;
+     while(released.getCount()>0&&connection.closed.getCount()>0)try{Thread.sleep(2);}catch(InterruptedException stillBlocked){interrupted=true;}
+     if(interrupted)Thread.currentThread().interrupt();
+     if(connection.closed.getCount()==0)throw new SocketException("Socket closed");
+     return bytes.read(buffer,offset,length);
+    }
+   };
+  }
+  /** Starts a tap and returns once its download is in flight, with its file in the cache. */
+  PluginCall start(AlphaDevicePlugin plugin)throws Exception{
+   body=this;connections.clear();
+   PluginCall call=offered();plugin.installUpdate(call);
+   check(reading.await(20,TimeUnit.SECONDS),"the download started");
+   return call;
+  }
+ }
+ /** Never silent: one byte of the offered APK after each pause. */
+ private static Body trickle(long pauseMillis){
+  return connection->new InputStream(){
+   private int at;
+   @Override public int read()throws IOException{
+    if(at==APK.length)return -1;
+    try{Thread.sleep(pauseMillis);}catch(InterruptedException stopped){throw new IOException(stopped);}
+    return APK[at++];
+   }
+   @Override public int read(byte[] buffer,int offset,int length)throws IOException{int value=read();if(value<0)return -1;buffer[offset]=(byte)value;return 1;}
+  };
  }
  private static AlphaDevicePlugin bridge(Context context,Lifecycle.State state){
   AlphaDevicePlugin plugin=new AlphaDevicePlugin();
@@ -51,13 +101,13 @@ public final class UpdateFlowTest {
   return plugin;
  }
  private static PackageInfo archive(String packageName,long versionCode){PackageInfo info=new PackageInfo();info.packageName=packageName;info.versionCode=versionCode;return info;}
- /** The owner's tap on the offered build, settled, with its download gone: the worker deletes it just after settling. */
+ private static PluginCall offered()throws Exception{return new PluginCall(new JSObject().put("apkUrl","https://updates.test/alpha-8.apk").put("sha256",sha256(APK)).put("sizeBytes",(long)APK.length).put("versionCode",8L));}
+ private static File download(Context context){return new File(context.getCacheDir(),"alpha-update.apk");}
+ /** The owner's tap on the offered build, settled only after its attempt let go of the download. */
  private static PluginCall tap(AlphaDevicePlugin plugin)throws Exception{
-  PluginCall call=new PluginCall(new JSObject().put("apkUrl","https://updates.test/alpha-8.apk").put("sha256",sha256(APK)).put("sizeBytes",(long)APK.length).put("versionCode",8L));
+  PluginCall call=offered();
   plugin.installUpdate(call);call.awaitAnswer();
-  File download=new File(plugin.getContext().getCacheDir(),"alpha-update.apk");
-  for(int wait=0;download.exists()&&wait<500;wait++)Thread.sleep(10);
-  check(!download.exists(),"no tap leaves its download in the cache");
+  check(!download(plugin.getContext()).exists(),"no tap leaves its download in the cache");
   return call;
  }
  private static int committed(Context context){List<Integer> all=context.packages.installer.committed;return all.get(all.size()-1);}
@@ -73,16 +123,116 @@ public final class UpdateFlowTest {
  private static void stop(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.CREATED;}
  private static Context installing(File cache){Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
 
- private static void firstLoadSweepsTheDownloadOfAKilledProcess(File cache)throws Exception{
-  File download=new File(cache,"alpha-update.apk");
-  Files.write(download.toPath(),APK);
+ private static void aStartSweepsTheDownloadOfAKilledProcess(File cache)throws Exception{
   Context context=new Context(cache);
+  Files.write(download(context).toPath(),APK);
   bridge(context,Lifecycle.State.RESUMED);
-  check(!download.exists(),"the first bridge deletes what a killed process left");
-  Files.write(download.toPath(),APK);
+  check(!download(context).exists(),"a bridge's load deletes what a killed process left");
+ }
+ private static void oneTapInstallsWhileATapOnAnotherBridgeChangesNothing(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin first=bridge(context,Lifecycle.State.RESUMED),second=bridge(context,Lifecycle.State.RESUMED);
+  Held held=new Held();
+  PluginCall running=held.start(first);
+  PluginCall quiet=offered();second.installUpdate(quiet);quiet.awaitAnswer();
+  check(quiet.resolved.get()==1&&quiet.rejected.get()==0,"the second bridge's tap settles without a failure");
+  check(connections.size()==1&&installer.sessions.isEmpty(),"and downloads and stages nothing");
+  check(download(context).exists(),"the running attempt keeps its file");
   bridge(context,Lifecycle.State.CREATED);
-  check(download.exists(),"a later bridge never deletes a download in flight");
-  download.delete();
+  check(download(context).exists(),"a bridge that loads meanwhile does not sweep it");
+  check(running.resolved.get()==0,"the first tap is still running");
+  held.released.countDown();running.awaitAnswer();body=IN_MEMORY;
+  check(running.resolved.get()==1&&running.rejected.get()==0&&installer.committed.size()==1,"one tap installs, once");
+  check(!download(context).exists(),"and its download goes");
+  int firstSession=committed(context);
+  check(tap(second).resolved.get()==1&&installer.committed.size()==2,"a tap after it finished runs");
+  check(installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(firstSession,committed(context))),"and leaves the first bridge's session");
+ }
+ private static void aTapOnAnotherBridgeLeavesAConfirmationPendingForTheOwner(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  stop(owner);
+  Intent confirm=confirmation(context,pending);
+  tap(other);
+  check(context.packages.installer.abandoned.isEmpty()&&context.packages.installer.sessions.contains(pending),"the owner's session stays");
+  Intent theirs=confirmation(context,committed(context));
+  check(other.activity.started.equals(List.of(theirs)),"the other bridge opens only its own");
+  resume(owner);resume(owner);
+  check(owner.activity.started.equals(List.of(confirm)),"the owner's kept confirmation still opens, once");
+ }
+ private static void aRepeatTapKeepsAConfirmationHeldForResume(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int pending=committed(context);
+  stop(owner);
+  Intent confirm=confirmation(context,pending);
+  connections.clear();
+  check(tap(owner).resolved.get()==1,"the repeat tap settles without a failure");
+  check(connections.isEmpty()&&context.packages.installer.abandoned.isEmpty()&&context.packages.installer.committed.size()==1,"it neither downloads nor cancels anything");
+  resume(owner);resume(owner);
+  check(owner.activity.started.equals(List.of(confirm)),"the kept confirmation opens once");
+  tap(owner);
+  check(context.packages.installer.abandoned.equals(List.of(pending)),"once it has been shown, a later tap replaces that session");
+ }
+ private static void aFailedTapLeavesTheEarlierSessionAndALaterTapWorks(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int earlier=committed(context);
+  served="the offered updatf".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+  check(tap(owner).rejected.get()==1,"the download does not match");
+  served=APK;
+  check(installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(earlier)),"the earlier session stays");
+  Intent confirm=confirmation(context,earlier);
+  check(owner.activity.started.equals(List.of(confirm)),"and its confirmation still opens");
+  installer.sessions.remove((Integer)earlier);
+  check(tap(owner).resolved.get()==1&&installer.sessions.equals(List.of(committed(context))),"after Android ended that session, the next tap installs");
+  check(installer.abandoned.isEmpty(),"with nothing left to abandon");
+ }
+ private static void theDeadlineEndsATrickleNotADownloadThatFinishesInTime(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  body=trickle(400);connections.clear();
+  PluginCall late=tap(owner);
+  check(late.rejected.get()==1&&late.resolved.get()==0,"a download still trickling at the deadline fails quietly");
+  check(connections.get(0).closed.getCount()==0&&context.packages.installer.sessions.isEmpty(),"its connection closes and nothing is staged");
+  body=trickle(2);
+  check(tap(owner).resolved.get()==1&&context.packages.installer.committed.size()==1,"a slow download inside the deadline installs, and nothing held the failed attempt");
+  body=IN_MEMORY;
+ }
+ private static void destroyClosesADownloadInFlight(File cache)throws Exception{
+  Context context=installing(cache);
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  Held held=new Held();
+  PluginCall running=held.start(owner);
+  owner.handleOnDestroy();
+  running.awaitAnswer();body=IN_MEMORY;
+  check(running.rejected.get()==1&&connections.get(0).closed.getCount()==0,"destroy closes the connection the worker is blocked on");
+  check(context.packages.installer.sessions.isEmpty()&&!download(context).exists(),"nothing is staged or left behind");
+  check(tap(other).resolved.get()==1&&context.packages.installer.committed.size()==1,"another bridge's later tap installs");
+  other.handleOnDestroy();
+  bridge(context,Lifecycle.State.RESUMED).handleOnDestroy();
+  check(context.receivers.isEmpty(),"a bridge with a finished attempt, or none, is destroyed cleanly and stops listening");
+ }
+ private static void destroyAfterTheDownloadChangesNoSession(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  tap(owner);
+  int earlier=committed(context);
+  context.packages.archiveRead=owner::handleOnDestroy;
+  check(tap(owner).rejected.get()==1,"destroyed while the archive is read");
+  check(installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(earlier)),"the earlier session stays and no new one opens");
+  Context stagingContext=installing(cache);
+  AlphaDevicePlugin staging=bridge(stagingContext,Lifecycle.State.RESUMED);
+  stagingContext.packages.installer.staging=staging::handleOnDestroy;
+  check(tap(staging).rejected.get()==1,"destroyed while the session is written");
+  check(stagingContext.packages.installer.committed.isEmpty()&&stagingContext.packages.installer.sessions.isEmpty(),"nothing commits for a receiver that is gone, and the session goes");
  }
  private static void aResumedOwnerOpensItAtOnceAndOnce(File cache)throws Exception{
   Context context=installing(cache);
@@ -186,7 +336,14 @@ public final class UpdateFlowTest {
   File cache=Files.createTempDirectory("alpha-update-flow").toFile();
   int status=1;
   try{
-   firstLoadSweepsTheDownloadOfAKilledProcess(cache);
+   aStartSweepsTheDownloadOfAKilledProcess(cache);
+   oneTapInstallsWhileATapOnAnotherBridgeChangesNothing(cache);
+   aTapOnAnotherBridgeLeavesAConfirmationPendingForTheOwner(cache);
+   aRepeatTapKeepsAConfirmationHeldForResume(cache);
+   aFailedTapLeavesTheEarlierSessionAndALaterTapWorks(cache);
+   theDeadlineEndsATrickleNotADownloadThatFinishesInTime(cache);
+   destroyClosesADownloadInFlight(cache);
+   destroyAfterTheDownloadChangesNoSession(cache);
    aResumedOwnerOpensItAtOnceAndOnce(cache);
    aStoppedOwnerOpensItOnItsNextResume(cache);
    anotherBridgeNeverOpensIt(cache);
@@ -197,7 +354,7 @@ public final class UpdateFlowTest {
    appSignerIsTheOriginalCertificateOfOneSigner(cache);
    System.out.println("PASS update flow");
    status=0;
-  }catch(AssertionError failed){
+  }catch(RuntimeException|AssertionError failed){
    failed.printStackTrace();
   }finally{
    for(File left:cache.listFiles())left.delete();

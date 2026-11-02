@@ -201,15 +201,20 @@ public final class AlphaDevicePlugin extends Plugin {
 
  /** Largest update APK admitted; UPDATE_MAX_BYTES in settings-adapter.ts is the same bound. */
  static final long UPDATE_MAX_BYTES=1L<<30;
+ /** Longest one update download may run: the read timeout bounds only silence, and a trickle never goes silent. Fits a 1 GiB APK from about 2.4 Mbit/s. */
+ static final long UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(1);
  /** 64 lowercase hex characters of a SHA-256 digest. */
  static String hex(byte[] digest){return String.format(java.util.Locale.ROOT,"%064x",new java.math.BigInteger(1,digest));}
- /** Copies the update download, then throws unless it was exactly sizeBytes long and hashes to sha256. An undeclared size or digest is refused before any byte is read. */
- static void copyVerified(java.io.InputStream in,java.io.OutputStream out,long sizeBytes,String sha256)throws java.io.IOException{
+ /** Stops an update attempt whose bridge is gone: handleOnDestroy interrupts updateWorker, and that bridge's receiver no longer hears any session's status. */
+ private static void throwIfDestroyed()throws java.io.IOException{if(Thread.currentThread().isInterrupted())throw new java.io.IOException("Update stopped");}
+ /** Copies the update download until the System.nanoTime() deadline, then throws unless it was exactly sizeBytes long and hashes to sha256. An undeclared size or digest is refused before any byte is read. */
+ static void copyVerified(java.io.InputStream in,java.io.OutputStream out,long sizeBytes,String sha256,long deadline)throws java.io.IOException{
   if(sizeBytes<=0||sizeBytes>UPDATE_MAX_BYTES||sha256==null||!sha256.matches("[0-9a-f]{64}"))throw new java.io.IOException("Update not admitted");
   java.security.MessageDigest digest;
   try{digest=java.security.MessageDigest.getInstance("SHA-256");}catch(java.security.NoSuchAlgorithmException unavailable){throw new java.io.IOException(unavailable);}
   byte[] buffer=new byte[65536];long total=0;
   for(int count;(count=in.read(buffer))!=-1;){
+   throwIfDestroyed();if(System.nanoTime()>=deadline)throw new java.io.IOException("Update took too long");
    total+=count;if(total>sizeBytes)throw new java.io.IOException("Update larger than declared");
    digest.update(buffer,0,count);out.write(buffer,0,count);
   }
@@ -223,7 +228,7 @@ public final class AlphaDevicePlugin extends Plugin {
   * Android's request for the owner's confirmation, kept until Alpha is resumed: Android silently drops an
   * activity Alpha starts while it is not in front (screen locked during the download, another app open).
   */
- private Intent updateConfirm;
+ private volatile Intent updateConfirm;
  /** The session this plugin created. Every bridge's receiver hears every session's status, and only the creator acts on it. */
  private volatile int updateSession;
  /** Android's status for this plugin's update session: only its request for the owner's confirmation is acted on. */
@@ -244,19 +249,23 @@ public final class AlphaDevicePlugin extends Plugin {
  /** The update download in the cache, deleted once the session has its copy or the download is refused. */
  private java.io.File updateApk(){return new java.io.File(getContext().getCacheDir(),"alpha-update.apk");}
  /**
-  * The first AlphaDevicePlugin of a process deletes the download a killed process left (up to UPDATE_MAX_BYTES);
-  * a later one (AlphaAssistActivity's bridge beside MainActivity's) never deletes another's download in flight.
+  * Held by the process's one update attempt, from the start of its work until its session is committed or it
+  * fails, or by a load sweeping. Static because every bridge (AlphaAssistActivity's beside MainActivity's) shares updateApk().
   */
- private static boolean updateApkSwept;
+ private static final java.util.concurrent.atomic.AtomicBoolean updating=new java.util.concurrent.atomic.AtomicBoolean();
  @Override public void load(){
   super.load();
-  if(!updateApkSwept){updateApkSwept=true;updateApk().delete();}
+  // Deletes the download a killed process left (up to UPDATE_MAX_BYTES), never one in flight on another bridge.
+  if(updating.compareAndSet(false,true)){updateApk().delete();updating.set(false);}
   androidx.core.content.ContextCompat.registerReceiver(getContext(),updateStatus,new android.content.IntentFilter(UPDATE_STATUS),androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
  }
+ /** The connection updateWorker opened last, for handleOnDestroy: interrupting a worker does not stop its socket I/O. */
+ private volatile javax.net.ssl.HttpsURLConnection updateActive;
  /** HTTPS only: a redirect never changes protocol, and the network security config refuses cleartext. */
- private static javax.net.ssl.HttpsURLConnection updateConnection(String url)throws java.io.IOException{
+ private javax.net.ssl.HttpsURLConnection updateConnection(String url)throws java.io.IOException{
   javax.net.ssl.HttpsURLConnection connection=(javax.net.ssl.HttpsURLConnection)new java.net.URL(url).openConnection();
   connection.setConnectTimeout(20000);connection.setReadTimeout(60000);connection.setUseCaches(false);
+  updateActive=connection;
   return connection;
  }
  /**
@@ -282,7 +291,9 @@ public final class AlphaDevicePlugin extends Plugin {
   * only that Android page opens. Otherwise the HTTPS APK is downloaded to the cache and admitted by size and
   * SHA-256 (copyVerified), then by Android's reading of the archive: this package at exactly the offered
   * versionCode, above the installed one. Android shows its own confirmation and installs only an APK signed
-  * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly.
+  * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
+  * per process: a tap while one runs on any bridge, or while this bridge keeps a confirmation for its next resume,
+  * changes nothing. Only an admitted build replaces this plugin's own earlier session, never another bridge's.
   */
  @PluginMethod public void installUpdate(PluginCall call){
   if(!getContext().getPackageManager().canRequestPackageInstalls()){
@@ -294,31 +305,37 @@ public final class AlphaDevicePlugin extends Plugin {
   }
   final String apkUrl=call.getString("apkUrl"),sha256=call.getString("sha256");final long size=call.getData().optLong("sizeBytes"),versionCode=call.getData().optLong("versionCode");
   PluginWorkers.submit(updateWorker,()->{
+   if(updateConfirm!=null||!updating.compareAndSet(false,true)){call.resolve();return;}
    java.io.File apk=updateApk();
    try{
-    PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
-    // An earlier session whose confirmation never reached the owner (Alpha closed before it resumed) would
-    // stay staged in /data/app; Alpha creates no other sessions, so each tap starts clean.
-    for(PackageInstaller.SessionInfo stale:installer.getMySessions())try{installer.abandonSession(stale.getSessionId());}catch(RuntimeException finished){/* Already gone. */}
-    javax.net.ssl.HttpsURLConnection connection=updateConnection(apkUrl);
     try{
-     if(connection.getResponseCode()!=200)throw new java.io.IOException("Update unavailable");
-     try(java.io.InputStream in=connection.getInputStream();java.io.OutputStream out=new java.io.FileOutputStream(apk)){copyVerified(in,out,size,sha256);}
-    }finally{connection.disconnect();}
-    // Android would also accept a same-versionCode reinstall; only the offered, newer build of this package goes on.
-    android.content.pm.PackageInfo archive=getContext().getPackageManager().getPackageArchiveInfo(apk.getPath(),0);
-    if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
-    PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-    params.setAppPackageName(getContext().getPackageName());params.setSize(size);
-    int id=installer.createSession(params);updateSession=id;
-    try(PackageInstaller.Session session=installer.openSession(id)){
-     try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
-     session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
-    }catch(Exception failed){installer.abandonSession(id);throw failed;}
+     PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
+     long deadline=System.nanoTime()+UPDATE_DEADLINE_NANOS;
+     javax.net.ssl.HttpsURLConnection connection=updateConnection(apkUrl);
+     try{
+      if(connection.getResponseCode()!=200)throw new java.io.IOException("Update unavailable");
+      try(java.io.InputStream in=connection.getInputStream();java.io.OutputStream out=new java.io.FileOutputStream(apk)){copyVerified(in,out,size,sha256,deadline);}
+     }finally{connection.disconnect();}
+     // Android would also accept a same-versionCode reinstall; only the offered, newer build of this package goes on.
+     android.content.pm.PackageInfo archive=getContext().getPackageManager().getPackageArchiveInfo(apk.getPath(),0);
+     if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
+     throwIfDestroyed();
+     // This plugin's earlier session, if the owner never answered it, would stay staged in /data/app. Dropped
+     // only here so a failed tap leaves it, and before the new one so its space is free.
+     if(updateSession!=0)try{installer.abandonSession(updateSession);}catch(RuntimeException finished){/* Already gone. */}
+     PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+     params.setAppPackageName(getContext().getPackageName());params.setSize(size);
+     int id=installer.createSession(params);updateSession=id;
+     try(PackageInstaller.Session session=installer.openSession(id)){
+      try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
+      throwIfDestroyed();
+      session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
+     }catch(Exception failed){installer.abandonSession(id);throw failed;}
+    }finally{apk.delete();updating.set(false);}
     call.resolve();
    }catch(Exception unavailable){call.reject("Update unavailable");}
-   finally{apk.delete();}
   },()->call.reject("Update unavailable"));
  }
- @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();getContext().unregisterReceiver(updateStatus);super.handleOnDestroy();}
+ /** Stops an update download too, closing its connection off this main thread: closing a TLS socket writes to it, which Android refuses here. */
+ @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();javax.net.ssl.HttpsURLConnection active=updateActive;if(active!=null)java.util.concurrent.CompletableFuture.runAsync(active::disconnect);getContext().unregisterReceiver(updateStatus);super.handleOnDestroy();}
 }

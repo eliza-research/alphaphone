@@ -25,13 +25,14 @@ test('the download is admitted only at its declared size and SHA-256',()=>{
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('the update flow keeps Android\'s confirmation for the bridge that started it, opens it once, and settles every failure quietly',()=>{
- const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.indexOf(' @Override protected void handleOnDestroy()');
+test('the update flow runs one attempt per process, keeps Android\'s confirmation for the bridge that started it, opens it once, and settles every failure quietly',()=>{
+ const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.lastIndexOf('}');
+ const hour='UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(1)';
  const signer=plugin.match(/^ *SystemFacts\.fact\(facts,"appSigner".*$/m)?.[0];
- assert.ok(start>0&&end>start&&signer,'the update members exist');
+ assert.ok(start>0&&end>start&&signer&&plugin.includes(hour),'the update members exist');
  const dir=mkdtempSync(join(tmpdir(),'alpha-update-flow-'));
  try{
-  // The plugin's own members in a class of its name; the stubs state what Android and Capacitor do.
+  // The plugin's own members in a class of its name, with only the deadline shortened to seconds; the stubs state what Android and Capacitor do.
   const members=join(dir,'AlphaDevicePlugin.java');
   writeFileSync(members,`package ai.elizaresearch.alphaphone;
 import ai.eliza.plugins.system.SystemFacts;
@@ -42,18 +43,19 @@ import android.content.pm.PackageManager;
 import android.provider.Settings;
 import com.getcapacitor.*;
 final class AlphaDevicePlugin extends Plugin {
+ private final java.util.concurrent.ExecutorService diagnosticsWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
  Object appSigner(Context context){java.util.Map<String,Object> facts=new java.util.HashMap<>();
 ${signer}
   return facts.get("appSigner");}
-${plugin.slice(start,end)}}
+${plugin.slice(start,end).replace(hour,'UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.SECONDS.toNanos(3)')}}
 `);
   assert.match(runJvm([members,nativeSource('PluginWorkers.java'),...javaFiles(fixture('app-update-jvm')),fixture('UpdateFlowTest.java')],'ai.elizaresearch.alphaphone.UpdateFlowTest'),/^PASS update flow/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('Android installs only the offered newer build of this package, after any stale session is dropped',()=>{
- const order=['installer.getMySessions()','installer.abandonSession(stale.getSessionId())','copyVerified(in,out,size,sha256);','getPackageArchiveInfo(apk.getPath(),0)','installer.createSession(params)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'stale sessions go first; size, SHA-256 and the archive are admitted before a session exists, and its status can only arrive once it is this plugin\'s');
+test('Android installs only the offered newer build of this package, in place of this plugin\'s own earlier session',()=>{
+ const order=['copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'size, SHA-256 and the archive are admitted before any session changes, and a new session\'s status can only arrive once it is this plugin\'s');
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);

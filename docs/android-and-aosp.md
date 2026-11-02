@@ -335,17 +335,20 @@ the launcher image. `signerSha256` is always the original certificate, index 0 o
 never changes it, so a phone that missed the rotating release is still offered later ones, and Android
 installs them through the lineage.
 
-`apkUrl` must be HTTPS (redirects stay on HTTPS). The plugin first abandons any earlier
-PackageInstaller session of Alpha's whose confirmation never reached the owner (Alpha closed
-before it was resumed), downloads at most `sizeBytes` (1 GiB at most) to the app cache, refuses any other length or SHA-256, and then reads the archive: it must be
+`apkUrl` must be HTTPS (redirects stay on HTTPS). One attempt runs per process, whichever of Alpha's
+surfaces started it, and a tap while one runs changes nothing. The plugin downloads at most
+`sizeBytes` (1 GiB at most) to the app cache within one hour, refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
-because Android would otherwise accept a same-versionCode reinstall. Only then does it open a
-session for this package. The archive check needs a file, so the cached copy stays until the
+because Android would otherwise accept a same-versionCode reinstall. Only then does it drop the
+session that surface created earlier and the owner left unanswered, and open a session for this
+package, so a failed tap leaves the earlier session. No tap touches another surface's session, and a
+session left by a killed process or a closed surface stays until Android expires it. Closing the
+surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
 in front, so one that arrives while the screen is locked or another app is open waits and opens when
-the surface that started the install is resumed; another of Alpha's surfaces never opens it. A
-dismissed Android confirmation downloads again on the next tap.
+the surface that started the install is resumed, and a tap while it waits changes nothing; another of
+Alpha's surfaces never opens it. A dismissed Android confirmation downloads again on the next tap.
 
 Publish an update by building the manifest's flavor with `ELIZAOS_VERSION_CODE` above the
 installed versionCode and signing it with the installed app's key, then upload the APK before the
