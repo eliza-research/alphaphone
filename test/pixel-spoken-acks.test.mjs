@@ -1583,7 +1583,7 @@ test('busy hold over the speech socket: Mute while the capture reopens after the
   assert.deepEqual(n.mutes,[false,true,false],'the reopen waits for the native unmute');
   f.renderChat().toggleMute();await f.clock.flush();
   reopened();await f.clock.flush();
-  assert.equal(f.renderChat()?.state,'stopping','voice is ending; the panel holds until the capture is released');assert.equal(n.stops,1);
+  assert.equal(n.stops,1,'the refused mute ended voice');
   f.renderChat()?.toggleMute?.();await f.clock.advance(5000);
   assert.deepEqual(n.mutes,[false,true,false,true],'the reopened capture is closed at Mute and nothing opens again');
   assert.equal(f.renderChat(),null,'voice ended quietly');

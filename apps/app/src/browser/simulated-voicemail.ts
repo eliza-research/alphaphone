@@ -14,7 +14,7 @@ export function installSimulatedVoicemail(phone:Bag){
   stop();api=currentApi;const epoch=generation;const speech=new AbortController();owner=speech;api.set({playing:row.id,vpos:0});
   try{
    await speakLocalText(row.text,speech.signal);if(epoch===generation)stop(true);
-  }catch{if(epoch===generation){stop();currentApi.toast('Read the voicemail transcript or try playback again.');}}
+  }catch{if(epoch===generation)stop();}
  };
  const render=phone.render,leave=phone.onLeave,back=phone.back;
  phone.render=(state:Bag,currentApi:Bag)=>{

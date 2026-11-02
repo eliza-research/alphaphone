@@ -34,6 +34,7 @@ export function cloudVoiceViewFixture(options={}){
  vm.runInNewContext('{'+stripTypeScriptTypes(fs.readFileSync('.eliza/client-features/packages/voice/src/cloud-speech-chunks.ts','utf8').replaceAll('export async function','async function').replaceAll('export function','function').replaceAll('export const','const').replaceAll('export type','type'))+';globalThis.speakCloudSpeechChunks=speakCloudSpeechChunks;}',box);
  load('prototype/local-speech-playback.ts',box,['installLocalSpeechPlayback','stopLocalSpeechPlayback','currentNoteReading','stopSpeaking','speakNote']);
  load('runtime/voice-states.ts',box,['voiceFailure','transcriptProvenance','deniedSettingsChoice','DENIED_SETTINGS_LABEL']);
+ load('runtime/voice-failure-log.ts',box,['logVoiceFailure']);
  // Issue #395 native stage bridge: a no-op outside the phone.
  box.installNativeVoiceTurnMarks=()=>{};
  box.alphaViewPath=alphaViewPath;box.cloudServiceName=cloudServiceName;box.cloudVoiceLimitOf=cloudVoiceLimitOf;box.readServiceLimit=readServiceLimit;box.retryDuration=retryDuration;

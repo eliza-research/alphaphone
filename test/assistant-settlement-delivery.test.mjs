@@ -202,3 +202,16 @@ test('aborted selected voice request removes progress listener without another s
  const f=fixture(),abort=new AbortController(),cues=[];const {task}=await f.start('voice',{signal:abort.signal,onProgress:value=>cues.push(value)});abort.abort();f.resolve();await assert.rejects(task);
  f.box.batchVoiceProgressEvents.dispatchEvent(new CustomEvent('progress',{detail:{turnId:'turn-1',conversationId:f.binding.conversationId,ownerId:f.binding.session.ownerId,kind:'thinking',label:'Checking'}}));assert.equal(cues.length,0);assert.equal(f.sent.length,1);
 });
+
+for(const [name,stop] of [['refused',()=>Promise.reject(Error('Plugin stop refused'))],['confirmed',()=>Promise.resolve()]])
+test(`a typed send goes on after a ${name} voice stop: typed text needs no voice media`,async()=>{
+  const f=fixture();f.shell.stopVoiceConversation=stop;
+  const {task}=await f.start('text');assert.equal(f.sent[0][0],'Question');
+  f.resolve();await task;
+});
+
+test('a typed send held by a refused voice stop still honors the currentness checks',async()=>{
+  const f=fixture();let refuse;f.shell.stopVoiceConversation=()=>new Promise((_,reject)=>refuse=reject);
+  const task=f.shell.send();await flush();f.shell.state.draft='Changed';refuse(Error('Plugin stop refused'));await task;
+  assert.equal(f.sent.length,0);
+});

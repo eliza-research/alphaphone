@@ -9,7 +9,7 @@ const platforms=[{native:true,platform:'android'},{native:false,platform:'web'}]
 const forcedStops=f=>f.native?(f.stopPlaybackInputs||[]).filter(input=>input===undefined).length:f.pluginCancels||0;
 function session(options){
  const f=cloudVoiceViewFixture({cloudProfile:true,sessions:0,...options});
- f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+ f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;f.box.nativeLiveVoiceReady=async()=>false;
  f.box.BatchVoiceConversation=class {
   constructor(input){f.sessions++;f.batchOptions=input;}
   async start(){f.batchOptions.onState({phase:'listening'});}
@@ -153,10 +153,10 @@ function realtime(revoke){
  Object.assign(f.box.connectionController,{getBrowserSpeechAgent:()=>agent,voiceRendererClientId:()=>'11111111-1111-4111-8111-111111111111',voiceConversationCurrent:()=>true,voiceRendererMetadata:()=>({viewDelivery:'completed-action'}),async refreshDeveloperVoiceHistory(){}});
  Object.assign(f.box,{testMocksEnabled:true,developmentCloudRealtimeVoiceEnabled:true,HTMLElement:class {},React:{createElement:()=>null},VoiceActivity:()=>null,console:{warn(){}},
   validateUuid:()=>true,readDevicePreferences:async()=>({askBeforeAgentActions:true}),location:{host:'localhost'},URL,Response,
-  WebSocket:class {constructor(){queueMicrotask(()=>this.onopen?.());}close(){}},
+  WebSocket:class {constructor(){f.socket=this;queueMicrotask(()=>this.onopen?.());}close(){}},
   loadClient:async()=>({createVoiceSessionClient:options=>{const client=++sdk.clients;sdk.options=options;return {
    async start(){sdk.starts++;options.onMinted({sessionId:'session-'+client});options.onState({phase:'listening',traceId:null,finalTranscript:''});},
-   async stop(){sdk.stops++;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false,async unlockPlayback(){}};}})});
+   async stop(){sdk.stops++;if(sdk.stopError)throw sdk.stopError;},microphoneMuted:false,setMicrophoneMuted(){},needsPlaybackUnlock:false,async unlockPlayback(){}};}})});
  load('runtime/development-cartesia-conversation.ts',f.box,['developmentCartesiaConversation'],source=>source.replace(/^export \{.*\} from .*;\n/gm,'').replace("await import('@elizaos/ui/voice/voice-session-client')",'await loadClient()'));
  return Object.assign(f,{sdk,revokes:()=>calls.filter(path=>path.includes('/revoke'))});
 }
@@ -180,5 +180,130 @@ test(`a lost realtime session (${failure.code||failure.message}) ends voice quie
   f.sdk.options.onError(failure);await settle(f);await new Promise(resolve=>setTimeout(resolve,2100));await settle(f);
   assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.sdk.clients,1,'no second paid session');assert.equal(f.revokes().length,1);
   await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sdk.clients,2);
+ }finally{f.close();await settle(f);}
+});
+
+for(const [name,cancelRecording] of [['refuses',async()=>{throw Error('DevelopmentAgent is not implemented on web');}],['answers',async()=>{}]])
+test(`realtime voice: a normal Stop asks no generic recorder that ${name}, and forces no plugin stop`,async()=>{
+ const f=realtime(()=>({revoked:true}));
+ try{
+  await f.shell.startVoice();let asked=0;f.driver.cancelRecording=()=>{asked++;return cancelRecording();};
+  f.renderChat().stop();await settle(f);
+  assert.equal(f.sdk.stops,1,'its own client stopped');assert.equal(asked,0,'it owns no recorder capture');assert.equal(f.pluginCancels||0,0);assert.equal(f.renderChat(),null);
+ }finally{f.close();await settle(f);}
+});
+
+test('realtime voice: a client stop that rejects ends voice quietly, and only an explicit Talk opens the next session',async()=>{
+ const f=realtime(()=>({revoked:true}));
+ try{
+  await f.shell.startVoice();
+  f.sdk.stopError=Error('Client stop rejected');f.renderChat().stop();await settle(f);
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.sdk.clients,1,'no second paid session by itself');
+  f.sdk.stopError=undefined;await f.shell.startVoice();assert.equal(f.renderChat().state,'listening');assert.equal(f.sdk.clients,2);
+ }finally{f.sdk.stopError=undefined;f.close();await settle(f);}
+});
+
+// One accepted turn: the SDK reducer's state, then the raw final that commits it.
+const acceptedTurn=f=>{f.sdk.options.onState({phase:'thinking',traceId:'turn',finalTranscript:'open notes'});f.sdk.options.onServerEvent({t:'stt_final',traceId:'turn',text:'open notes'});};
+for(const [name,arrange,fail] of [
+ ['a history refresh',f=>{f.box.connectionController.refreshDeveloperVoiceHistory=async()=>{throw Error('PRIVATE_FAILURE');};},f=>f.sdk.options.onServerEvent({t:'ready',traceId:'turn'})],
+ ['a renderer frame',()=>{},f=>f.socket.onmessage({data:'not json'})],
+ ['a navigation follow-up',f=>{f.shell.applyRealtimeVoiceNavigation=async()=>{throw Error('PRIVATE_FAILURE');};},f=>{acceptedTurn(f);f.sdk.options.onServerEvent({t:'navigate_view',traceId:'turn',viewId:'notes'});}],
+ ['an action verification',f=>{f.box.readDevicePreferences=async()=>({askBeforeAgentActions:false});f.box.connectionController.performVoiceRequestedActions=async()=>{throw Error('PRIVATE_FAILURE');};},f=>{acceptedTurn(f);f.sdk.options.onServerEvent({t:'reply_complete',traceId:'turn',userMessageId:'message'});}],
+])test(`realtime voice: ${name} that fails leaves a healthy session running`,async()=>{
+ const f=realtime(()=>({revoked:true})),logged=[];arrange(f);
+ f.box.devSurfacesEnabled=true;f.box.console={warn:(...line)=>logged.push(line)};
+ try{
+  await f.shell.startVoice();fail(f);await settle(f);
+  assert.equal(f.sdk.stops,0,'the session is not stopped');assert.ok(f.renderChat(),'the panel stays');assert.deepEqual(f.shell.messages,[]);
+  assert.deepEqual(logged.map(line=>line[0]),['[Alpha voice]'],'the dev log keeps it');
+  f.sdk.options.onState({phase:'listening',traceId:null,finalTranscript:''});await settle(f);assert.equal(f.renderChat().state,'listening');
+  f.renderChat().stop();await settle(f);assert.equal(f.renderChat(),null);assert.equal(f.sdk.stops,1);
+ }finally{f.close();await settle(f);}
+});
+
+test('realtime voice: losing the renderer still ends voice quietly, once, and opens no session',async()=>{
+ const f=realtime(()=>({revoked:true}));
+ try{
+  await f.shell.startVoice();f.socket.onclose();await settle(f);
+  assert.equal(f.renderChat(),null);assert.deepEqual(f.shell.messages,[]);assert.equal(f.sdk.stops,1);assert.equal(f.sdk.clients,1);
+ }finally{f.close();await settle(f);}
+});
+
+/** A session Stop and the plugin both refused, so the next media must ask again. */
+async function refused(options){
+ const f=session({native:true,platform:'android',...options});
+ await f.shell.startVoice();
+ f.stopError=Error('Session stop refused');f.captureCancelError=Error('Plugin stop refused');f.renderChat().stop();await settle(f);
+ f.stopError=undefined;
+ assert.equal(f.renderChat(),null);
+ return f;
+}
+const healthy=f=>{f.captureCancelError=undefined;};
+test('Notes Start asks the plugin again and records once it answers; while it refuses Start stays quiet',async()=>{
+ const f=await refused(),rec=()=>f.render().rec;
+ try{
+  f.render().record();await settle(f);const asked=f.recordingCancels.length;
+  rec().stop();await settle(f);
+  assert.equal(rec().state,'ready');assert.equal(rec().failed,false);assert.equal(f.starts,0,'no capture over a refused stop');assert.ok(f.recordingCancels.length>asked,'Start asked again');assert.deepEqual(f.shell.messages,[]);
+  healthy(f);rec().stop();await settle(f);assert.equal(rec().state,'recording');assert.equal(f.starts,1);
+ }finally{healthy(f);f.close();await settle(f);}
+});
+test('Notes Start after a plain Stop asks the plugin nothing',async()=>{
+ const f=session({native:true,platform:'android'}),rec=()=>f.render().rec;
+ try{
+  await f.shell.startVoice();f.renderChat().stop();await settle(f);
+  f.render().record();await settle(f);rec().stop();await settle(f);
+  assert.equal(rec().state,'recording');assert.equal(forcedStops(f),0);
+ }finally{f.close();await settle(f);}
+});
+test('a device read review asks the plugin again, and goes on once it answers',async()=>{
+ const f=await refused(),review=()=>f.shell.prepareDeviceReadReview('proposal','digest',new AbortController().signal);
+ try{
+  await assert.rejects(review(),/Plugin stop refused/);
+  healthy(f);await review();
+ }finally{healthy(f);f.close();await settle(f);}
+});
+test('Play recording asks the plugin again on its first tap once it answers',async()=>{
+ const f=await refused();Object.assign(f.shell.notes,{list:[{id:'note',kind:'voice',title:'Memo',body:'Hello',audio:{audioId:'saved'}}],open:'note'});
+ try{
+  healthy(f);f.render().vo.play();await settle(f);
+  assert.equal(f.savedAudioStarts,1);assert.equal(f.activeSavedAudio,'saved');
+ }finally{healthy(f);f.close();await settle(f);}
+});
+test('on-device preparation asks the plugin again before it gives up',async()=>{
+ const f=await refused({cloudProfile:false}),rec=()=>f.render().rec,cancel=f.driver.cancelRecording;
+ let refusals=1;f.driver.cancelRecording=async()=>{if(refusals-->0)throw Error('Plugin stop refused');healthy(f);return cancel();};
+ try{
+  f.render().record();await settle(f);
+  assert.equal(rec().primaryDisabled,false,'preparation finished');assert.match(rec().lines[0].t,/on this phone/);
+  rec().stop();await settle(f);assert.equal(rec().state,'recording');
+ }finally{healthy(f);f.close();await settle(f);}
+});
+
+/** The live assistant's heard outcome through the actual adapter; the session itself is a stub. */
+function heardSession(){
+ const f=cloudVoiceViewFixture({cloudProfile:false,native:true,platform:'android'}),reported=[];
+ Object.assign(f.box,{React:{createElement:()=>null},VoiceActivity:()=>null,nativeLiveVoiceReady:async()=>true,nativeAssistantListener:()=>async()=>({}),createEndpointChain:()=>async()=>'unavailable',residentEndpoint:()=>undefined,clefEndpointStage:()=>undefined,recordHeardVoiceTiming(){},activeVoiceTurn:()=>undefined,
+  createHeardReporter:()=>({report:async value=>{reported.push(value);return 'recorded';}}),
+  VoiceAssistantSession:class {constructor(ports){f.assistant=ports;}async start(){f.assistant.onState({phase:'listening'});}async stop(){}recheck(){}}});
+ f.box.connectionController.voiceConversationCurrent=()=>true;
+ return Object.assign(f,{reported});
+}
+const REPLY='First sentence. Second sentence.',heard={interrupted:true,turnId:'turn',replyId:'message',heard:'First sentence.',unheard:'Second sentence.'};
+test('a playback failure after the first sentence reports what was heard and leaves the reply as it is',async()=>{
+ const f=heardSession();f.shell.state.msgs=[{id:'message',from:'agent',text:REPLY}];
+ try{
+  await f.shell.startVoice();f.assistant.onHeard({...heard,playbackFailed:true});await settle(f);
+  assert.equal(f.shell.state.msgs[0].text,REPLY);assert.equal(f.shell.state.msgs[0].interrupted,undefined);
+  assert.equal(f.reported.length,1);assert.equal(f.reported[0].heard,'First sentence.');assert.equal(f.reported[0].playbackFailed,true);
+ }finally{f.close();await settle(f);}
+});
+test('a real barge-in still keeps only what was played, with its note',async()=>{
+ const f=heardSession();f.shell.state.msgs=[{id:'message',from:'agent',text:REPLY}];
+ try{
+  await f.shell.startVoice();f.assistant.onHeard(heard);await settle(f);
+  assert.match(f.shell.state.msgs[0].text,/^First sentence\.\n\n\(Interrupted\. The rest of this reply was not played\.\)$/);assert.equal(f.shell.state.msgs[0].interrupted,true);
+  assert.equal(f.reported[0].playbackFailed,undefined);
  }finally{f.close();await settle(f);}
 });

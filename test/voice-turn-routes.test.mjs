@@ -91,7 +91,7 @@ test('heard reporting: a playback failure before any sentence finished never emp
   assert.deepEqual(r.outcomes, [['nothing-heard', {attempts: 0}]]);
   const adapter = fs.readFileSync(new URL('../apps/app/src/prototype/voice-adapter.ts', import.meta.url), 'utf8');
   assert.match(adapter, /interrupted:true,\.\.\.\(failed\?\{playbackFailed:true\}:\{\}\)\}\)/);
-  assert.match(adapter, /if\(failed&&!heard\.heard\)return;/, 'the view keeps the reply text too');
+  assert.match(adapter, /if\(failed\)return;/, 'the view keeps the reply text too, whatever was played');
 });
 
 test('heard reporting: only assistant replies of the current conversation, and nothing after the binding changed', async () => {

@@ -152,3 +152,55 @@ test('Notes: leaving the foreground while recording returns to the normal line, 
   await tap(f);assert.equal(rec(f).state,'recording');
  }finally{f.close();await f.tick();}
 });
+
+test('Notes: leaving the foreground during transcription keeps the recording, and Transcribe works on return',async()=>{
+ const f=await opened(),cancels=[],cancel=f.driver.cancel;f.driver.cancel=input=>{cancels.push(input);return cancel(input);};
+ try{
+  await tap(f);await tap(f);quiet(f,'recorded');const kept=f.recordingCancels.length;
+  f.holdTranscript=true;rec(f).stop();await settle(f);assert.equal(rec(f).state,'transcribing');const request=f.transcribeInput.requestId;
+  f.setHidden(true);await settle(f);f.setHidden(false);await settle(f);
+  quiet(f,'recorded');assert.equal(rec(f).state,'recorded');assert.equal(f.recordingCancels.length,kept,'cancelRecording would delete the finished file');
+  assert.deepEqual(cancels.map(input=>input?.requestId),[request],'the abandoned upload is cancelled');
+  f.holdTranscript=false;f.releaseTranscript({text:'Late words',local:false});await settle(f);assert.equal(rec(f).state,'recorded','late words are not this attempt');
+  await tap(f);assert.equal(rec(f).state,'review');assert.equal(rec(f).transcript,'Synthetic Cloud transcript');assert.equal(f.uploads,2,'only the tap uploads again');
+  await tap(f);assert.equal(f.audioSaves,1);saved(f);
+ }finally{f.close();await f.tick();}
+});
+
+test('Notes: a kept recording waits through a trip to the background with nothing else changing',async()=>{
+ const f=await opened();
+ try{
+  await tap(f);await tap(f);const kept=f.recordingCancels.length;
+  f.setHidden(true);await settle(f);f.setHidden(false);await settle(f);
+  quiet(f,'recorded');assert.equal(f.recordingCancels.length,kept);assert.equal(f.uploads,0);
+ }finally{f.close();await f.tick();}
+});
+
+function dictation(createOnDeviceVoice,options={}){
+ const f=cloudVoiceViewFixture(options);f.box.HTMLElement=class {};f.box.nativeLiveVoiceReady=async()=>false;f.box.React={createElement:()=>null};f.box.VoiceActivity=()=>null;
+ if(createOnDeviceVoice)f.box.createOnDeviceVoice=createOnDeviceVoice;
+ return f;
+}
+for(const [name,voice] of [['no engine',()=>null],['an engine that is not ready',()=>({ready:async()=>false})],['an engine check that fails',()=>({ready:async()=>{throw Error('PRIVATE_ENGINE_TEXT');}})]])
+test(`chat dictation with ${name} ends quietly at the keyboard and starts no capture`,async()=>{
+ const f=dictation(voice);
+ try{
+  f.shell.startTranscription();await settle(f);
+  assert.equal(f.renderChat(),null);assert.equal(f.shell.state.chat,'input');assert.equal(f.starts,0);assert.deepEqual(f.shell.messages,[]);
+ }finally{f.close();await f.tick();}
+});
+test('chat dictation with a ready engine starts recording by itself',async()=>{
+ const f=dictation();
+ try{
+  f.shell.startTranscription();await settle(f);
+  assert.equal(f.renderChat().state,'recording');assert.equal(f.starts,1);
+ }finally{f.close();await f.tick();}
+});
+test('Cloud chat dictation keeps its panel and waits for its Start tap: it has no on-device engine to miss',async()=>{
+ const f=dictation(undefined,{cloudProfile:true});
+ try{
+  f.shell.startTranscription();await settle(f);
+  assert.equal(f.renderChat().state,'ready');assert.equal(f.renderChat().primaryDisabled,false);assert.equal(f.starts,0);
+  f.renderChat().stop();await settle(f);assert.equal(f.renderChat().state,'recording');
+ }finally{f.close();await f.tick();}
+});
