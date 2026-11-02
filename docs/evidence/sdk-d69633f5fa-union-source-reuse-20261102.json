@@ -1,0 +1,665 @@
+{
+  "state": "SOURCE_EQUIVALENCE_ONLY_COMBINED_TESTS_PENDING",
+  "SDK": "d69633f5fad0173fd79d88d6179d0c4f40850d45",
+  "parents": [
+    "47982b8f49d16d520990e14e07cdeb5c6931df81",
+    "6c290febc380a057a6961109463ce9bb5cfc7204"
+  ],
+  "tree": "c94e8c7ecf95a1c151075c1bbf23d4ac87496332",
+  "changedSDKFiles": [
+    "packages/app/src/api/self-hosted-voice.test.ts",
+    "packages/app/src/api/self-hosted-voice.ts",
+    "packages/app/src/api/server.ts",
+    "packages/host/src/voice/cloud-speech-relay-client.test.ts",
+    "packages/host/src/voice/cloud-speech-relay-client.ts",
+    "packages/host/src/voice/cloud-speech-relay-http-status.test.ts",
+    "packages/host/src/voice/cloud-speech-relay-phase-deadline.test.ts",
+    "packages/host/src/voice/cloud-speech-relay-startup-deadline.test.ts",
+    "packages/host/src/voice/protocol.ts",
+    "packages/host/src/voice/speech-relay-wire.ts",
+    "packages/host/src/voice/speech-retirement-proof.test.ts",
+    "packages/host/src/voice/voice-stop-intent.test.ts",
+    "packages/host/src/voice/ws-handler.ts",
+    "packages/ui/src/voice/voice-session-client-core.ts",
+    "packages/ui/src/voice/voice-session-cloud-budget-rotation.test.ts",
+    "packages/ui/src/voice/voice-session-protocol.ts",
+    "plugins/plugin-assistant/src/runtime/calendar-read-coverage.test.ts",
+    "plugins/plugin-assistant/src/runtime/evaluator.ts",
+    "plugins/plugin-calendar/src/actions/calendar-handler.ts"
+  ],
+  "nativeProducerInputs": {
+    "package.json": {
+      "blob": "29ceae5d8e57d8e7ea10dbf94e62ff893f5d53e5",
+      "sha256": "fd04e2ad8574cd0055627138466b8eec77404863e2bc546a866bace10c6d732b"
+    },
+    "packages/agent/package.json": {
+      "blob": "0e38bcccbf347784499612daf81be0c9266aad76",
+      "sha256": "1082dc34ec6894e19a43003528fd5701ebe53621f77c37d1bec37662bd822554"
+    },
+    "packages/app/package.json": {
+      "blob": "4cf363f3cc1779091bd2fcae830fe1a396fd6e9b",
+      "sha256": "1ee43697b88c28dd2e95a64c7113c936fe13dc923482305a904f073e52bfe23a"
+    },
+    "packages/app/platforms/android/app/src/main/elizavoice-jni/CMakeLists.txt": {
+      "blob": "55f9b05dd8c2d572f54c2332eac1161cb57e432f",
+      "sha256": "a956ce2fb2ccc5610d9108eb168c2418b50083b4981288c917f2a9ed1686e281"
+    },
+    "packages/app/platforms/android/app/src/main/elizavoice-jni/elizavoice-jni.cpp": {
+      "blob": "06aa6d77073fdf9c04cb443995d48b23050929e8",
+      "sha256": "128c4e7306479ecf80130028a79d3537552fbc93c2ab13a821cf0b5213efd94f"
+    },
+    "packages/app/platforms/android/app/src/main/java/ai/elizaos/app/ElizaVoiceNative.java": {
+      "blob": "c7cfb4d376fd92be1039e57ce196f91011d7ee2b",
+      "sha256": "328c96c067aabdae17adcc6534b41abfb6befd9d598a1d44b30ffc20a5157c87"
+    },
+    "packages/app/scripts/aosp/compile-libllama-paths.ts": {
+      "blob": "2e2f181a7fb37d043550db3ada4b59b04ee8433b",
+      "sha256": "c484bd46cb7f8cf308f449840f491f1e8d380c1c66a75b2a57a02867a09a8a3c"
+    },
+    "packages/app/scripts/aosp/compile-libllama.ts": {
+      "blob": "60f13ee2e21f1841cb45718311298308c11ad53b",
+      "sha256": "81de4affc63f07f662679d34a01cea7f4f720fc705ef1ac5c5b501021070e1fd"
+    },
+    "packages/app/scripts/aosp/compile-shim.ts": {
+      "blob": "a8186281c9cb3f43c1ca598df6a3a5c133849cee",
+      "sha256": "c7765557fafa6cc39090590c3e52a3b8bc1f03e6cedb7170492512a45bcbe15b"
+    },
+    "packages/app/scripts/aosp/vulkan-source-contract.ts": {
+      "blob": "ee576c8ecba48eaa76b5d1f29d5f19e6532cff52",
+      "sha256": "8b1d173b222ab7017b1cc7d18d4125392cafda022ac6c49cfc6c38f31549a73b"
+    },
+    "packages/app/scripts/aosp/zig-toolchain.ts": {
+      "blob": "b943e6d82db4b2480f2b7d9758c3ff1de596dec0",
+      "sha256": "5d7ad034f9fbbce9fc241c7d7ba64b4bfece2b0aa6c7a699c761df8c8ac36959"
+    },
+    "packages/app/scripts/build-helpers/arm64-simd.ts": {
+      "blob": "7c7a5ce7e11150ccc7bb3321d776f08cd511af62",
+      "sha256": "b5291bb3c31f2b284691ff7c465de31c7564ea1c1c22e726309661e64a47aee2"
+    },
+    "packages/app/scripts/build-helpers/omnivoice-merged.ts": {
+      "blob": "f39146655a896dba5513898276c89622ed5da64c",
+      "sha256": "4192c42fd54940ff0039bbb452aadb6e39cb286b732baaaf76513411c7adc4fe"
+    },
+    "packages/app/scripts/build-helpers/verify-fused-symbols.ts": {
+      "blob": "3c6498f0cd87d1b33a63ff4317a8d7a066ffff48",
+      "sha256": "a7706e5f2526e20a7685825b19e9bdd7115f61d2791d921ba55af4fe3e73baa1"
+    },
+    "packages/app/scripts/lib/repo-root.ts": {
+      "blob": "c78e6068188dc5092a8692ada749202b6cb3e3bf",
+      "sha256": "9e75776f57d7fa219993cb454d33102fe80a9276c576d299b42a0b284f2980ba"
+    },
+    "packages/app/scripts/stage-elizavoice-lib.ts": {
+      "blob": "68755f64bc719b567afd2290d53369c2e9c4fee2",
+      "sha256": "7c36788b0886de46bde06f84a50c54a3ace7f2aa59468f811864e47134be4309"
+    }
+  },
+  "dependencyIdentityInputs": {
+    "bun.lock": {
+      "blob": "1cc61ff8862fd52607467743370879b575050d4d",
+      "priorVerifiedSHA256": "3b2baea4b2490f48c19dfbfa48f6cedfd61d5edaf66ee31ab87f7de44c282088"
+    },
+    "bunfig.toml": {
+      "blob": "5d661db6ee1566438af9f5657b1a5b9c97ecb5f5",
+      "priorVerifiedSHA256": "eec98c76b5f98631cb0e417a4945e154476e3cfa963bf3d95c1a32d64afe3fe6"
+    },
+    "package.json": {
+      "blob": "29ceae5d8e57d8e7ea10dbf94e62ff893f5d53e5",
+      "priorVerifiedSHA256": "fd04e2ad8574cd0055627138466b8eec77404863e2bc546a866bace10c6d732b"
+    },
+    "packages/agent/package.json": {
+      "blob": "0e38bcccbf347784499612daf81be0c9266aad76",
+      "priorVerifiedSHA256": "1082dc34ec6894e19a43003528fd5701ebe53621f77c37d1bec37662bd822554"
+    },
+    "packages/app/deploy/cloud-agent-template/package.json": {
+      "blob": "203acdf176b46d5e2ce54f0bcf44fd36e6f2f9de",
+      "priorVerifiedSHA256": "d03c42390795c484b81db62dff3b551cfdb82ec7f6a6642a1d7a8163c5661618"
+    },
+    "packages/app/package.json": {
+      "blob": "4cf363f3cc1779091bd2fcae830fe1a396fd6e9b",
+      "priorVerifiedSHA256": "1ee43697b88c28dd2e95a64c7113c936fe13dc923482305a904f073e52bfe23a"
+    },
+    "packages/app/platforms/electrobun/package.json": {
+      "blob": "6e20a067df04e68735e10afe4c27bd4c5cac46ac",
+      "priorVerifiedSHA256": "e3111a62eebd6e071896a28f21e6afca52b87d61f7e71dc1dd5fcaf3cc2e343f"
+    },
+    "packages/auth/package.json": {
+      "blob": "8614d40bd537a4632fa7dcca09f5a6213cee5252",
+      "priorVerifiedSHA256": "9834a72cbb59af715deb019fc7e99f98df576d04f4ef243fd4e3951468f4ddd4"
+    },
+    "packages/benchmarks/framework/typescript/package.json": {
+      "blob": "83edf9900103bdcbd60981aa34661b55839844b3",
+      "priorVerifiedSHA256": "8478f001edcdfa01bba04fed830921e3b0a0fd15a8152dbdfb26a3c4764246f5"
+    },
+    "packages/benchmarks/harnesses/eliza/runner/package.json": {
+      "blob": "d7c9e85826d2f4afb4450ae5f834b0463988b7e7",
+      "priorVerifiedSHA256": "38a6b8940628250119dc99c7cea6983ff007ed47e7263ce785b09f66c00615d1"
+    },
+    "packages/benchmarks/harnesses/transports/claude-subscription-gateway/package.json": {
+      "blob": "395ccecc257cd40bf601393d426495c952e21a74",
+      "priorVerifiedSHA256": "69fc9e4aae5ab949ce30ec8624e9c1772211f40a9f5c0e507b4025d1d79ea906"
+    },
+    "packages/benchmarks/package.json": {
+      "blob": "04a704c3f6a36797fc22667fd7fc6ab227b1a7fa",
+      "priorVerifiedSHA256": "673d344b929249312be8e037c7767dd1a486450bfa5496dd665501a11985769c"
+    },
+    "packages/benchmarks/plugin-benchmarks/package.json": {
+      "blob": "b65940573d3ae632b17f33377bc2f7d93aab09fc",
+      "priorVerifiedSHA256": "394fa9f2bc90c4f34726f1692b104d71394cdb589de13ac62020dd9fba114d7d"
+    },
+    "packages/benchmarks/scripts/eliza-benchmark-scripts/package.json": {
+      "blob": "c74ec628e3c0a37cbf373795942fdf5e3244643a",
+      "priorVerifiedSHA256": "f2d46d84fa420d003564255871871f0cd47639c043d944e114cf0f92b0bcff9a"
+    },
+    "packages/benchmarks/suites/configbench/package.json": {
+      "blob": "85b63020ce6748876781bd28bb79c5db1890799d",
+      "priorVerifiedSHA256": "42ab2cc918ea501cea81e181cebbcd42517a8b743f3d103e4d807d255e65538c"
+    },
+    "packages/benchmarks/suites/eliza-1/package.json": {
+      "blob": "f4ef68e4ae501f12089062ecad6e79f1f9a22439",
+      "priorVerifiedSHA256": "48ffc72dfbd2e1dc9fc150378e485f49b28fbf9aefb085003bee9b6aa8228631"
+    },
+    "packages/benchmarks/suites/eliza-1/vision-cua-e2e/package.json": {
+      "blob": "0812a873448a5669af17c0f38c43ea08ab5e6294",
+      "priorVerifiedSHA256": "b26ceb0488a1f35ad11e8407ebb29e5f00a548fe136291ea35e55f844f8d2cdb"
+    },
+    "packages/benchmarks/suites/entity-voice-bench/package.json": {
+      "blob": "6d8f913807ea902b16224b55bb5d142e1a3f102e",
+      "priorVerifiedSHA256": "aac0fa0271eff7b5088647e69a8599f6b0dc59aeff7265a551a352667227be79"
+    },
+    "packages/benchmarks/suites/gauntlet/sdk/typescript/package.json": {
+      "blob": "52230fe1a51ab21099544f4b88d245e6ff946685",
+      "priorVerifiedSHA256": "c689c6a011b3af3984f68660991a97ba1069d689503dda63338aea9a1a4d007c"
+    },
+    "packages/benchmarks/suites/interrupt-bench/package.json": {
+      "blob": "a613eebad047e8eaea9b996e6e9b2f28ab181ff8",
+      "priorVerifiedSHA256": "b1017549891da071bc56b7d1da2203adda2ae406b152fb5550a462869cc029aa"
+    },
+    "packages/benchmarks/suites/lifeops-bench/quality/package.json": {
+      "blob": "f09e469963caef02a365cc7cb3ed42a158133188",
+      "priorVerifiedSHA256": "1166b4dbbf4cff4732f715a2e0a597558395cf02f72fc0d00d3e6b21aa7ee85e"
+    },
+    "packages/benchmarks/suites/lifeops-bench/runner/package.json": {
+      "blob": "1484e1e9d93ac74c8045805e418a23e188dbf964",
+      "priorVerifiedSHA256": "73f90cf0e7f7f845abc4606caf14f184d087327d0666ecd4fa7621e0555e5e9d"
+    },
+    "packages/benchmarks/suites/memperf/package.json": {
+      "blob": "28ef2b5e319e2af41d0fc3572f178746f5fab7e5",
+      "priorVerifiedSHA256": "c3285916f6a2a15f8dc2d9efcaa08f163c5ca1c554bfebb93138210557f9486b"
+    },
+    "packages/benchmarks/suites/personality-bench/package.json": {
+      "blob": "b7055503993848a7d76c4f8ca508aaa793aa2e65",
+      "priorVerifiedSHA256": "614a03a557ab697aca5edd263b6b28fc200407d5d5f714d3348a636fc4825e97"
+    },
+    "packages/benchmarks/suites/recall-bench/package.json": {
+      "blob": "293c01d3db7b7fa4058e973117c77aa4d892531e",
+      "priorVerifiedSHA256": "5309098f2521053a41e9c008145059a8d79e25d027bf10138583ddbdb71f5245"
+    },
+    "packages/benchmarks/suites/searchbench/package.json": {
+      "blob": "792e6a1e928c6e2b5a0baa26122c4f0e635a76ea",
+      "priorVerifiedSHA256": "06d6d694a5cd2461ac32b4b31c084050b6646aa4f331042592df0b9aced44e68"
+    },
+    "packages/benchmarks/suites/terminal-bench/tasks/npm-conflict-resolution/client/task-deps/package.json": {
+      "blob": "43cc232789de3f58f71bb6af05fb01de54443ffb",
+      "priorVerifiedSHA256": "15eac5654313a424278e9f0e3532440f4fe79e8f497d45b72002b64e18e841e2"
+    },
+    "packages/benchmarks/suites/three-agent-dialogue/package.json": {
+      "blob": "597216d4629eeb11315056aaa528245c1cab338c",
+      "priorVerifiedSHA256": "ee3ec6d960df24f25a66c3af3ad5c20a52e5f286968710a39ec40ae4e00c0a2c"
+    },
+    "packages/benchmarks/suites/vision-language/package.json": {
+      "blob": "8d933629e4c7e527f318a4e824ebe317c96d0585",
+      "priorVerifiedSHA256": "7cc62807e037a727c2cd3627878375c30d6a01620df1a093d0beb447c973eb50"
+    },
+    "packages/benchmarks/suites/voice-rtt/package.json": {
+      "blob": "b1749cf99069acc1aebadb4d83a219bcf3037abb",
+      "priorVerifiedSHA256": "5cb2d4129e1233c5e9e0925973056cb8ce1032d133eb60c10107f0cf7a46cfdb"
+    },
+    "packages/benchmarks/suites/voicebench/package.json": {
+      "blob": "e33c337a37f30f47c84525c101e1712cd5c76a4f",
+      "priorVerifiedSHA256": "716513987ac907890d2297ba0b403bd9b63a8fcf7490b82c1e501f7344eaa60a"
+    },
+    "packages/cloud/api/package.json": {
+      "blob": "c6f644e74063d1a66683778c72c2460db050cab4",
+      "priorVerifiedSHA256": "51d7316b403b7ec3ba14dde43c3394ec9bb51e2ecd12c1e5992a076dff2b231e"
+    },
+    "packages/cloud/e2e/package.json": {
+      "blob": "eb4f0ae2e1042942ed924636b9b5cb53111b65d6",
+      "priorVerifiedSHA256": "d74a782e176b07050acb8a4b5e1a4b4879d7ceaaa4ad493a51ece03af2ac25e0"
+    },
+    "packages/cloud/infra/package.json": {
+      "blob": "f98240a860f5f4d80fd9fd84948688dbaebba295",
+      "priorVerifiedSHA256": "0ef9b4628105c22add7f5930ace97e3607445647c14d27f55e38b0c05f85a256"
+    },
+    "packages/cloud/routing/package.json": {
+      "blob": "54dcdc288426ff370287ec28e4d8e46d678e67a3",
+      "priorVerifiedSHA256": "594508d91aef4adb31b6f56600eb54ceec709ed52bf3f31a8d6399c57a714b1e"
+    },
+    "packages/cloud/scripts/package.json": {
+      "blob": "205a648121838a603064ad857df05bcad325b1d0",
+      "priorVerifiedSHA256": "8bac8c2b2ea5d4f5273f960dd7aca42b06cd9171c254c63960d94705169108a4"
+    },
+    "packages/cloud/sdk/package.json": {
+      "blob": "13bd7bb680829361281645f61743e09272a903eb",
+      "priorVerifiedSHA256": "17c843a140bbaf83e6511a5a08e9441817a09ce91122a8b74471f09fa1299109"
+    },
+    "packages/cloud/services/_common/package.json": {
+      "blob": "3f9bd795928b65fd142e7141a447cfb61ad94600",
+      "priorVerifiedSHA256": "971383b26750aefbaed902a430fd58d1a764a54a4feee2b1242ed66be0eefb04"
+    },
+    "packages/cloud/services/agent-server-container/package.json": {
+      "blob": "fe5cbf14e61eef8a0451fb768fcf3c5d6124faee",
+      "priorVerifiedSHA256": "2f42ed3c24e49d4ad19edd8c83a3f9ed9c76664e1762eba136d6c580816a95b9"
+    },
+    "packages/cloud/services/agent-server/package.json": {
+      "blob": "07826579ed81a6e82928361bc14196c67592d5df",
+      "priorVerifiedSHA256": "59a4f02bce75a739b13017062ccf21eebc8744b10c31272ad377c5c47a74829d"
+    },
+    "packages/cloud/services/coding-remote-runner/package.json": {
+      "blob": "4076447631b82701105708e1d6ba3b9a4a47dad5",
+      "priorVerifiedSHA256": "67cdb901989adb605e6f576793381daf87b00aba3c918a5d5e328e49840ccf05"
+    },
+    "packages/cloud/services/container-control-plane/package.json": {
+      "blob": "e7bbc830aae394ad11e016d81d26fb2a82bef36b",
+      "priorVerifiedSHA256": "a4f8352eee997f5ee8c2e7a55aa5b9e2b6b2e61552babf71399c481296f4bc40"
+    },
+    "packages/cloud/services/gateway-container/package.json": {
+      "blob": "5420f7a93a089f5a1dcac4ea424f8eadf292919e",
+      "priorVerifiedSHA256": "860c1e8fb4b2413ec899a30a8dbbdd4f6746b9c87ba8102f56d787341646f005"
+    },
+    "packages/cloud/services/gateway-discord/package.json": {
+      "blob": "3173e0ce3473446370aa697818b601986a38a12b",
+      "priorVerifiedSHA256": "52a7b25ce0c033151d441a436ce15493228ff53cbec4904cf48e4d5a9666332c"
+    },
+    "packages/cloud/services/gateway-webhook/package.json": {
+      "blob": "14d6f57d0ae4bba920e3ae808a2c4dc751320f2e",
+      "priorVerifiedSHA256": "a563efc7c1cbdd68a2d7f5fe24aeedcd9c79789d704f9b45f5deaad1f30c7559"
+    },
+    "packages/cloud/services/operator/package.json": {
+      "blob": "9417f6a90123cc67553f1bcb71a59ebc7c4d5449",
+      "priorVerifiedSHA256": "771d07a4e597ebe2fb9dd12c2d2608b972d5b3d9bea788cf3e4007a6737a7b49"
+    },
+    "packages/cloud/services/provisioning-worker/package.json": {
+      "blob": "2f642c4addfee3a4ae4c31fce1065e148577d68c",
+      "priorVerifiedSHA256": "8affb7956921017e5866cd4cafacbdd6bda99685e17fa0adb81d54dd4030b130"
+    },
+    "packages/cloud/services/redis-rest/package.json": {
+      "blob": "60103b497aedf917901241e75f5779ea1de3330d",
+      "priorVerifiedSHA256": "1971d0d34899c5454cdf714f52b94240aa522f632f02bf97c5f68a9dcfb1feea"
+    },
+    "packages/cloud/services/tunnel-proxy/package.json": {
+      "blob": "3eb2b5489c5e528fbf8e2e2e3bfb7541c9630e35",
+      "priorVerifiedSHA256": "b2809b3c83580ff08976ebee184e49f761c43d84b15426e0ac6c826f98feff7c"
+    },
+    "packages/cloud/shared/package.json": {
+      "blob": "cecd0e4d95112459b64787f39f33deba89da674b",
+      "priorVerifiedSHA256": "2807f3f0705b29d176ea9970b9b152d0057de3b24462f05889512310051b0dd1"
+    },
+    "packages/cloud/test-mocks/package.json": {
+      "blob": "db8181c62b91b8fa5a8c646256cadc7c83aff07d",
+      "priorVerifiedSHA256": "7dab9b23a25d45f4b3056e4a0917620b5315a286cd45a06ecebb520899a7b456"
+    },
+    "packages/contracts/package.json": {
+      "blob": "81e17f20303c0ef8fb1b49a3f0f2bf4e16026df5",
+      "priorVerifiedSHA256": "f4e8a312510ab9f72ac27e597d7f1268202b162ac04e86db5fd060885ee7838c"
+    },
+    "packages/core/package.json": {
+      "blob": "45e27aa04a688f04a8d54bbbd5bd900ca4edc41a",
+      "priorVerifiedSHA256": "7e4d5fbca377e9095b414f9fcc9e955288f1bf499839564ba85e15bfd8f1babd"
+    },
+    "packages/host/package.json": {
+      "blob": "a39c5ef2ee510895e2a810eb5af0dd43a712593f",
+      "priorVerifiedSHA256": "e07b4c728d053e99df650666f241446c80add422212e11e72ee251d3c1b40703"
+    },
+    "packages/os/linux/installer/package.json": {
+      "blob": "baeb1b3c91b8ad2a654f94365af2f6568b6e3306",
+      "priorVerifiedSHA256": "190cde722b0804868c021a629bc09bf7e2373dd9fee89105fd199fdbd54adffe"
+    },
+    "packages/os/package.json": {
+      "blob": "d7899ba1c8cd7ae38c30f8bee342fa60d023c30e",
+      "priorVerifiedSHA256": "13ddc2ee88917e3cde0d43851cb597e2d8f5298d24010b92fe0aa98ce0cf4a90"
+    },
+    "packages/os/setup/package.json": {
+      "blob": "10edc7ad5bca19a6d945c7fd55641bfeef7e721e",
+      "priorVerifiedSHA256": "60b2b157936fcd6ac3044ce8ff0f5816b016f49a382f8b7867ee3a07f5685f12"
+    },
+    "packages/os/usb-installer/package.json": {
+      "blob": "f81b1dde0ccf589912c7a65d0c424d1436f02e68",
+      "priorVerifiedSHA256": "25288dc92f5ac25012c6d3755426072f435789826b53bd91262ea3045940664b"
+    },
+    "packages/scripts/package.json": {
+      "blob": "417eadcacb58ef1a6b59b819fe26f8967bb619a2",
+      "priorVerifiedSHA256": "24d9ebe05bff9e929725ba539a4506f5144a93bf40c231760ae23758366173d9"
+    },
+    "packages/testing/package.json": {
+      "blob": "34e4b3a3042695bc5a17991af410e6993034904d",
+      "priorVerifiedSHA256": "55e46302ce7cfda70f4cee53eebfeaa32e5d04e7792efd80e16128982d11378f"
+    },
+    "packages/ui/package.json": {
+      "blob": "40d67942baa38387fce3dea9af7a6c4069c76cca",
+      "priorVerifiedSHA256": "33a1eb4dacf6dfd5913bea584b6ffc895ab3fdacfd0816ed8caab93f3eef11cb"
+    },
+    "packages/voice/package.json": {
+      "blob": "155556f95ecc5d8bf3f13524f2eaad2ba921cea3",
+      "priorVerifiedSHA256": "975f6e158d526ebfd1787fb201c856c9f2f0c21cc578ac7f7b1934a8ed506fb1"
+    },
+    "plugins/plugin-agent-orchestrator/package.json": {
+      "blob": "617e3f64108a57a6159ced91dcfa36e9eb30099e",
+      "priorVerifiedSHA256": "a460a8d455b543387f36142389521a403213a2a56efa55248a54512847e16a98"
+    },
+    "plugins/plugin-anthropic/package.json": {
+      "blob": "857db07700cf6eb533f21736c1a6795f4ec04268",
+      "priorVerifiedSHA256": "9c004e0b27375e33ac5e7e1fbe76e0607b6235875ff449807fd86837c2df4f42"
+    },
+    "plugins/plugin-assistant/package.json": {
+      "blob": "7b2a6b469a3b51bd0549ac01432df0e9e7cc2d84",
+      "priorVerifiedSHA256": "752eec2de728333bfeba957d993023c01289d86e8b9d89f8f58469b755156712"
+    },
+    "plugins/plugin-blocker/package.json": {
+      "blob": "ab7d09703c643e1f4869b780c18f247f32447759",
+      "priorVerifiedSHA256": "c3b24d488209392aa2346539d440b08c5b705a1a51393fdda61a4acfeb73f3f4"
+    },
+    "plugins/plugin-browser/package.json": {
+      "blob": "e093d3fc5eed0abdc4f18d3ccebcd04242d6a539",
+      "priorVerifiedSHA256": "3d516dfa2eae5194626d58178fed0c68256e22b815950a5f82e068fd220da451"
+    },
+    "plugins/plugin-calendar/package.json": {
+      "blob": "c88066c9e969bf7d4b851759a85736ade6987143",
+      "priorVerifiedSHA256": "82e090d56b024122268efbd7d872a702729ce24e16171e3eea4e63ab55d3fca2"
+    },
+    "plugins/plugin-coding-tools/package.json": {
+      "blob": "0548f35ea1e83ce7fe7301d47a5372d0953587d4",
+      "priorVerifiedSHA256": "61184a15487ad3dccfa13914479f560132299fb70cca1a5d9016b694e8e4fe15"
+    },
+    "plugins/plugin-computeruse/package.json": {
+      "blob": "6a4f694f841db70f283d6be191afd2ec8840ebd3",
+      "priorVerifiedSHA256": "f1ce5c89df4a9d83ac86e93743acaf7688fa89094623558a493994ed871395df"
+    },
+    "plugins/plugin-discord/package.json": {
+      "blob": "92e137636763ac1c71e370b1fc02cd84d772a307",
+      "priorVerifiedSHA256": "befbd73c1faef5a75143e6f86c57ec385ba870eaab390114d329df19948856b3"
+    },
+    "plugins/plugin-elizacloud/package.json": {
+      "blob": "1b69f8e7cfc6b9d868cc08b5919c59ed9c531a5a",
+      "priorVerifiedSHA256": "81d2fdcf9dbafaa10e9e65b541dd08db18b97ba612ae9de3592e111f2796efc5"
+    },
+    "plugins/plugin-embeddings/package.json": {
+      "blob": "f0c9d23db0910120519fbbccc42583f4506ef585",
+      "priorVerifiedSHA256": "7db556ebd29049baa21aab770dc39ae267c4ee8685ab97041e10d39e882868d6"
+    },
+    "plugins/plugin-files/package.json": {
+      "blob": "bd5a381df82923453435aac7e161a6326dbf6bb4",
+      "priorVerifiedSHA256": "3c340817f7148a6277f457f94620d673141cdcac2f6a78e1bea82a0c91565066"
+    },
+    "plugins/plugin-form/package.json": {
+      "blob": "5d064405dfc05dfa6b45c96a7f7a02ae4fa100f1",
+      "priorVerifiedSHA256": "ddf11da1842101d1bd2e8c1d1f5f91456ec8b44319ef30bc79256569ed104825"
+    },
+    "plugins/plugin-github/package.json": {
+      "blob": "e0eab0b070d17e8e1d5b134fc98d123760cdd616",
+      "priorVerifiedSHA256": "bfb2e9c3eba1fe61efaeeca1da00c1cb0d23e56238582fd2a9242deebf07ffe2"
+    },
+    "plugins/plugin-goals/package.json": {
+      "blob": "519520363a278f8996ea0c0514c062f90f987656",
+      "priorVerifiedSHA256": "03d3bb10d81d31f4420f380b59e2f6ba6eabc33a77ed089f7e11809f3f94ce35"
+    },
+    "plugins/plugin-google-workspace/package.json": {
+      "blob": "6ed4d4d8d40212bdd735bed3eb81b2ed5edf88e7",
+      "priorVerifiedSHA256": "3821a6c6b2f0040535c6c45ded1f3d579fad9f046c60183f1a0337a99466f523"
+    },
+    "plugins/plugin-health/package.json": {
+      "blob": "e07e164bf5c32846f7e9da6f62efbef0c48f0319",
+      "priorVerifiedSHA256": "768db06f279cc302cf8dd4203eb4b1923bb7beed263013b9811782164670ad6e"
+    },
+    "plugins/plugin-imessage/package.json": {
+      "blob": "7e289ad6db610294a666cf49c78f258f619de049",
+      "priorVerifiedSHA256": "1d7b83088a628895a107770d099defda71b63c2ea2cc4344039f815418b039cd"
+    },
+    "plugins/plugin-inbox/package.json": {
+      "blob": "fe380b462a167e70b69afc2a938b02a27115015d",
+      "priorVerifiedSHA256": "b8dcfceced2f661fa445f3e5afb21ae4cffb098a2c439c5ab2c9284c1f978444"
+    },
+    "plugins/plugin-knowledge/package.json": {
+      "blob": "590fcd57a4617bac3cb05413b564c285cad1e245",
+      "priorVerifiedSHA256": "c85ed48e46cff80704ef90bfb409d46a52130a6c2ca7bd49eca506f75753a522"
+    },
+    "plugins/plugin-local-inference/native/voice-bench/package.json": {
+      "blob": "58d7ff0a6c0ab366279aacba3c616ebfca7b5fc5",
+      "priorVerifiedSHA256": "8a63785edbc9dcf905ca78a04653112b4fc591014f5441e9b593ec8ad2e3869d"
+    },
+    "plugins/plugin-local-inference/package.json": {
+      "blob": "87a0bd47ce9bc7b634af39c9ef929a44ec63b138",
+      "priorVerifiedSHA256": "c909450a4d46d33469976053cdf110f784f1813a68a163c564218caf74703203"
+    },
+    "plugins/plugin-maps/package.json": {
+      "blob": "2245362cec8bc4dedbcf32435956283fdeee74e5",
+      "priorVerifiedSHA256": "c38b03a8b72c1c718baeb1b88ef2d928e8ce018d66b2797ab346e0c275e61096"
+    },
+    "plugins/plugin-mcp/package.json": {
+      "blob": "038100869457ae05090d78e887fff74880109778",
+      "priorVerifiedSHA256": "747a85420b731debb378dcc06f72517c9939ee146b99076db46e4e728c026f9b"
+    },
+    "plugins/plugin-meetings/package.json": {
+      "blob": "53587edc37cf4d4121aeed6c728ebc59c086499c",
+      "priorVerifiedSHA256": "199981a6d3d5a3167536e3987269eb221893e59ce0e4660cb012938f24e4d847"
+    },
+    "plugins/plugin-native-action-journal/package.json": {
+      "blob": "c97c5c2fff7bdb10444668057a775bba5e20ee63",
+      "priorVerifiedSHA256": "17f4b821c8df53e5624cb646dd3c3ba4d3daa39d67b74ae4d3c8c5557476040f"
+    },
+    "plugins/plugin-native-activity-tracker/package.json": {
+      "blob": "fa3b8cc3981ae90d1945e3993be0411183a43579",
+      "priorVerifiedSHA256": "a3815aa50dc215b7ea4f2badcfe0bbae8e74cbe73060357a20a1e862367f781e"
+    },
+    "plugins/plugin-native-agent/package.json": {
+      "blob": "01e1a0da389df4d18122fca00a7e827938ca6211",
+      "priorVerifiedSHA256": "9935fd84acd76e72ca4645c647a69d03cff05d66ec797dde0a53b03dde502060"
+    },
+    "plugins/plugin-native-appblocker/package.json": {
+      "blob": "650661863d3790766eefb7820c8a0e6966c83bf8",
+      "priorVerifiedSHA256": "bdeb1ee486bca7c3940cb1c7d44936b33a2500dcb73898fcb8172f0dc72845e8"
+    },
+    "plugins/plugin-native-browser-surface/package.json": {
+      "blob": "24869da4f4d3fed14ccaca7b0bb83d25d45a0821",
+      "priorVerifiedSHA256": "20ccf0e83c8d94915ee661016b5b37caccfcfcf838f491d14e8da0ab863bcdcb"
+    },
+    "plugins/plugin-native-bun-runtime/package.json": {
+      "blob": "ec0bcf3c3cb3d884fcc13862d09345c548f895a7",
+      "priorVerifiedSHA256": "54462e528f86c6f5f7c77b9d8c016224d7832c3cb6bd90e9124aa3e2dff0cc42"
+    },
+    "plugins/plugin-native-calendar/package.json": {
+      "blob": "aa7ef32ccfabb7952e8a9fee5c2552af41c95a8f",
+      "priorVerifiedSHA256": "bf41c1988ef1daaddc39c43e76119acaa22a8086895b88c7b179a1a39e248e48"
+    },
+    "plugins/plugin-native-camera/package.json": {
+      "blob": "b63afa6d39af77a7d8f63d2d0a4494b6bd2825a0",
+      "priorVerifiedSHA256": "8bb3ef28635ac758f842715e35595c0dda5bd19fdd593f172760a15cdd776dbf"
+    },
+    "plugins/plugin-native-canvas/package.json": {
+      "blob": "a70dae3185d46959578701633541899436dfa8de",
+      "priorVerifiedSHA256": "eb87d019e7b8b25a232e93e336cf6f82b05259ac99060d9dafe397f3cd2556ee"
+    },
+    "plugins/plugin-native-contacts/package.json": {
+      "blob": "c84dc4ed5808e442e64a21895d894609520f91f7",
+      "priorVerifiedSHA256": "cb661913362e333bbe50eb55579965c5f5295827a5f1c0b2c7eb258c374cfe1e"
+    },
+    "plugins/plugin-native-desktop/package.json": {
+      "blob": "13240ab5b3addd90458372cc4acaf378680ea329",
+      "priorVerifiedSHA256": "77acce8422d665a26e1557b6bd077f2d9528e1dc5707af674dced376dbb3af04"
+    },
+    "plugins/plugin-native-eliza-tasks/package.json": {
+      "blob": "a79337ca6b7d7015f0ec8e8f42691b480a2602db",
+      "priorVerifiedSHA256": "3e20e9597162614dd1b7ebb7dd424cc32673febb7f8c877472ae70e835a274f2"
+    },
+    "plugins/plugin-native-filesystem/package.json": {
+      "blob": "d75ae45cef8370be0df409c81f17fc988879a30d",
+      "priorVerifiedSHA256": "c692d57b6d4e186c4423fedd5092ad24a1e705564207bbe3131e944d35c449c3"
+    },
+    "plugins/plugin-native-gateway/package.json": {
+      "blob": "3892ed49c2090e725daf28e46e75bf3a7c590d2b",
+      "priorVerifiedSHA256": "60fdd2798d4dafc903c32657a674f51543db5de0a1b1b51e46aeffd3cbf80a44"
+    },
+    "plugins/plugin-native-inference/package.json": {
+      "blob": "8af2956cf8058b8b80047d0f2f6bc850cab809be",
+      "priorVerifiedSHA256": "ae7c87e725fca17c9a54f909374a036a778e23e03433401a92780e5ffd1e8c8c"
+    },
+    "plugins/plugin-native-location/package.json": {
+      "blob": "bd09a8988b85e82cdf0f23b3645c749d7794ca43",
+      "priorVerifiedSHA256": "0f3c38046cb626af6d90e18e794706d39e5e86286c786dacabb9097fe5a1bb07"
+    },
+    "plugins/plugin-native-media/package.json": {
+      "blob": "caf2521f44b7c6fc191b2a5ed29fa4158e05ff15",
+      "priorVerifiedSHA256": "3a83e6111d08a5c6c1d6688d3f02695441dc668afca7b662d0d5cc23d04684b2"
+    },
+    "plugins/plugin-native-messages/package.json": {
+      "blob": "bb49beb0a867b311b3355d69e0ddbfc438577585",
+      "priorVerifiedSHA256": "2f00e66061f8260daa8727ccbdd54380e34733984628a4644e604ca1f1f986fc"
+    },
+    "plugins/plugin-native-mobile-signals/package.json": {
+      "blob": "74aec432b3fe8b892d3b5281827c4b3842cd8dd2",
+      "priorVerifiedSHA256": "7ccfd978471dfdceeb0eaee30eed3197f7c78b52db0b595b535cc27404794e52"
+    },
+    "plugins/plugin-native-network-policy/package.json": {
+      "blob": "ae7e483070217cf01c28f04d3800d90a590c1a2d",
+      "priorVerifiedSHA256": "ca955a20988202445dfbd9974c50caddf82d5ae981fbf6360e7de0e69d70c244"
+    },
+    "plugins/plugin-native-notifications/package.json": {
+      "blob": "5c3bf47ec869bac1b3534e29ce7f7053e32206e0",
+      "priorVerifiedSHA256": "e9806f9d8fed564f24e4391f75a0c05156e1da4dc73707ccb2823fc1e56a5908"
+    },
+    "plugins/plugin-native-passwords/package.json": {
+      "blob": "6fbea55832e1d9e5a2a071f9a98420f3f6e28bab",
+      "priorVerifiedSHA256": "3cfd9f056b2392870cb930ce11fe464530dcf7173fdb2986204d2fa3dbc7da11"
+    },
+    "plugins/plugin-native-phone/package.json": {
+      "blob": "fcd9df1cc122a6253f0cc7f35f2938730773c850",
+      "priorVerifiedSHA256": "e98c822d40c80273739444afe784d6fb654483bd64fa00525cbae5f2c2913713"
+    },
+    "plugins/plugin-native-reminders/package.json": {
+      "blob": "a7642bea0c753eedd7e9f16f53e8a0735d81a634",
+      "priorVerifiedSHA256": "0ed3f7470348993b95f132867e22d1b7e8aa46717f4b1303d84e971422a0bc81"
+    },
+    "plugins/plugin-native-secure-store/package.json": {
+      "blob": "97b85cd8e821d16e38c0674aee78b73dc62580cf",
+      "priorVerifiedSHA256": "dc9d82a4b8e6db9c645ccdc1d38cc1b0bc59747ac58fe8ee42b963b9a2af9ec1"
+    },
+    "plugins/plugin-native-settings/package.json": {
+      "blob": "93b13fe41c4fcdc92450403dc874936bf7b7e96c",
+      "priorVerifiedSHA256": "cabb00837962c3b0c7b080fe8713118abf2d9ffd17d54267cd2bffb8e2b46db9"
+    },
+    "plugins/plugin-native-shared-types/package.json": {
+      "blob": "ad5f1f6c37b9eba7787f66b5c8ee810f4940f425",
+      "priorVerifiedSHA256": "e63495ead9ec5dd13336760faf68c5f8220e50364a834f42de910fe9e6b7a7fd"
+    },
+    "plugins/plugin-native-swabble/package.json": {
+      "blob": "eaaf9ab4d6fe971250e9375e8c2330db45c77caa",
+      "priorVerifiedSHA256": "17402c0fe6939c358d1246dd8e82edde3ac6c64325bfb11852af73e6ca383b9d"
+    },
+    "plugins/plugin-native-system/package.json": {
+      "blob": "a11372c933b12e48c4e2cb3841ad097e3c418b40",
+      "priorVerifiedSHA256": "5dfc08b77acb5deb5845c97278fd7ff06ba0bdb8d82e7220aec8ff885a85c75e"
+    },
+    "plugins/plugin-native-talkmode/package.json": {
+      "blob": "46f56a70067d0e998db440e2b7f71dc90f2e47d6",
+      "priorVerifiedSHA256": "e85967184f9cd1426bb2457d50a4ef6899960b8d0a762ac7b8016c18676b352f"
+    },
+    "plugins/plugin-native-websiteblocker/package.json": {
+      "blob": "cb88266432b4919523bc53bb60805bdc3034953c",
+      "priorVerifiedSHA256": "13ece379088f68b1d6c9693e4435bfbf69e5166bded457a5569a247429c5ab8d"
+    },
+    "plugins/plugin-native-wifi/package.json": {
+      "blob": "e31e756b00e2db6fd52ac6855455e3fce9a2515d",
+      "priorVerifiedSHA256": "9e3298048cac9ab118ec616cc018e41fa2b7ce7c36c89472656a149a35b527d8"
+    },
+    "plugins/plugin-network/package.json": {
+      "blob": "98168a584e96cdd7ad8e0b8c555486734df96b40",
+      "priorVerifiedSHA256": "d7350ea1cb81fc691382d85e7f5d44083f3e72ce64c21fb0e518963988392ed3"
+    },
+    "plugins/plugin-notes/package.json": {
+      "blob": "b3ae9f846be5407c859daadc4254d0d0ef3b8761",
+      "priorVerifiedSHA256": "f21c637b108308d6eecc0ec2e5635e398588f7fd9164e3faf2801dae115007c3"
+    },
+    "plugins/plugin-openai/package.json": {
+      "blob": "0cab494a84ff1a8d23ae86b574509f41eab9376b",
+      "priorVerifiedSHA256": "f10101267ae23f8a63c6a3133e7e2a5c1bfb81a4c55eee70e1d4fce39208b1cc"
+    },
+    "plugins/plugin-pdf/package.json": {
+      "blob": "601b870779d645d8e785b15ec2420c3f5fb7229e",
+      "priorVerifiedSHA256": "fa3faa9438b25423e26165da7fcf5e1a43edce87007f086aed2bd24727c977c3"
+    },
+    "plugins/plugin-personal-assistant/package.json": {
+      "blob": "9f97d73119158f86b2fcbe43b1fbd9c97163a1d5",
+      "priorVerifiedSHA256": "57f8eb11a6f9f0e5e73e2757e4323e7d151af42cc43ba121fe92f716e5b1efec"
+    },
+    "plugins/plugin-pty/package.json": {
+      "blob": "7bd2e80590e18979bf6db2c655f6fe4090bd174e",
+      "priorVerifiedSHA256": "5a13d117285d1901f7bec3adabf5c157c37506710f09af57980089529369fe6c"
+    },
+    "plugins/plugin-relationships/package.json": {
+      "blob": "514ee85e2f22b2e7d7bb37ddd8932b689ea09428",
+      "priorVerifiedSHA256": "7886071d950d831983590a40ff5cb8135de92d9b148fc22beec50c2ac66fb6ff"
+    },
+    "plugins/plugin-reminders/package.json": {
+      "blob": "550068281db35b0e22e512be2c476112c767f102",
+      "priorVerifiedSHA256": "5007ca87877e4462d3c6811d42efc0f96a115a311bad447f6b7cb867310f67e7"
+    },
+    "plugins/plugin-scheduling/package.json": {
+      "blob": "47de087dc92f5871609d461411135a4bc4cc8607",
+      "priorVerifiedSHA256": "2183b393e3bac9f14cddc4620240b35f12f375ca7ed15ae815ecdaba4406fe5f"
+    },
+    "plugins/plugin-slack/package.json": {
+      "blob": "81626fa735e0fa11b00d07af32566325f8e659b2",
+      "priorVerifiedSHA256": "01178fd635cde84eedd7dda3c6f78f0018afe09eacbd038b22f67256512aa25b"
+    },
+    "plugins/plugin-sql/package.json": {
+      "blob": "c24994d4f818a552bc13494e3270246e2f8dae91",
+      "priorVerifiedSHA256": "5625760075dec5414c28b96ce535d556932131e6ba1a8adbfd8d3a4666a5f82a"
+    },
+    "plugins/plugin-sqlite/package.json": {
+      "blob": "7326ed2e2fed5c0c111250d9f0cb65809239f708",
+      "priorVerifiedSHA256": "2c67fd9839277c0f50427134a4897ebf1d1ed15b564c454c3c23ca7a1de931d9"
+    },
+    "plugins/plugin-telegram/package.json": {
+      "blob": "23c5a96b0fb04d9ec8e4099243033067b43de279",
+      "priorVerifiedSHA256": "de885c08af68101f8b319881714d25018d81cb7497dccccba17793a465ea4274"
+    },
+    "plugins/plugin-todos/package.json": {
+      "blob": "ad90ed20b1129571faa1fb94b1fb549b917577e5",
+      "priorVerifiedSHA256": "4da2035e823b346283f3732024c6fe7994a624faafea654068ac923d5d415ef4"
+    },
+    "plugins/plugin-trajectory-logger/package.json": {
+      "blob": "7789ebf7f575c0391e1538617a6d640b523f2a94",
+      "priorVerifiedSHA256": "d96d78d2fb66e200c6d712ef17a33d5e3749cd1c55c3d032e62ec9fffaf570e8"
+    },
+    "plugins/plugin-video/package.json": {
+      "blob": "e388442aaf87fdc9cfc3f74bd9a73df2b04810db",
+      "priorVerifiedSHA256": "f252b8622d905afab514b2e0d6a938d328952fc327efbd8d3bcb4b98ff9b926e"
+    },
+    "plugins/plugin-vision/package.json": {
+      "blob": "d7c1632c4a0f7a81fedfd5d6eadf23328edff679",
+      "priorVerifiedSHA256": "2b8b0a227323dd2f3b8a1c1b68b7cd56f780abcfd6ba20956ef5e8b052a9be27"
+    },
+    "plugins/plugin-wallet/package.json": {
+      "blob": "a5af7cf13d444ae6e405a19622ef6770993796c2",
+      "priorVerifiedSHA256": "fdf173cee7a5300490b28767d06b3cb0ab1787b8c31369915bfd23865c988983"
+    },
+    "plugins/plugin-web-search/package.json": {
+      "blob": "c7f34ed546f927f8f5410a4fc181a00a93cabd9d",
+      "priorVerifiedSHA256": "f6be768a2fee5e171d885b256997e662256c4cb60fac11087d752a2cea632cf3"
+    },
+    "plugins/plugin-workflow/package.json": {
+      "blob": "66920c04f68f7a9d0adc154bd5c6af10c41011c4",
+      "priorVerifiedSHA256": "05f8694f7a6560e6214ad9046c54bf6cd0dd1bf4654e1bf71c0b5f77f751e333"
+    },
+    "plugins/plugin-x/package.json": {
+      "blob": "e32325bf178885b20f71ca76b6fc9f5cf5f161a1",
+      "priorVerifiedSHA256": "16e3fa816b07537a176de2e367ec87e64a7cb56b5919dfe3964be0f929665d93"
+    },
+    "turbo.json": {
+      "blob": "8ed7b03068e564a7a40c8c2c4c5671df4aa6009a",
+      "priorVerifiedSHA256": "1e7720daa6972284ec985ddcaeaa7a9af52e8fbb5d74187e6653eb5bb0f74c33"
+    }
+  },
+  "nativeGitlink": "160000 commit cc8c979157e1f577448d8b8c6ff598b7cfc3d661\tplugins/plugin-local-inference/native/llama.cpp",
+  "qualificationTransfer": false,
+  "note": "Separate Calendar and speech tests do not qualify this union. No model/ABI/native/voice/device acceptance inherited."
+}
