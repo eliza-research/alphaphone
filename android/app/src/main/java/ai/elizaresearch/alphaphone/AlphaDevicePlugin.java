@@ -332,6 +332,7 @@ public final class AlphaDevicePlugin extends Plugin {
      throwIfDestroyed();
      // This plugin's earlier session, if the owner never answered it, would stay staged in /data/app. Dropped
      // only here so a tap refused before admission leaves it, and before the new one so its space is free.
+     if(updateConfirm!=null)throw new java.io.IOException("Update stopped");
      if(updateSession!=0)try{installer.abandonSession(updateSession);}catch(RuntimeException finished){/* Already gone. */}
      PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
      params.setAppPackageName(getContext().getPackageName());params.setSize(size);

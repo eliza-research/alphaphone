@@ -231,7 +231,7 @@ public final class UpdateFlowTest {
   Intent confirm=confirmation(context,staged);
   resume(owner);
   check(owner.activity.started.equals(List.of(confirm)),"that session's kept confirmation still opens");
-  check(tap(owner).resolved.get()==1&&installer.abandoned.equals(List.of(staged))&&installer.committed.size()==2,"and a later tap, after the finished install, still replaces it");
+  check(tap(owner).resolved.get()==1&&installer.abandoned.equals(List.of(staged))&&installer.committed.size()==2,"and a later tap, once that confirmation has opened, still replaces it");
  }
  private static void aTapQueuedOnAnotherBridgeDuringCommitKeepsSession(File cache)throws Exception{
   Context context=installing(cache);
