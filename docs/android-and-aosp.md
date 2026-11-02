@@ -338,7 +338,7 @@ installs them through the lineage.
 `apkUrl` must be HTTPS (redirects stay on HTTPS). One attempt runs per process, whichever of Alpha's
 surfaces started it. A tap while one runs starts nothing beside it and never replaces what it staged;
 only a tap on the same surface, behind an attempt that fails first, retries. The plugin downloads at most
-`sizeBytes` (1 GiB at most) to the app cache within six hours, refuses any other length or SHA-256, and then reads the archive: it must be
+`sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it drop the
 session that surface created earlier and the owner left unanswered, and open a session for this

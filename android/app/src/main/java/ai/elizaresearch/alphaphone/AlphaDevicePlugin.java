@@ -201,13 +201,13 @@ public final class AlphaDevicePlugin extends Plugin {
 
  /** Largest update APK admitted; UPDATE_MAX_BYTES in settings-adapter.ts is the same bound. */
  static final long UPDATE_MAX_BYTES=1L<<30;
- /** Longest one update download may run: the read timeout bounds only silence, and a trickle never goes silent. Fits a 1 GiB APK from about 0.4 Mbit/s, so it ends only a stalled link's trickle. */
+ /** Soft ceiling on one update download, checked only when a read returns: the read timeout bounds only silence, and a trickle never goes silent. A read in flight can outlast it by up to that 60 s timeout unless handleOnDestroy disconnects it first. Fits a 1 GiB APK from about 0.4 Mbit/s, so it ends only a stalled link's trickle. */
  static final long UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(6);
  /** 64 lowercase hex characters of a SHA-256 digest. */
  static String hex(byte[] digest){return String.format(java.util.Locale.ROOT,"%064x",new java.math.BigInteger(1,digest));}
  /** Stops an update attempt whose bridge is gone: handleOnDestroy interrupts updateWorker, and that bridge's receiver no longer hears any session's status. */
  private static void throwIfDestroyed()throws java.io.IOException{if(Thread.currentThread().isInterrupted())throw new java.io.IOException("Update stopped");}
- /** Copies the update download until the System.nanoTime() deadline, then throws unless it was exactly sizeBytes long and hashes to sha256. An undeclared size or digest is refused before any byte is read. */
+ /** Copies the update download, throwing at the first read that returns at or past the System.nanoTime() deadline, or unless it was exactly sizeBytes long and hashes to sha256. An undeclared size or digest is refused before any byte is read. */
  static void copyVerified(java.io.InputStream in,java.io.OutputStream out,long sizeBytes,String sha256,long deadline)throws java.io.IOException{
   if(sizeBytes<=0||sizeBytes>UPDATE_MAX_BYTES||sha256==null||!sha256.matches("[0-9a-f]{64}"))throw new java.io.IOException("Update not admitted");
   java.security.MessageDigest digest;
@@ -250,9 +250,15 @@ public final class AlphaDevicePlugin extends Plugin {
  private java.io.File updateApk(){return new java.io.File(getContext().getCacheDir(),"alpha-update.apk");}
  /**
   * Held by the process's one update attempt, from the start of its work until its session is committed or it
-  * fails, or by a load sweeping. Static because every bridge (AlphaAssistActivity's beside MainActivity's) shares updateApk().
+  * fails, by a load sweeping, or by a tap reading updatesCommitted. Static because every bridge (AlphaAssistActivity's beside MainActivity's) shares updateApk().
   */
  private static final java.util.concurrent.atomic.AtomicBoolean updating=new java.util.concurrent.atomic.AtomicBoolean();
+ /**
+  * Attempts in this process whose commit returned, counted before they let go of updating. A tap that waited on a
+  * worker finds updating free once the attempt ahead of it ends; this count says whether that attempt staged a
+  * session after the tap was taken, whichever bridge ran it. A failed attempt leaves it, so the tap behind retries.
+  */
+ private static final java.util.concurrent.atomic.AtomicInteger updatesCommitted=new java.util.concurrent.atomic.AtomicInteger();
  @Override public void load(){
   super.load();
   // Deletes the download a killed process left (up to UPDATE_MAX_BYTES), never one in flight on another bridge.
@@ -293,7 +299,7 @@ public final class AlphaDevicePlugin extends Plugin {
   * versionCode, above the installed one. Android shows its own confirmation and installs only an APK signed
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
   * per process: a tap while one runs on another bridge, while this bridge keeps a confirmation for its next
-  * resume, or queued here behind an attempt that staged a session changes nothing; queued behind one that failed
+  * resume, or that an attempt's commit overtook while it waited changes nothing; queued behind one that failed
   * first, it retries. Only an admitted build replaces this plugin's own earlier session, never another bridge's.
   */
  @PluginMethod public void installUpdate(PluginCall call){
@@ -305,10 +311,11 @@ public final class AlphaDevicePlugin extends Plugin {
    return;
   }
   final String apkUrl=call.getString("apkUrl"),sha256=call.getString("sha256");final long size=call.getData().optLong("sizeBytes"),versionCode=call.getData().optLong("versionCode");
-  // updateWorker is one thread, so a tap queued behind an attempt finds updating free; this tells it what that attempt staged.
-  final int earlier=updateSession;
+  final int seen=updatesCommitted.get();
   PluginWorkers.submit(updateWorker,()->{
-   if(updateConfirm!=null||updateSession!=earlier||!updating.compareAndSet(false,true)){call.resolve();return;}
+   if(updateConfirm!=null||!updating.compareAndSet(false,true)){call.resolve();return;}
+   // Read holding updating: an attempt ending between a read and the claim above would otherwise pass unseen.
+   if(updatesCommitted.get()!=seen){updating.set(false);call.resolve();return;}
    java.io.File apk=updateApk();
    try{
     try{
@@ -332,10 +339,11 @@ public final class AlphaDevicePlugin extends Plugin {
      try(PackageInstaller.Session session=installer.openSession(id)){
       try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
       throwIfDestroyed();
-      // Set at commit: a tap reaching the worker before this has nothing staged to keep, and one after it voids itself.
+      // Named before commit: Android's status for this session can arrive as soon as commit reaches it.
       updateSession=id;
       session.commit(android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender());
      }catch(Exception failed){installer.abandonSession(id);throw failed;}
+     updatesCommitted.incrementAndGet();
     }finally{apk.delete();updating.set(false);}
     call.resolve();
    }catch(Exception unavailable){call.reject("Update unavailable");}

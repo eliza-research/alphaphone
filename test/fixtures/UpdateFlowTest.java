@@ -208,6 +208,61 @@ public final class UpdateFlowTest {
   dropped.awaitAnswer();queued.awaitAnswer();
   check(dropped.rejected.get()==1&&queued.resolved.get()==1&&context.packages.installer.committed.size()==1,"an attempt that staged nothing does not void the tap behind it");
  }
+ /** Holds the installer's next commit once updateSession names its session; the returned latch counts down when it is reached. */
+ private static CountDownLatch holdCommit(PackageInstaller installer,CountDownLatch release){
+  CountDownLatch atCommit=new CountDownLatch(1);
+  installer.committing=()->{atCommit.countDown();try{check(release.await(20,TimeUnit.SECONDS),"the commit was released");}catch(InterruptedException stopped){throw new AssertionError(stopped);}};
+  return atCommit;
+ }
+ private static void aTapAfterSessionAssignedBeforeCommitReturnsKeepsSession(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  CountDownLatch release=new CountDownLatch(1),atCommit=holdCommit(installer,release);
+  connections.clear();
+  PluginCall running=offered();owner.installUpdate(running);
+  check(atCommit.await(20,TimeUnit.SECONDS),"the first attempt reaches commit after naming its session");
+  PluginCall queued=offered();owner.installUpdate(queued);
+  release.countDown();running.awaitAnswer();queued.awaitAnswer();
+  check(running.resolved.get()==1&&queued.resolved.get()==1&&queued.rejected.get()==0,"both taps settle without a failure");
+  check(connections.size()==1&&installer.committed.size()==1&&installer.abandoned.isEmpty(),"a tap during commit must not replace the committing session: committed="+installer.committed+" abandoned="+installer.abandoned);
+  int staged=committed(context);
+  stop(owner);
+  Intent confirm=confirmation(context,staged);
+  resume(owner);
+  check(owner.activity.started.equals(List.of(confirm)),"that session's kept confirmation still opens");
+  check(tap(owner).resolved.get()==1&&installer.abandoned.equals(List.of(staged))&&installer.committed.size()==2,"and a later tap, after the finished install, still replaces it");
+ }
+ private static void aTapQueuedOnAnotherBridgeDuringCommitKeepsSession(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
+  CountDownLatch release=new CountDownLatch(1),atCommit=holdCommit(installer,release);
+  PluginCall running=offered();owner.installUpdate(running);
+  check(atCommit.await(20,TimeUnit.SECONDS),"the first attempt reaches commit");
+  // The other bridge's tap waits behind its own check until the attempt has ended and updating is free.
+  Held checking=new Held();body=checking;
+  PluginCall answer=offered();other.checkForUpdate(answer);
+  check(checking.reading.await(20,TimeUnit.SECONDS),"a check holds the other bridge's worker");
+  PluginCall queued=offered();other.installUpdate(queued);
+  release.countDown();running.awaitAnswer();
+  checking.released.countDown();answer.awaitAnswer();queued.awaitAnswer();body=IN_MEMORY;
+  check(queued.resolved.get()==1&&queued.rejected.get()==0&&installer.committed.size()==1,"a tap taken before the commit returned stages nothing on any bridge: committed="+installer.committed);
+  check(tap(other).resolved.get()==1&&installer.committed.size()==2&&installer.abandoned.isEmpty(),"and a later tap there runs, leaving the first bridge's session");
+ }
+ private static void aTapQueuedBehindACommitThatFailsRetries(File cache)throws Exception{
+  Context context=installing(cache);
+  PackageInstaller installer=context.packages.installer;
+  AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
+  Held held=new Held();
+  PluginCall dropped=held.start(owner);
+  PluginCall queued=offered();owner.installUpdate(queued);
+  installer.committing=()->{installer.committing=()->{};throw new IllegalStateException("Session gone");};
+  body=IN_MEMORY;held.released.countDown();
+  dropped.awaitAnswer();queued.awaitAnswer();
+  check(dropped.rejected.get()==1&&queued.resolved.get()==1&&queued.rejected.get()==0,"the failed commit settles quietly and the tap behind it installs");
+  check(installer.committed.size()==1&&installer.sessions.equals(List.of(committed(context))),"only the retry's session remains: committed="+installer.committed+" sessions="+installer.sessions);
+ }
  private static void aTapRefusedBeforeAdmissionLeavesTheEarlierSessionAndALaterTapWorks(File cache)throws Exception{
   Context context=installing(cache);
   PackageInstaller installer=context.packages.installer;
@@ -382,6 +437,9 @@ public final class UpdateFlowTest {
    aRepeatTapKeepsAConfirmationHeldForResume(cache);
    aTapQueuedBehindAnAttemptKeepsWhatItStaged(cache);
    aTapQueuedBehindAFailedAttemptRetries(cache);
+   aTapAfterSessionAssignedBeforeCommitReturnsKeepsSession(cache);
+   aTapQueuedOnAnotherBridgeDuringCommitKeepsSession(cache);
+   aTapQueuedBehindACommitThatFailsRetries(cache);
    aTapRefusedBeforeAdmissionLeavesTheEarlierSessionAndALaterTapWorks(cache);
    theDeadlineEndsATrickleNotADownloadThatFinishesInTime(cache);
    destroyClosesADownloadInFlight(cache);

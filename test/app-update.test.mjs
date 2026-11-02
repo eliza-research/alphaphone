@@ -54,8 +54,8 @@ ${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.conc
 });
 
 test('Android installs only the offered newer build of this package, in place of this plugin\'s own earlier session',()=>{
- const order=['copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','session.fsync(out)','updateSession=id;','session.commit('].map(step=>install.indexOf(step));
- assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'size, SHA-256 and the archive are admitted before any session changes, and a new session\'s status can only arrive once it is this plugin\'s');
+ const order=['updatesCommitted.get();','updating.compareAndSet(false,true)','updatesCommitted.get()!=seen','copyVerified(in,out,size,sha256,deadline);','getPackageArchiveInfo(apk.getPath(),0)','installer.abandonSession(updateSession)','installer.createSession(params)','session.fsync(out)','updateSession=id;','session.commit(','updatesCommitted.incrementAndGet();','updating.set(false);}\n'].map(step=>install.indexOf(step));
+ assert.ok(order.every((at,index)=>at>0&&(index===0||at>order[index-1])),'a tap fences at entry, size, SHA-256 and the archive are admitted before any session changes, a new session\'s status can only arrive once it is this plugin\'s, and an attempt counts its commit before letting go');
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);
  assert.match(install,/params\.setAppPackageName\(getContext\(\)\.getPackageName\(\)\);/);
@@ -83,6 +83,8 @@ test('Alpha stays nonprivileged and reads one configured HTTPS manifest from its
  assert.equal(url,'https://github.com/eliza-research/alphaphone/releases/download/app-stable/alpha-update-stable.json');
  const docs=readFileSync(join(root,'docs/android-and-aosp.md'),'utf8');
  assert.ok(docs.includes('`'+url+'`')&&docs.includes('gh release upload app-stable alpha-update-stable.json --repo eliza-research/alphaphone --clobber'),'the runbook publishes to the configured release');
+ // Checked only as reads return, so neither the comment nor the runbook may promise a hard interrupt at six hours.
+ assert.ok(docs.includes('soft six-hour ceiling')&&!docs.includes('within six hours')&&plugin.includes('Soft ceiling on one update download'),'the six hours are labelled soft');
  assert.match(readFileSync(join(root,'android/app/product.gradle'),'utf8'),/buildConfigField 'String', 'ALPHA_UPDATE_MANIFEST_URL', "\\"\$\{updateManifestUrl\}\\""/);
  for(const file of ['apps/app/src/prototype/settings-adapter.ts','android/app/src/main/java/ai/elizaresearch/alphaphone/AlphaDevicePlugin.java'])assert.ok(!readFileSync(join(root,file),'utf8').includes(url),file);
 });
