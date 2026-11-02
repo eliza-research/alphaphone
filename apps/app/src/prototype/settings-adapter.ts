@@ -24,6 +24,7 @@ import { retireGmailBackground } from '../runtime/gmail-background';
 import { gmailGrantLabel, googleAccountAccessLabel } from '../runtime/gmail-grants';
 import { clearCrashLog, describeCrashEntry, readCrashLog, recordCloudInferenceFailure, type CrashLog } from '../runtime/crash-log';
 import { buildDiagnostics, diagnosticsFileName, diagnosticsText } from '../runtime/diagnostics-export';
+import { availableUpdate, checkForUpdate, installUpdate } from '../runtime/app-update';
 import {planAdmission} from '../runtime/subscription-entitlement';
 import { exportVoiceTiming } from '../runtime/voice-timing';
 import { readNativeVoiceTiming } from '../runtime/native-voice-turn';
@@ -124,7 +125,7 @@ export function versionLabel(version: unknown, code: unknown): string {
   const name = typeof version === 'string' && version ? version : 'Unavailable';
   return Number.isSafeInteger(code) && (code as number) > 0 && name !== 'Unavailable' ? `${name} (${code})` : name;
 }
-/** Only the install time Android recorded; Alpha has no update check, so it shows no update row. */
+/** Only the install time Android recorded. */
 export function installedRows(updatedAt: unknown, format: (at: number) => string = at => new Date(at).toLocaleDateString()): Array<[string, string]> {
   return Number.isSafeInteger(updatedAt) && (updatedAt as number) > 0 ? [['Installed or last updated', format(updatedAt as number)]] : [];
 }
@@ -169,6 +170,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
   let gmailAccounts: GmailAccount[] = [], gmailBusy = '', settingsApi: Bag | undefined;
   let roles: Record<string, RoleRow> | null = null, launcher: boolean | null = null, roleBusy = false;
   let crashLog: CrashLog | null = null, crashBusy = false, diagnosticsBusy = false;
+  let updateBusy: '' | 'check' | 'install' = '';
   let gmail = 'Not checked';
   let inferenceProvider = 'Not reported by agent';
   // The AOSP image's always-on listener (#424): status, Pause and Turn off only. Turning listening on
@@ -325,6 +327,12 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     catch { if (owner === instance) api.toast('The problem log could not be cleared.'); }
     finally { crashBusy = false; if (owner === instance) changed(); }
   }
+  /** Software update is quiet (app-update.ts): only the busy label changes while a check or install runs. */
+  async function updateAction(busy: 'check' | 'install', run: () => Promise<void>) {
+    if (updateBusy) return;
+    updateBusy = busy; changed();
+    try { await run(); } finally { updateBusy = ''; changed(); }
+  }
   async function refresh() {
     const instance = owner, token = ++generation;
     if (!instance) return;
@@ -351,7 +359,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     mount.call(this); owner = this;
     this.mailImagePreferenceChanged=changed;
     window.addEventListener('alpha:device-settings',this.mailImagePreferenceChanged);
-    initializeDevicePreferences(); void refresh(); void refreshCapabilities();
+    initializeDevicePreferences(); void refresh(); void refreshCapabilities(); void checkForUpdate(false).then(changed);
     this.passwordLifecycle = passwordManagerLifecycle(changed);
     if(!new URLSearchParams(location.search).has('theme')){
       // A read from storage or the system scheme carries a marker, so componentDidUpdate never writes it back.
@@ -376,7 +384,7 @@ export function installSettingsAdapter(Component: any, views: Bag) {
     });
     this.googleAccountsChanged=()=>void refreshCapabilities();
     window.addEventListener(GOOGLE_ACCOUNTS_CHANGED,this.googleAccountsChanged);
-    this.deviceResume = DailyApps.addListener('appResumed', () => { void refresh(); void refreshCapabilities(); }).catch(() => null);
+    this.deviceResume = DailyApps.addListener('appResumed', () => { void refresh(); void refreshCapabilities(); void checkForUpdate(false).then(changed); }).catch(() => null);
   };
   p.componentDidUpdate = function (previousProps: Bag, previousState: Bag) {
     update?.call(this, previousProps, previousState);
@@ -552,6 +560,11 @@ export function installSettingsAdapter(Component: any, views: Bag) {
           page.groups.push(group([info('Home app',roles?roleValue(home):'Unavailable'),info('Assistant app',roles?roleValue(roles.assistant):'Unavailable'),
             ...(canRequestHome?[{kNav:true,label:'Make Alpha your Home app',lbl:roleBusy?'Waiting for Android…':'Make Alpha your Home app',chev:true,noAB:true,go:()=>void requestHome(api)}]:[]),
             nav('Default apps in Android','default-apps')]));
+          // The installed version, a newer one only when the manifest offers it, and an explicit check. No error or "up to date" claim.
+          const update=availableUpdate(facts.appVersionCode);
+          page.groups.push(group([info('Software update',versionLabel(facts.appVersion||buildVersion,facts.appVersionCode)),
+            ...(update?[{...action(updateBusy==='install'?'Downloading update…':'Install update',()=>void updateAction('install',()=>installUpdate(update))),val:versionLabel(update.versionName,update.versionCode),hasVal:true,sub:update.notes,hasSub:!!update.notes,busy:!!updateBusy}]:[]),
+            {...action(updateBusy==='check'?'Checking for updates…':'Check for updates',()=>void updateAction('check',()=>checkForUpdate(true))),busy:!!updateBusy}]));
         }
         page.groups.push(group([{kNav:true,label:'Scheduled digests',lbl:'Scheduled digests',chev:true,noAB:true,go:()=>window.dispatchEvent(new Event('alpha:hosted-digests'))}]));
         // Every Alpha Phone signs in to Eliza Cloud and holds a plan: account, plan and sign-in expiry.

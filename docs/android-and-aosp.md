@@ -276,6 +276,42 @@ A persistent cross-app helper and secure Chromium component require their explic
 native/OS integration and signer-admission work in the implementation plan. Managed
 kiosk is not enabled by default; preserve a recovery route and normal Android settings.
 
+## One-tap app update
+
+Settings shows a **Software update** row on Android: the installed version, **Install update**
+with the newer version when the manifest offers one, and **Check for updates**. It updates the
+Alpha APK only; the unattended OS update through `update_engine` (P-75) stays a separate,
+privileged client. Alpha itself stays nonprivileged: it declares only `REQUEST_INSTALL_PACKAGES`,
+Android asks the owner to allow installs from Alpha (opened from the Install tap) and to confirm
+each update, and Android installs only an APK of `ai.elizaresearch.alphaphone` signed like the
+installed app. There is no silent install, background service or error text: a failed check or
+install leaves the row on the installed version and a later check or tap retries.
+
+The one manifest URL is `updateManifestUrl` in `app.config.json`; `android/app/product.gradle`
+requires HTTPS and emits it as `BuildConfig.ALPHA_UPDATE_MANIFEST_URL`. The default,
+`https://github.com/eliza-research/alphaphone/releases/latest/download/alpha-update-stable.json`,
+resolves to the newest full (not draft, not prerelease) GitHub release. The app checks on start
+and resume at most once a day (`apps/app/src/runtime/app-update.ts`), and on Check for updates.
+
+```json
+{
+  "schema": "alpha-update/v1",
+  "versionCode": 2,
+  "versionName": "0.1.1",
+  "apkUrl": "https://github.com/eliza-research/alphaphone/releases/download/TAG/alpha-phone-2.apk",
+  "sha256": "64 lowercase hex characters of the APK",
+  "sizeBytes": 400000000,
+  "notes": "Optional, at most 500 characters"
+}
+```
+
+Only a `versionCode` above the installed one is offered. `apkUrl` must be HTTPS (redirects stay
+on HTTPS); `AlphaUpdatePlugin` downloads at most `sizeBytes` (1 GiB at most) to the app cache,
+refuses any other length or SHA-256, and only then opens a PackageInstaller session for this
+package. Publish an update by building with `ELIZAOS_VERSION_CODE` above the installed
+versionCode, signing with the installed app's key (release key per P-16 for field builds), and
+attaching the APK and the manifest to the release.
+
 ## One live MainActivity on the launcher flavor
 
 `MainActivity` is `singleTask` and, on the launcher flavor, also answers `ACTION_MAIN` /
