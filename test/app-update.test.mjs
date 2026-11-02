@@ -27,9 +27,9 @@ test('the download is admitted only at its declared size and SHA-256',()=>{
 
 test('the update flow runs one attempt per process, keeps Android\'s confirmation for the bridge that started it, opens it once, and settles every failure quietly',()=>{
  const start=plugin.indexOf(' static final long UPDATE_MAX_BYTES='),end=plugin.lastIndexOf('}');
- const hour='UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(1)';
+ const deadline='UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(6)';
  const signer=plugin.match(/^ *SystemFacts\.fact\(facts,"appSigner".*$/m)?.[0];
- assert.ok(start>0&&end>start&&signer&&plugin.includes(hour),'the update members exist');
+ assert.ok(start>0&&end>start&&signer&&plugin.includes(deadline),'the update members exist');
  const dir=mkdtempSync(join(tmpdir(),'alpha-update-flow-'));
  try{
   // The plugin's own members in a class of its name, with only the deadline shortened to seconds; the stubs state what Android and Capacitor do.
@@ -47,7 +47,7 @@ final class AlphaDevicePlugin extends Plugin {
  Object appSigner(Context context){java.util.Map<String,Object> facts=new java.util.HashMap<>();
 ${signer}
   return facts.get("appSigner");}
-${plugin.slice(start,end).replace(hour,'UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.SECONDS.toNanos(3)')}}
+${plugin.slice(start,end).replace(deadline,'UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.SECONDS.toNanos(3)')}}
 `);
   assert.match(runJvm([members,nativeSource('PluginWorkers.java'),...javaFiles(fixture('app-update-jvm')),fixture('UpdateFlowTest.java')],'ai.elizaresearch.alphaphone.UpdateFlowTest'),/^PASS update flow/);
  }finally{rmSync(dir,{recursive:true,force:true});}
@@ -64,6 +64,8 @@ test('Android installs only the offered newer build of this package, in place of
  assert.match(install,/PendingIntent\.FLAG_MUTABLE/);
  assert.match(plugin,/registerReceiver\(getContext\(\),updateStatus,new android\.content\.IntentFilter\(UPDATE_STATUS\),androidx\.core\.content\.ContextCompat\.RECEIVER_NOT_EXPORTED\)/);
  assert.match(install,/catch\(Exception failed\)\{installer\.abandonSession\(id\);throw failed;\}/);
+ // The file goes while the flag is held: a delete after it would hit the next attempt's download.
+ assert.match(install,/finally\{apk\.delete\(\);updating\.set\(false\);\}/);
  // A check of 404 is an answer, not a failure.
  assert.match(plugin,/if\(status==404\)\{call\.resolve\(new JSObject\(\)\);return;\}\s*if\(status!=200\)throw/);
  assert.match(plugin,/updateConnection\(BuildConfig\.ALPHA_UPDATE_MANIFEST_URL\)/);

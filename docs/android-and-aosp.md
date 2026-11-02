@@ -336,12 +336,13 @@ never changes it, so a phone that missed the rotating release is still offered l
 installs them through the lineage.
 
 `apkUrl` must be HTTPS (redirects stay on HTTPS). One attempt runs per process, whichever of Alpha's
-surfaces started it, and a tap while one runs changes nothing. The plugin downloads at most
-`sizeBytes` (1 GiB at most) to the app cache within one hour, refuses any other length or SHA-256, and then reads the archive: it must be
+surfaces started it. A tap while one runs starts nothing beside it and never replaces what it staged;
+only a tap on the same surface, behind an attempt that fails first, retries. The plugin downloads at most
+`sizeBytes` (1 GiB at most) to the app cache within six hours, refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it drop the
 session that surface created earlier and the owner left unanswered, and open a session for this
-package, so a failed tap leaves the earlier session. No tap touches another surface's session, and a
+package, so a tap refused before that point leaves the earlier session. No tap touches another surface's session, and a
 session left by a killed process or a closed surface stays until Android expires it. Closing the
 surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed

@@ -201,8 +201,8 @@ public final class AlphaDevicePlugin extends Plugin {
 
  /** Largest update APK admitted; UPDATE_MAX_BYTES in settings-adapter.ts is the same bound. */
  static final long UPDATE_MAX_BYTES=1L<<30;
- /** Longest one update download may run: the read timeout bounds only silence, and a trickle never goes silent. Fits a 1 GiB APK from about 2.4 Mbit/s. */
- static final long UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(1);
+ /** Longest one update download may run: the read timeout bounds only silence, and a trickle never goes silent. Fits a 1 GiB APK from about 0.4 Mbit/s, so it ends only a stalled link's trickle. */
+ static final long UPDATE_DEADLINE_NANOS=java.util.concurrent.TimeUnit.HOURS.toNanos(6);
  /** 64 lowercase hex characters of a SHA-256 digest. */
  static String hex(byte[] digest){return String.format(java.util.Locale.ROOT,"%064x",new java.math.BigInteger(1,digest));}
  /** Stops an update attempt whose bridge is gone: handleOnDestroy interrupts updateWorker, and that bridge's receiver no longer hears any session's status. */
@@ -292,8 +292,9 @@ public final class AlphaDevicePlugin extends Plugin {
   * SHA-256 (copyVerified), then by Android's reading of the archive: this package at exactly the offered
   * versionCode, above the installed one. Android shows its own confirmation and installs only an APK signed
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
-  * per process: a tap while one runs on any bridge, or while this bridge keeps a confirmation for its next resume,
-  * changes nothing. Only an admitted build replaces this plugin's own earlier session, never another bridge's.
+  * per process: a tap while one runs on another bridge, while this bridge keeps a confirmation for its next
+  * resume, or queued here behind an attempt that staged a session changes nothing; queued behind one that failed
+  * first, it retries. Only an admitted build replaces this plugin's own earlier session, never another bridge's.
   */
  @PluginMethod public void installUpdate(PluginCall call){
   if(!getContext().getPackageManager().canRequestPackageInstalls()){
@@ -304,8 +305,10 @@ public final class AlphaDevicePlugin extends Plugin {
    return;
   }
   final String apkUrl=call.getString("apkUrl"),sha256=call.getString("sha256");final long size=call.getData().optLong("sizeBytes"),versionCode=call.getData().optLong("versionCode");
+  // updateWorker is one thread, so a tap queued behind an attempt finds updating free; this tells it what that attempt staged.
+  final int earlier=updateSession;
   PluginWorkers.submit(updateWorker,()->{
-   if(updateConfirm!=null||!updating.compareAndSet(false,true)){call.resolve();return;}
+   if(updateConfirm!=null||updateSession!=earlier||!updating.compareAndSet(false,true)){call.resolve();return;}
    java.io.File apk=updateApk();
    try{
     try{
@@ -321,7 +324,7 @@ public final class AlphaDevicePlugin extends Plugin {
      if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
      throwIfDestroyed();
      // This plugin's earlier session, if the owner never answered it, would stay staged in /data/app. Dropped
-     // only here so a failed tap leaves it, and before the new one so its space is free.
+     // only here so a tap refused before admission leaves it, and before the new one so its space is free.
      if(updateSession!=0)try{installer.abandonSession(updateSession);}catch(RuntimeException finished){/* Already gone. */}
      PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
      params.setAppPackageName(getContext().getPackageName());params.setSize(size);
@@ -336,6 +339,6 @@ public final class AlphaDevicePlugin extends Plugin {
    }catch(Exception unavailable){call.reject("Update unavailable");}
   },()->call.reject("Update unavailable"));
  }
- /** Stops an update download too, closing its connection off this main thread: closing a TLS socket writes to it, which Android refuses here. */
- @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();javax.net.ssl.HttpsURLConnection active=updateActive;if(active!=null)java.util.concurrent.CompletableFuture.runAsync(active::disconnect);getContext().unregisterReceiver(updateStatus);super.handleOnDestroy();}
+ /** Stops an update download too: disconnect only closes the raw socket, which Android allows on this main thread. */
+ @Override protected void handleOnDestroy(){diagnosticsWorker.shutdown();updateWorker.shutdownNow();javax.net.ssl.HttpsURLConnection active=updateActive;if(active!=null)active.disconnect();getContext().unregisterReceiver(updateStatus);super.handleOnDestroy();}
 }

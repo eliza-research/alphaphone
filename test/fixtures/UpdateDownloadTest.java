@@ -50,7 +50,7 @@ public final class UpdateDownloadTest {
   InputStream unread=new InputStream(){@Override public int read(){throw new AssertionError("read before admission");}};
   check(!admitted(unread,new byte[0],AlphaDevicePlugin.UPDATE_MAX_BYTES+1,digest)&&!admitted(unread,new byte[0],-1,digest),"sizes outside 1..UPDATE_MAX_BYTES are refused");
   check(AlphaDevicePlugin.UPDATE_MAX_BYTES==1024L*1024*1024,"the bound is 1 GiB");
-  check(AlphaDevicePlugin.UPDATE_DEADLINE_NANOS==TimeUnit.HOURS.toNanos(1),"the deadline is one hour");
+  check(AlphaDevicePlugin.UPDATE_DEADLINE_NANOS==TimeUnit.HOURS.toNanos(6),"the deadline is six hours");
   byte[] small=Arrays.copyOf(apk,400);
   Trickle late=new Trickle(small,20);
   check(!admitted(late,new byte[0],small.length,sha256(small),System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(100)),"a trickle past the deadline is refused");
