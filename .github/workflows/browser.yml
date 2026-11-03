@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      qualification_scope:
+        description: Normal MVP or exact reviewed Stage1 notice unit qualification
+        type: choice
+        options: [normal, stage1-notice-unit]
+        default: normal
       cross_browser:
         description: Also qualify Firefox and macOS WebKit storage (expensive; not the Android engine)
         type: boolean
@@ -17,6 +22,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 jobs:
   changes:
+    if: github.event_name != 'workflow_dispatch' || inputs.qualification_scope != 'stage1-notice-unit'
     uses: ./.github/workflows/changes.yml
   verify:
     name: Repository verification
@@ -154,7 +160,7 @@ jobs:
   result:
     name: Browser MVP result
     needs: [changes, verify, browser, production]
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.qualification_scope != 'stage1-notice-unit')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -171,7 +177,7 @@ jobs:
           PRODUCTION_SELECTED: ${{ github.event_name != 'push' && needs.changes.outputs.browser == 'true' && needs.changes.outputs.browser_production }}
         run: node scripts/ci/required-result.mjs "changes=$CHANGES" "verify=$VERIFY:$VERIFY_SELECTED" "browser=$BROWSER:$BROWSER_SELECTED" "production=$PRODUCTION:$PRODUCTION_SELECTED"
   storage:
-    if: github.event_name == 'workflow_dispatch' && inputs.cross_browser
+    if: github.event_name == 'workflow_dispatch' && inputs.qualification_scope != 'stage1-notice-unit' && inputs.cross_browser
     name: Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)
     # Linux WebKit lacks MediaRecorder in the hosted build. Run the complete
     # WebKit inventory on macOS so Notes records real audio before storage,
@@ -220,3 +226,205 @@ jobs:
             test-results/browser/
             test-results/browser-report/
           retention-days: 3
+
+  stage1-notice-unit:
+    name: Stage1 exact notice unit qualification (not types or release acceptance)
+    if: github.event_name == 'workflow_dispatch' && inputs.qualification_scope == 'stage1-notice-unit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: af6ef1f6dccde4fa2ded703b43982e7ab4b8db8e
+          path: successor
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: Admit only the reviewed product and SDK identities before preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export QA_ROOT="$RUNNER_TEMP/notice-unit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "QA_ROOT=$QA_ROOT" >> "$GITHUB_ENV"
+          mkdir -p "$QA_ROOT"/{logs,reports,receipts,home,tmp,cache,tooling}
+          chmod 700 "$QA_ROOT"
+          cat > "$QA_ROOT/tooling/cleanup.sh" <<'CLEANUP'
+          #!/bin/bash
+          set -euo pipefail
+          for record in "$QA_ROOT"/receipts/*.unit; do
+            test -f "$record" || continue
+            unit=$(cat "$record")
+            case "$unit" in alpha-notice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-*.service) ;; *) exit 125;; esac
+            [[ "$unit" =~ ^alpha-notice-[0-9]+-[0-9]+-[a-z0-9-]+\.service$ ]]
+            phase=${record##*/}; phase=${phase%.unit}
+            sudo systemctl stop "$unit" || { load=$(sudo systemctl show "$unit" -p LoadState --value 2>/dev/null || true); test "$load" = not-found; }
+            # The unit itself records its actual kernel cgroup before running source or tests.
+            actual="$QA_ROOT/receipts/$phase.actual-cgroup"
+            if ! test -s "$actual"; then echo "INCOMPLETE missing actual cgroup: $phase" >&2; exit 125; fi
+            group=$(sed -n 's/^0:://p' "$actual")
+            test "$group" = "/system.slice/$unit"
+            if test -e "/sys/fs/cgroup$group/cgroup.procs"; then test -z "$(sudo cat "/sys/fs/cgroup$group/cgroup.procs")"; fi
+            printf '%s\n' "$group empty-or-absent" > "$QA_ROOT/receipts/$phase.closure"
+          done
+          CLEANUP
+          for lane in successor; do
+            test "$(git -C "$lane" ls-tree HEAD vendor/eliza | awk '{print $1,$2,$3}')" = '160000 commit b60a34b62025a1736e1a09723002feed2d8114fe'
+            test "$(git -C "$lane" config -f .gitmodules --get submodule.vendor/eliza.url)" = https://github.com/elizaOS/eliza.git
+            test "$(sha256sum "$lane/package-lock.json" | cut -d' ' -f1)" = 84029a1d65017782877b3cc3e71b81f48f7f7441be2eb892d2df91e83a4ac3ff
+            git -C "$lane" diff --exit-code
+          done
+          test "$(git -C successor rev-parse HEAD)" = af6ef1f6dccde4fa2ded703b43982e7ab4b8db8e
+      # Ordinary full SDK source at the exact gitlink. No recursive/nested modules or SDK install.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: elizaOS/eliza
+          ref: b60a34b62025a1736e1a09723002feed2d8114fe
+          path: successor/vendor/eliza
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # existing v7.1.0
+        with:
+          node-version-file: successor/.nvmrc
+          cache: npm
+          cache-dependency-path: successor/package-lock.json
+      - name: Bootstrap only the locked ordinary consumer, with install hooks suppressed
+        shell: bash
+        env:
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_SYSTEM: /dev/null
+          GIT_NO_LAZY_FETCH: '1'
+          GIT_NO_REPLACE_OBJECTS: '1'
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.15.0
+          test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 8388608
+          command -v systemd-run; command -v systemctl; command -v setpriv
+          for lane in successor; do
+            test "$(git -C "$lane/vendor/eliza" rev-parse HEAD)" = b60a34b62025a1736e1a09723002feed2d8114fe
+            test -z "$(git -C "$lane/vendor/eliza" status --porcelain --untracked-files=normal)"
+            (cd "$lane" && timeout --kill-after=15s 360s npm ci --ignore-scripts --include=optional --no-audit --no-fund)
+          done
+      - name: Exact isolated projection, smoke and four whole Node files
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -f 262144
+          trap 'status=$?; trap - EXIT INT TERM; /bin/bash "$QA_ROOT/tooling/cleanup.sh" || status=125; exit "$status"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          uid=$(id -u); gid=$(id -g)
+          # A normal hosted test process cgroup/namespace, not a new test controller.
+          run_owned() {
+            local phase=$1 seconds=$2 lane=$3
+            shift 3
+            local unit="alpha-notice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${phase}"
+            mkdir -p "$QA_ROOT/home/$phase" "$QA_ROOT/tmp/$phase" "$QA_ROOT/cache/$phase" || return 125
+            test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 5242880 || return 125
+            printf '%s\n' "$unit.service" >"$QA_ROOT/receipts/$phase.unit" || return 125
+            local code=0
+            if sudo systemd-run --quiet --wait --pipe --unit="$unit" --uid="$uid" --gid="$gid" \
+              --working-directory="$GITHUB_WORKSPACE/$lane" \
+              -p PrivateNetwork=yes -p NoNewPrivileges=yes -p KillMode=control-group \
+              -p MemoryMax=6G -p TasksMax=256 -p CPUQuota=200% \
+              -p "RuntimeMaxSec=$seconds" -p TimeoutStopSec=15s -p LimitFSIZE=268435456 \
+              --setenv="PATH=$PATH" --setenv="HOME=$QA_ROOT/home/$phase" \
+              --setenv="TMPDIR=$QA_ROOT/tmp/$phase" --setenv="NPM_CONFIG_CACHE=$QA_ROOT/cache/$phase" \
+              --setenv=CI=true --setenv=NODE_OPTIONS=--max-old-space-size=3072 \
+              --setenv=GIT_CONFIG_GLOBAL=/dev/null --setenv=GIT_CONFIG_SYSTEM=/dev/null \
+              --setenv=GIT_NO_LAZY_FETCH=1 --setenv=GIT_NO_REPLACE_OBJECTS=1 \
+              /bin/bash -c 'cat /proc/self/cgroup > "$1"; shift; exec "$@"' _ "$QA_ROOT/receipts/$phase.actual-cgroup" "$@" >"$QA_ROOT/logs/$phase.log" 2>&1; then code=0; else code=$?; fi
+            printf '%s\n' "$code" >"$QA_ROOT/receipts/$phase.exit" || return 125
+            /bin/bash "$QA_ROOT/tooling/cleanup.sh" || return 125
+            if test -d "$GITHUB_WORKSPACE/$lane/test-results/browser"; then
+              mkdir -p "$QA_ROOT/reports/$phase" || return 125
+              cp -a "$GITHUB_WORKSPACE/$lane/test-results/browser" "$QA_ROOT/reports/$phase/" || return 125
+            fi
+            test "$(du -sk "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" | awk '{n+=$1} END{print n}')" -le 524288 || return 125
+            test "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -xdev | wc -l)" -le 20000 || return 125
+            test -z "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -type l -print -quit)" || return 125
+            return "$code"
+          }
+          node - "$QA_ROOT/receipts/admission.json" <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto'),p=require('node:path');
+          const hash=f=>c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+          fs.writeFileSync(process.argv[2],JSON.stringify({workflowCommit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,sourceCandidate:'af6ef1f6dccde4fa2ded703b43982e7ab4b8db8e',sdk:'b60a34b62025a1736e1a09723002feed2d8114fe',node:process.version,lockSHA256:hash(p.join(process.env.GITHUB_WORKSPACE,'successor/package-lock.json')),memoryMaxBytes:6442450944,tasksMax:256,cpuQuotaPercent:200,privateNetwork:'loopback-only per test cgroup; bootstrap/artifact network outside',nodeOldSpaceMiB:3072,realProviderCredentialsPassed:false,rootOrDependencyInstallHooksExecuted:false},null,2)+'\n');
+          NODE
+          cat > "$QA_ROOT/tooling/inventory.json" <<'INVENTORY'
+          {"source":"af6ef1f6dccde4fa2ded703b43982e7ab4b8db8e","inventory":{"test/system-notice-collapse.test.mjs":["the recognized texts are byte-equal to the pinned upstream systemNoticeText()","the runtime-error copy names an owner step, not the host operator diagnostics","model-unavailable display is product-neutral while raw protocol recognition and stored bytes remain intact","replayed history with four identical notices and a normal reply shows no notice","notices with no later reply collapse to the latest one, worded for whether the owner was waiting","a stale escalation before a new send is never worded as if that send failed","failed, unfinished, streaming, card and phone receipt rows do not prove chat works","restored history marks saved interrupted replies as unfinished","a live proactive copy after the collapse is not appended again, and unchanged input is returned as is","history and live delivery both mark notices and collapse them before rendering"],"test/action-message-presentation.test.mjs":["completed action projects one truthful result without changing stored history","pending review keeps its existing approve/cancel handlers and shows the destination once","failures remain visible once, user quotes and unrelated later messages are preserved","restored verified browser receipt hides only exact protocol instruction in its turn","no page loaded or read claim; malformed/non-HTTPS destinations refuse","cold history reads one fully matched browser receipt without executing navigation","cold history refuses uncertain, foreign, changed or contradictory browser receipts","automatic live receipt replaces the exact protocol pause without needing an approval card","equal summaries never hide another proposal receipt or an unbound message","a queued proposal and its later exact receipt show one result across the request turn","cross-turn collapse retains pending, foreign, quoted, different and offscreen results","a requested Browser open answered by the agent reply shows that reply once, live or restored","failed, other, unanswered and offscreen-reply receipts stay visible","only a browser proposal receipt that succeeded with its exact summary names its destination"],"test/resident-agent-fixture-provider-status.test.mjs":["provider status is opt-in and existing custom-provider fixtures retain their route","explicit resident fixture exposes an unconfigured Cloud read without inventing keys or inference","provider fixture read returns a copy and does not alter its configured source","provider capability leaves native navigation owner-fence failures observable","all four connection-sheet fixture constructors opt in, without changing owner fences"],"test/white-label-copy.test.mjs":["runtime and native sources carry no hard-coded Eliza product name outside the Cloud configuration","Dedicated hosting review names the configured Cloud service and a neutral agent"]}}
+          INVENTORY
+          cat > "$QA_ROOT/tooling/node-reporter.mjs" <<'REPORTER'
+          export default async function* (source) {
+            const events=[];
+            for await (const event of source) if(['test:pass','test:fail','test:summary'].includes(event.type)) events.push(event);
+            yield JSON.stringify(events)+'\n';
+          }
+          REPORTER
+          cat > "$QA_ROOT/tooling/validate.cjs" <<'VALIDATOR'
+          const fs=require('node:fs'),p=require('node:path'),assert=require('node:assert/strict');
+          const root=process.argv[2],inventory=JSON.parse(fs.readFileSync(p.join(root,'tooling/inventory.json')));
+          const events=JSON.parse(fs.readFileSync(p.join(root,'reports/node-four.json')));
+          const cases=events.filter(e=>e.type==='test:pass'||e.type==='test:fail');
+          assert.equal(cases.length,31);
+          for(const [file,names] of Object.entries(inventory.inventory)){
+            const rows=cases.filter(e=>e.data.file?.replaceAll('\\','/').endsWith('/'+file));
+            assert.deepEqual(rows.map(e=>e.data.name).sort(),[...names].sort());
+          }
+          for(const e of cases){assert.equal(e.type,'test:pass');assert.equal(e.data.nesting,0);assert.ok(!e.data.skip&&!e.data.todo);}
+          fs.writeFileSync(p.join(root,'receipts/result.json'),JSON.stringify({state:'EXACT_STAGE1_NOTICE_UNIT31_PASS_NOT_TYPES_OR_RELEASE',source:inventory.source,sdk:'b60a34b62025a1736e1a09723002feed2d8114fe',nodeFiles:4,nodeCases:31,typesQualified:false,browserOrNativeOrProviderAcceptance:false},null,2)+'\n');
+          VALIDATOR
+          # Hook-free esbuild must use its installed platform binary, never a downloader.
+          smoke="import {version,transform} from 'esbuild'; if(version!=='0.28.2')throw Error('Wrong esbuild'); await transform('const value: number = 1',{loader:'ts'});"
+          for lane in successor; do
+            run_owned "$lane-projection" 180 "$lane" npm run upstream:prepare-client
+            run_owned "$lane-tool-smoke" 30 "$lane" node --input-type=module -e "$smoke"
+            run_owned "$lane-projection-proof" 30 "$lane" node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('.eliza/client-features/.source.json')); if(p.baseCommit!=='b60a34b62025a1736e1a09723002feed2d8114fe')throw Error('Wrong projected SDK');"
+          done
+          run_owned node-four 240 successor node --test --test-concurrency=1 --test-reporter=tap --test-reporter-destination=stdout \
+            --test-reporter="$QA_ROOT/tooling/node-reporter.mjs" --test-reporter-destination="$QA_ROOT/reports/node-four.json" \
+            test/white-label-copy.test.mjs test/system-notice-collapse.test.mjs \
+            test/action-message-presentation.test.mjs test/resident-agent-fixture-provider-status.test.mjs
+          grep -Eq '^# fail 0$' "$QA_ROOT/logs/node-four.log"
+          grep -Eq '^# cancelled 0$' "$QA_ROOT/logs/node-four.log"
+          grep -Eq '^# skipped 0$' "$QA_ROOT/logs/node-four.log"
+          grep -Eq '^# todo 0$' "$QA_ROOT/logs/node-four.log"
+          node "$QA_ROOT/tooling/validate.cjs" "$QA_ROOT"
+      - name: Independently close only exact recorded units, including cancellation
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$QA_ROOT/tooling/cleanup.sh"
+          /bin/bash "$QA_ROOT/tooling/cleanup.sh"
+          for record in "$QA_ROOT"/receipts/*.unit; do
+            test -f "$record" || continue
+            test -s "${record%.unit}.closure"
+          done
+          echo 'closed=true' >> "$GITHUB_OUTPUT"
+      - name: Bound the exact upload scope even after a failed or interrupted phase
+        id: artifact_gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$QA_ROOT/receipts"
+          test "$(du -sk "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" | awk '{n+=$1} END{print n}')" -le 524288
+          test "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -xdev | wc -l)" -le 20000
+          test -z "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -type l -print -quit)"
+          if test '${{ steps.cleanup.outputs.closed }}' != true; then
+            printf '%s\n' INCOMPLETE_NO_CLOSURE_RECEIPT > "$QA_ROOT/receipts/INCOMPLETE"
+            node -e 'const fs=require("node:fs"),p=process.argv[1],prior=fs.existsSync(p)?JSON.parse(fs.readFileSync(p)):null;fs.writeFileSync(p,JSON.stringify({state:"INCOMPLETE_NO_CLOSURE_RECEIPT",preCleanupQualification:prior},null,2)+"\n")' "$QA_ROOT/receipts/result.json"
+          fi
+          echo 'allowed=true' >> "$GITHUB_OUTPUT"
+      - name: Retain only owned reports, logs and receipts, including failures
+        if: always() && steps.artifact_gate.outputs.allowed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # existing v7.0.2
+        with:
+          name: notice-unit-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.QA_ROOT }}/logs/
+            ${{ env.QA_ROOT }}/reports/
+            ${{ env.QA_ROOT }}/receipts/
+          retention-days: 3
+          if-no-files-found: error
