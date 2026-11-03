@@ -273,6 +273,8 @@ function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.c
 /** The plan check scope when the network went away. Once it is back, the next return in that same
  * scope checks inside the once-a-minute limit, once. */
 let networkLostUnder: string | null = null;
+/** The plan check a return started (recheckResidentPlan); while it runs it answers the network's return. */
+let planRecheck: AbortController | null = null;
 type PlanAdmissionRecord = ResidentPlanAdmissionRecord<CloudEnvironment>;
 /** The stored record, parsed by the shared controller's rules; installed data keeps its key. */
 function readPlanAdmission(): PlanAdmissionRecord | null {
@@ -1034,8 +1036,9 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
   if(!admitted||!plan||!result)return {binding:'unbound',notice:{error:'Cloud account changed. Sign in again.',open:true}};
   if(admission.reason==='needs-plan'){
     // No admissible plan: the agent runs without Cloud inference; the plan notice offers Redeem
-    // code / Choose a plan / Check plan again. Nothing is bound.
-    update({residentSubscription:plan.view,residentPlanNotice:'needs-plan',planEndsAt:null});
+    // code / Choose a plan / Check plan again. Nothing is bound. A plan read that failed in transport
+    // or in an outage (no plan verified in the last 7 days) is Cloud being unreachable: no notice.
+    update({residentSubscription:plan.view,residentPlanNotice:plan.outage?'offline':'needs-plan',planEndsAt:null});
     return {binding:'unbound',account:admitted};
   }
   const endsAt=admission.endsAt??null,identity=admission.identity!;
@@ -1087,7 +1090,7 @@ async function recheckResidentPlan(){
   if(operation||state.residentRecoveryReason)return;
   if(ownProviderSelected()){void restoreOwnProviderCloudServices();return;}
   if(!state.session||active?.kind!=='resident'){queueResidentRebind();return;}
-  const controller=new AbortController();signInReadinessOwner=null;operation=controller;
+  const controller=new AbortController();signInReadinessOwner=null;operation=controller;planRecheck=controller;
   try{
     const admission=await admitCloudResident(controller.signal);
     const target=residentBindable()?admission.binding:residentBinding;
@@ -2710,18 +2713,19 @@ export const connectionController = {
   },
   /** Checks the plan again after the owner returns from Eliza Cloud (resume or visibility), at most
    * once a minute unless planManagementReturn lifts the limit, or the network came back in the same
-   * plan check scope since the last return. */
+   * plan check scope since the last check. */
   recheckPlanOnReturn() {
-    // The network's return lifts the limit for this return only. Work already running (a plan
-    // check, a Cloud services read or a connection step) answers it.
-    const networkReturned=!state.inferenceOffline&&!ownCloudServiceRestore&&networkLostUnder===planCheckScope();
-    if(!state.inferenceOffline)networkLostUnder=null;
+    // The network's return lifts the limit for one check in the same scope. A plan check or Cloud
+    // services read already running answers it; other work (a reply, an edit, a connection step or
+    // recovery) leaves it for the next return.
+    if(!state.inferenceOffline&&(networkLostUnder!==planCheckScope()||ownCloudServiceRestore||operation&&operation===planRecheck))networkLostUnder=null;
     if(!residentCloudFlow()||operation||sending||state.busy||state.residentRecoveryReason)return;
     const now=Date.now();
-    if(!planManagementReturn&&!networkReturned&&now-lastPlanRecheck<PLAN_RECHECK_INTERVAL_MS)return;
+    if(!planManagementReturn&&(state.inferenceOffline||networkLostUnder===null)&&now-lastPlanRecheck<PLAN_RECHECK_INTERVAL_MS)return;
     planManagementReturn=false;lastPlanRecheck=now;
-    // Alpha started with no network: this check's scope is the one the network's return is for.
-    if(state.inferenceOffline)networkLostUnder??=planCheckScope();
+    // This check answers the network's return. One made with no network (Alpha started offline)
+    // records the scope the return will be for.
+    networkLostUnder=state.inferenceOffline?networkLostUnder??planCheckScope():null;
     if(ownProviderSelected()){void restoreOwnProviderCloudServices();return;}
     // Without bound Cloud inference (no plan, offline, signed out) or without a running agent, the
     // account and plan are read again; the agent is rebound or restarted only when that changes.

@@ -266,7 +266,7 @@ const returnCode = stripTypeScriptTypes([
 ].join('\n'), {mode: 'transform'});
 function returnFixture({offline = false} = {}) {
   const listeners = {}, target = {addEventListener: (type, listener) => { (listeners[type] ??= []).push(listener); }, removeEventListener() {}};
-  const box = {residentCloudFlow: () => true, operation: null, sending: null, state: {busy: false, session: {}, inferenceOffline: offline, cloudAccount: {credentialId: 'credential-1'}}, Date, planManagementReturn: false, lastPlanRecheck: -Infinity, PLAN_RECHECK_INTERVAL_MS: 60_000, environment: 'production', residentEnvironment: () => box.environment, ownCloudServiceRestore: null, residentBinding: 'kept', rechecks: 0, service: null, update: patch => { Object.assign(box.state, patch); }, retractReadiness() {}, useEffect: run => run(), document: {...target, hidden: false}, window: target};
+  const box = {residentCloudFlow: () => true, operation: null, planRecheck: null, sending: null, state: {busy: false, session: {}, inferenceOffline: offline, cloudAccount: {credentialId: 'credential-1'}}, Date, planManagementReturn: false, lastPlanRecheck: -Infinity, PLAN_RECHECK_INTERVAL_MS: 60_000, environment: 'production', residentEnvironment: () => box.environment, ownCloudServiceRestore: null, residentBinding: 'kept', rechecks: 0, service: null, update: patch => { Object.assign(box.state, patch); }, retractReadiness() {}, useEffect: run => run(), document: {...target, hidden: false}, window: target};
   box.recheckResidentPlan = box.restoreOwnProviderCloudServices = () => { box.rechecks++; };
   vm.createContext(box); vm.runInContext(returnCode, box);
   box.fire = (type, hidden = false) => { box.document.hidden = hidden; for (const listener of listeners[type]) listener({type}); };
@@ -285,7 +285,10 @@ test('a return from plan management still checks once inside the limit', () => {
 });
 test('the network coming back while Alpha is shown checks the plan at once, once, inside the limit', () => {
   const box = returnFixture();
-  box.fire('visibilitychange'); box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2);
+  box.fire('visibilitychange'); box.fire('offline');
+  box.fire('visibilitychange'); box.fire('pageshow'); box.fire('visibilitychange', true); box.fire('visibilitychange');
+  assert.equal(box.rechecks, 1, 'returns while the network is still away stay inside the limit');
+  box.fire('online'); assert.equal(box.rechecks, 2);
   box.fire('visibilitychange'); box.fire('pageshow'); assert.equal(box.rechecks, 2, 'the lifted limit is used once');
 });
 test('the network coming back while Alpha is in the background is checked once when the owner comes back', () => {
@@ -330,7 +333,7 @@ test('a changed Cloud sign-in, environment or provider drops the lifted limit', 
 });
 test('a check already running when the network comes back answers it; no second check follows', () => {
   const cloud = returnFixture();
-  cloud.recheckResidentPlan = () => { cloud.rechecks++; cloud.operation = {}; };
+  cloud.recheckResidentPlan = () => { cloud.rechecks++; cloud.operation = cloud.planRecheck = {}; };
   cloud.fire('offline'); cloud.fire('visibilitychange'); cloud.fire('online'); assert.equal(cloud.rechecks, 1);
   cloud.operation = null; cloud.fire('pageshow'); cloud.fire('visibilitychange'); assert.equal(cloud.rechecks, 1);
   const own = returnFixture(); own.state.providerStatus = {selected: true, provider: 'cerebras'};
@@ -338,20 +341,53 @@ test('a check already running when the network comes back answers it; no second 
   own.fire('offline'); own.fire('visibilitychange'); own.fire('online'); assert.equal(own.rechecks, 1);
   own.ownCloudServiceRestore = null; own.fire('pageshow'); assert.equal(own.rechecks, 1);
 });
+test('a network return held back by a reply, an edit or other work checks on the next return, once', () => {
+  for (const [name, hold] of Object.entries({
+    reply: (box, on) => { box.sending = on ? {} : null; },
+    'edit, voice or connection step': (box, on) => { box.operation = on ? {} : null; },
+    'busy step': (box, on) => { box.state.busy = on; },
+    recovery: (box, on) => { box.state.residentRecoveryReason = on ? 'ipc-recovery' : undefined; },
+  })) {
+    const box = returnFixture();
+    box.fire('visibilitychange'); box.fire('offline'); box.fire('visibilitychange');
+    hold(box, true); box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1, `${name}: nothing is checked while it runs`);
+    hold(box, false); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, name);
+    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${name}: once`);
+  }
+});
 // The check the network's return allows may still not reach Cloud: the plan stays unknown, with no
-// plan notice, sign-in or rebind.
-const recheckCode = stripTypeScriptTypes(section('async function admitCloudResident(', '/**\n * Cloud reported') + section('async function recheckResidentPlan(', '/** Bind or unbind'), {mode: 'transform'});
-test('a plan check that cannot reach Cloud leaves the plan unknown', async () => {
-  for (const binding of ['kept', 'unbound']) {
-    const account = {credentialId: 'credential-1'}, calls = [];
-    const box = {operation: null, state: {session: {}, open: false, cloudAccount: account, residentPlanNotice: 'offline'}, active: {kind: 'resident'}, residentBinding: binding, service: {identity: account}, AbortController,
-      ownProviderSelected: () => false, residentBindable: () => true, residentEnvironment: () => 'production', makeCloud: () => ({}), stopEntitlementRefresh() {}, update: patch => { Object.assign(box.state, patch); },
-      residentBindingController: () => ({admit: async () => ({reason: 'offline', binding, recent: null})}),
+// plan notice, sign-in or rebind. The shared controller and entitlement check decide it.
+const recheckCode = stripTypeScriptTypes([
+  section('function cloudUnreachable(', '/** Notice shown when Cloud inference'),
+  section('async function admitCloudResident(', '/**\n * Cloud reported'),
+  section('async function recheckResidentPlan(', '/** Bind or unbind'),
+  section('function residentBindingController(', '/** The packaged-runtime refusal.'),
+].join('\n'), {mode: 'transform'});
+test('a plan check that cannot reach Cloud leaves the plan unknown; a missing plan still shows its notice', async () => {
+  const shared = await import('../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts');
+  const entitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
+  const unreachable = async () => { throw new Error('Connection request failed'); }, outage = {kind: 'unavailable', reason: 'outage'}, marked = [];
+  for (const [name, {identity = async () => {}, plan, recent = false, notice, subscription = outage}] of Object.entries({
+    'identity read fails': {identity: unreachable, notice: 'offline'},
+    'identity read fails, plan verified this week': {identity: unreachable, recent: true, notice: 'offline'},
+    'plan read fails after the identity read': {plan: unreachable, notice: 'offline'},
+    'no plan': {plan: async () => null, notice: 'needs-plan', subscription: {kind: 'inactive', planName: null, status: 'none', source: 'billing-limits'}},
+  })) {
+    const account = {credentialId: 'credential-1'}, identityRow = {credentialId: 'credential-1', userId: 'user-1', organizationId: null}, calls = [];
+    const client = {environment: 'production', entitlementSource: () => ({issuer: 'https://cloud.invalid', entitlement: plan, entitlementKeys: async () => [], fallbackPlan: async () => ({status: 'none', planName: null, periodEnd: null})})};
+    const box = {operation: null, planRecheck: null, signInReadinessOwner: null, state: {session: {}, open: false, cloudAccount: account, residentPlanNotice: null}, active: {kind: 'resident'}, residentBinding: 'unbound', service: null, AbortController, DOMException, Date, Error,
+      CloudProtocolError: class extends Error {}, EntitlementError: entitlement.EntitlementError, checkEntitlement: entitlement.checkEntitlement, planAdmission: entitlement.planAdmission, isEntitlementSignInFailure: entitlement.isEntitlementSignInFailure,
+      CloudResidentBindingController: shared.CloudResidentBindingController, CloudResidentBindingError: shared.CloudResidentBindingError, recentResidentPlanAdmission: shared.recentResidentPlanAdmission,
+      cloudCredentialStore: {read: async () => ({credentialId: 'credential-1'})}, cloudServiceName: () => 'Cloud',
+      verifyService: async () => { marked.push(box.operation !== null && box.operation === box.planRecheck); await identity(); box.service = {client, identity: identityRow}; },
+      readPlanAdmission: () => recent ? {version: 1, environment: 'production', ...identityRow, status: 'active', planName: 'Synthetic plan', verifiedAt: Date.now() - 1000, endsAt: null} : null, writePlanAdmission() {},
+      ownProviderSelected: () => false, residentBindable: () => true, residentEnvironment: () => 'production', makeCloud: () => client, stopEntitlementRefresh() {}, update: patch => { Object.assign(box.state, patch); },
       detachService: () => calls.push('detach'), queueResidentRebind: () => calls.push('rebind'), residentRebinds: () => ({queue: () => calls.push('rebind')}), runQueuedResidentRebind() {}};
     vm.createContext(box); vm.runInContext(recheckCode, box);
     await box.recheckResidentPlan();
-    assert.deepEqual({notice: box.state.residentPlanNotice, subscription: {...box.state.residentSubscription}, open: box.state.open, account: box.state.cloudAccount, operation: box.operation, calls}, {notice: 'offline', subscription: {kind: 'unavailable', reason: 'outage'}, open: false, account, operation: null, calls: []}, binding);
+    assert.deepEqual({notice: box.state.residentPlanNotice, subscription: {...box.state.residentSubscription}, open: box.state.open, account: box.state.cloudAccount, operation: box.operation, calls}, {notice, subscription, open: false, account, operation: null, calls: []}, name);
   }
+  assert.deepEqual(marked, [true, true, true, true], 'a network return shares this running check');
 });
 test('unknown balance does not bypass missing, expired or busy conversation guards', async () => {
   for (const balance of ['checking', 'unavailable', undefined]) {

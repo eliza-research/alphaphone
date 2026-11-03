@@ -494,11 +494,15 @@ test.describe('outages and offline use',()=>{
   await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentSubscription?.refreshFailed),{timeout:10000}).toBe(true);
   expect(await page.evaluate(()=>localStorage.getItem('alpha.connection.plan-admission.v1'))).toBe(before);
  });
- test('a billing outage without a recent plan is "needs plan" with a retry',async({page})=>{
+ // A plan read that fails after the identity read is Cloud being unreachable: nothing is bound and,
+ // as for an identity read that fails, nothing is shown (owner, 2026-11-03).
+ test('a billing outage without a recent plan binds nothing and shows no notice',async({page})=>{
   await boot(page,{route:'503'});
-  await needsPlan(page);await started(page);
-  await expect(planDetails(page).getByText('Subscription not confirmed',{exact:true})).toBeVisible();
-  await expect(planDetails(page).getByText('Subscription details could not be refreshed. Check again or manage your subscription.',{exact:true})).toBeVisible();
+  await started(page);await idle(page);
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentPlanNotice)).toBe('offline');
+  expect(await page.evaluate(()=>(window as any).planController.getSnapshot().residentSubscription)).toEqual({kind:'unavailable',reason:'outage'});
+  await expect(page.getByRole('region',{name:'Eliza Cloud plan notice',exact:true})).toHaveCount(0);
+  await expect(signInPage(page)).toHaveCount(0);
   expect(await configured(page)).toBe(0);
  });
  test('a billing outage after a recent verified plan keeps the agent',async({page})=>{
