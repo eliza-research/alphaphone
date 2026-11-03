@@ -271,7 +271,9 @@ let planManagementReturn = false;
  * account only serves optional services (a failed read detaches it), so the provider stands for it. */
 function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.cloudAccount?.credentialId??null),residentEnvironment()]);}
 /** The plan check scope when the network went away. Once it is back, the next return in that same
- * scope checks inside the once-a-minute limit, once. */
+ * scope checks inside the once-a-minute limit, once. A new admission retires it (connectResident,
+ * residentSignedIn): every Cloud sign-in, sign-out and provider change runs one, and a change of
+ * Cloud environment reloads Alpha. */
 let networkLostUnder: string | null = null;
 /** The plan check a return started (recheckResidentPlan); while it runs it answers the network's return. */
 let planRecheck: AbortController | null = null;
@@ -673,6 +675,8 @@ function showPostSignInSetup() {
  * and a key Cloud refused right after issuing it is removed rather than kept for a retry that cannot work.
  */
 async function residentSignedIn(signal: AbortSignal, unconfirmed: boolean, expected?:{credentialId:string;credentialReference?:string}) {
+  // A sign-in is a new admission (its plan read below), as in connectResident.
+  networkLostUnder=null;
   const assertExpected=async()=>{if(!expected)return;const current=await cloudCredentialStore.read(residentEnvironment());signal.throwIfAborted();if(current?.credentialId!==expected.credentialId||current?.credentialReference!==expected.credentialReference)throw new CloudProtocolError('account-changed');};
   await assertExpected();
   const issued = (await cloudCredentialStore.read(residentEnvironment()))?.credentialId;
@@ -1207,6 +1211,8 @@ async function restoreOwnProviderCloudServices():Promise<void>{
 }
 /** `admitted`: the admission a sign-in just made for this start (residentSignedIn); otherwise it is read here. */
 async function connectResident(signal: AbortSignal, admitted?: ResidentAdmission) {
+  // A new admission retires a network return still waiting from an earlier one.
+  networkLostUnder=null;
   let admission:ResidentAdmission|null=null,bound:Awaited<ReturnType<typeof applyResidentBinding>>|null=null;
   if(isAndroid||browserCloudResidentEnabled){const status=await localProviderStatus();signal.throwIfAborted();update({providerStatus:status});}
   const ownProvider=ownProviderSelected();

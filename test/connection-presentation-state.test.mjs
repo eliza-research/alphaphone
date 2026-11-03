@@ -365,6 +365,53 @@ test('a network return held back by a reply, an edit or other work checks on the
     box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${name}: once`);
   }
 });
+// The network's return belongs to the admission it was lost under (Root, #743). Every Cloud sign-in,
+// sign-out and provider change runs a new admission (connectResident, after residentSignedIn for a
+// sign-in), which retires a return still waiting, so an A→B→A change never spends it on a second
+// plan read. Both run here from source up to their first read, which never settles.
+const admissionCode = stripTypeScriptTypes(section('async function residentSignedIn(', '/** The key is stored;') + section('async function connectResident(', 'async function connectCloud('), {mode: 'transform'});
+function admissions(box) {
+  vm.runInContext(admissionCode, box);
+  Object.assign(box, {isAndroid: true, localProviderStatus: () => new Promise(() => {}), cloudCredentialStore: {read: () => new Promise(() => {})}});
+  return {connect: () => void box.connectResident(new AbortController().signal), signIn: () => void box.residentSignedIn(new AbortController().signal, false)};
+}
+// The network comes back while a busy step holds the check, or while Alpha is hidden; `release` ends
+// that and is the next return.
+const waits = {
+  busy: {hold: box => { box.fire('visibilitychange'); box.fire('offline'); box.state.busy = true; box.fire('online'); }, release: box => { box.state.busy = false; box.fire('visibilitychange'); }},
+  hidden: {hold: box => { box.fire('visibilitychange'); box.fire('offline'); box.fire('visibilitychange', true); box.fire('online', true); }, release: box => box.fire('visibilitychange')},
+};
+const ownProvider = {selected: true, provider: 'cerebras'};
+test('a Cloud account changed and changed back while a network return waits does not spend it', () => {
+  for (const [how, wait] of Object.entries(waits)) for (const provider of [undefined, ownProvider]) {
+    const box = returnFixture(), name = `${how}, ${provider ? 'own provider' : 'Cloud'}`, {connect, signIn} = admissions(box);
+    box.state.providerStatus = provider;
+    wait.hold(box); assert.equal(box.rechecks, 1, name);
+    for (const credentialId of ['credential-2', 'credential-1']) { signIn(); box.state.cloudAccount = {credentialId}; connect(); }
+    wait.release(box); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
+    box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks`);
+  }
+});
+test('a sign-out and sign-in, a provider round trip or a Cloud environment round trip retires a waiting network return', () => {
+  for (const [name, change] of Object.entries({
+    'sign-out, then sign-in again': (box, {connect, signIn}) => { box.state.cloudAccount = null; connect(); signIn(); box.state.cloudAccount = {credentialId: 'credential-1'}; connect(); },
+    'Cloud, own provider, Cloud': (box, {connect}) => { box.state.providerStatus = ownProvider; connect(); box.state.providerStatus = {selected: false}; connect(); },
+    // setResidentQa reloads Alpha, which starts the agent again.
+    'Cloud environment and back': (box, {connect}) => { box.environment = 'staging'; connect(); box.environment = 'production'; connect(); },
+  })) for (const [how, wait] of Object.entries(waits)) {
+    const box = returnFixture(), entries = admissions(box);
+    wait.hold(box); change(box, entries); wait.release(box);
+    assert.equal(box.rechecks, 1, `${name}, ${how}`);
+  }
+});
+test('a fresh start, restart, rebind, redeem or sign-in retires a waiting network return: no second plan read', () => {
+  for (const admission of ['connect', 'signIn']) for (const [how, wait] of Object.entries(waits)) {
+    const box = returnFixture(), entries = admissions(box), name = `${admission}, ${how}`;
+    wait.hold(box); entries[admission](); wait.release(box); box.fire('pageshow');
+    assert.equal(box.rechecks, 1, name);
+    box.fire('offline'); box.fire('online'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks once`);
+  }
+});
 // The check the network's return allows may still not reach Cloud. Nothing unverified is admitted,
 // recorded or shown as a valid plan; there is no sign-in or rebind. An identity read that fails shows
 // no notice; a plan read that fails after it keeps the plan notice (Root, #743: that contract is
