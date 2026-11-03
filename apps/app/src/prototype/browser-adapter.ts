@@ -3,7 +3,7 @@ import {parseBrowserAddressInput} from "../../../../.eliza/client-features/plugi
 import {browsingSnapshot, restoreBrowsing, DEFAULT_BROWSING_LIMITS} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/browsing-session.ts";
 import {BrowserTabSession, newBrowserTabId as newTabId, type BrowserFindResult, type BrowserFullscreen, type BrowserTabEvent, type BrowserTabNotice, type BrowserTabOpened, type BrowserTabState} from "../../../../.eliza/client-features/plugins/plugin-native-browser-surface/src/tab-host.ts";
 import { registerPlugin } from '../platform-plugins';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorException, ExceptionCode } from '@capacitor/core';
 import { DailyApps } from '../daily';
 import { createNativeReadingVoice } from '../runtime/native-reading-voice';
 import {reviewContentQuestion} from '../browser/content-question';
@@ -43,7 +43,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   const tabOf = (id: string) => state()?.tabs?.find((tab: Bag) => tab.id === id);
   const isPrivate = (id: string) => !!tabOf(id)?.priv;
   let bookmarkRead: Promise<void> | undefined, bookmarkQueue = Promise.resolve();
-  let bookmarkHydrated = false, bookmarkRefreshQueued = false, initialBookmarkRead = false, browserWasActive = false;
+  let bookmarkHydrated = false, bookmarkRefreshQueued = false, bookmarkRefreshBackground = false, initialBookmarkRead = false, browserWasActive = false;
   // Browser-owned bookmark storage reports damaged saved data by failing to
   // read. The product then offers its exact-byte recovery dialog in Bookmarks.
   let bookmarkRecovery = false;
@@ -71,10 +71,17 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     }).finally(() => { bookmarkRead = undefined; });
     return bookmarkRead;
   }
-  function refreshBookmarks() {
-    if (disposed || bookmarkRefreshQueued) return;
+  const unimplemented = (error: unknown) => error instanceof CapacitorException && error.code === ExceptionCode.Unimplemented;
+  /** `background`: the first read at startup, outside Browser. A host without the Browser plugin
+   * then says nothing over whatever screen is open (sign-in, setup, Settings); opening Browser
+   * reads again and reports it there. */
+  function refreshBookmarks(background = false) {
+    if (disposed) return;
+    // Opening Browser promotes an already-coalesced startup read to foreground interest.
+    if (bookmarkRefreshQueued) { if (!background) bookmarkRefreshBackground = false; return; }
+    bookmarkRefreshBackground = background;
     bookmarkRefreshQueued = true;
-    bookmarkQueue = bookmarkQueue.then(() => disposed ? undefined : loadBookmarks()).catch(report).finally(() => { bookmarkRefreshQueued = false; });
+    bookmarkQueue = bookmarkQueue.then(() => disposed ? undefined : loadBookmarks()).catch((error: unknown) => { if (!(bookmarkRefreshBackground && shell?.S().view !== 'browser' && unimplemented(error))) report(error); }).finally(() => { bookmarkRefreshQueued = false; });
   }
   function saveBookmark(url: string, saved?: boolean) {
     bookmarkQueue = bookmarkQueue.then(async () => {
@@ -322,7 +329,9 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
       else if (next.visits.length !== s.visits.length) shell.vset('browser', { visits: next.visits });
       sessionHydrated = true;
       lastSaved = JSON.stringify(savedSnapshot());
-    } catch {
+    } catch (error) {
+      // Restore runs at startup, over any screen: a host without the Browser plugin has no saved tabs to report.
+      if (unimplemented(error) && shell?.S().view !== 'browser') return;
       report(new Error('Saved tabs and history could not be opened. They were kept unchanged; Clear browsing data resets them.'));
     }
   }
@@ -404,7 +413,7 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
   const oldRender = Component.prototype.renderVals;
   Component.prototype.renderVals = function(){shell=this;
     const browserActive = this.S().view === 'browser';
-    if (!initialBookmarkRead || (browserActive && !browserWasActive)) { initialBookmarkRead = true; refreshBookmarks(); }
+    if (!initialBookmarkRead || (browserActive && !browserWasActive)) { initialBookmarkRead = true; refreshBookmarks(!browserActive); }
     if (browserActive && !browserWasActive) void readingSupport?.check();
     if (!sessionRead && this.vget('browser')?.tabs) void restoreSession();
     browserWasActive = browserActive;
@@ -511,9 +520,10 @@ export function installPrototypeBrowserAdapter(Component: any, views: Record<str
     shell?.openView(view,view==='calendar'&&browserCalendarScope(shell)?{calendarAuthority:'browser-local'}:undefined);
   };
   window.addEventListener('alpha:browser-open-view', openBrowserView);
-  window.addEventListener('alpha:bookmarks-document-changed',refreshBookmarks);
+  const bookmarksDocumentChanged = () => refreshBookmarks();
+  window.addEventListener('alpha:bookmarks-document-changed',bookmarksDocumentChanged);
   const timer=window.setInterval(update,100);
   const visibility = () => { lastGeometry=''; update(); if (!document.hidden && shell?.S().view === 'browser') refreshBookmarks(); };
   window.addEventListener('resize',update);document.addEventListener('visibilitychange',visibility);
-  return ()=>{window.removeEventListener('alpha:bookmarks-document-changed',refreshBookmarks);window.removeEventListener('alpha:browser-open-view',openBrowserView);stopReading();unsubscribeReading();disposed=true;clearInterval(timer);window.removeEventListener('resize',update);document.removeEventListener('visibilitychange',visibility);void resumeListener?.remove();void listener?.remove();void openedListener?.remove();void closedListener?.remove();void noticeListener?.remove();void findListener?.remove();void fullscreenListener?.remove();window.clearTimeout(findTimer);for(const id of tabs.dispose())void Browser.close({session,id}).catch(()=>{});};
+  return ()=>{window.removeEventListener('alpha:bookmarks-document-changed',bookmarksDocumentChanged);window.removeEventListener('alpha:browser-open-view',openBrowserView);stopReading();unsubscribeReading();disposed=true;clearInterval(timer);window.removeEventListener('resize',update);document.removeEventListener('visibilitychange',visibility);void resumeListener?.remove();void listener?.remove();void openedListener?.remove();void closedListener?.remove();void noticeListener?.remove();void findListener?.remove();void fullscreenListener?.remove();window.clearTimeout(findTimer);for(const id of tabs.dispose())void Browser.close({session,id}).catch(()=>{});};
 }
