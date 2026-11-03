@@ -265,8 +265,14 @@ const PLAN_ADMISSION = 'alpha.connection.plan-admission.v1';
 export const PLAN_RECHECK_INTERVAL_MS = 60_000;
 let lastPlanRecheck = -Infinity, lastRefusalRecheck = -Infinity;
 /** The next return checks the plan inside the once-a-minute limit: set by a return from plan
- * management, a billing refusal during a turn, or the network coming back. */
+ * management or a billing refusal during a turn. */
 let planManagementReturn = false;
+/** The owner, Cloud environment and provider a plan check is for. With its own provider the Cloud
+ * account only serves optional services (a failed read detaches it), so the provider stands for it. */
+function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.cloudAccount?.credentialId??null),residentEnvironment()]);}
+/** The plan check scope when the network went away. Once it is back, the next return in that same
+ * scope checks inside the once-a-minute limit, once. */
+let networkLostUnder: string | null = null;
 type PlanAdmissionRecord = ResidentPlanAdmissionRecord<CloudEnvironment>;
 /** The stored record, parsed by the shared controller's rules; installed data keeps its key. */
 function readPlanAdmission(): PlanAdmissionRecord | null {
@@ -2195,11 +2201,12 @@ export const connectionController = {
   openProviderSettings(){update({open:true,automaticRestore:false,purpose:'provider',error:'',message:''});void connectionController.refreshProviderStatus();},
   open() { update({ open: true, automaticRestore:false, purpose:'agent', error: state.kind === 'recovering' ? state.error : '' }); },
   /** Window online/offline events. Offline retracts readiness and refuses sends to the resident;
-   * local apps are untouched. Coming back online only allows sends again. */
+   * local apps are untouched. Coming back online only allows sends again; the next return may check
+   * the plan inside the once-a-minute limit (recheckPlanOnReturn). */
   networkChanged(online: boolean) {
     if (online === !state.inferenceOffline) return;
     update({ inferenceOffline: !online });
-    if (!online) retractReadiness();
+    if (!online) { networkLostUnder = planCheckScope(); retractReadiness(); }
   },
   openCloudAccount(){
     update({open:true,automaticRestore:false,purpose:'cloud-account',membershipDismissed:false,message:'',error:''});
@@ -2702,12 +2709,19 @@ export const connectionController = {
     return redeemed;
   },
   /** Checks the plan again after the owner returns from Eliza Cloud (resume or visibility), at most
-   * once a minute unless planManagementReturn lifts the limit. */
+   * once a minute unless planManagementReturn lifts the limit, or the network came back in the same
+   * plan check scope since the last return. */
   recheckPlanOnReturn() {
+    // The network's return lifts the limit for this return only. Work already running (a plan
+    // check, a Cloud services read or a connection step) answers it.
+    const networkReturned=!state.inferenceOffline&&!ownCloudServiceRestore&&networkLostUnder===planCheckScope();
+    if(!state.inferenceOffline)networkLostUnder=null;
     if(!residentCloudFlow()||operation||sending||state.busy||state.residentRecoveryReason)return;
     const now=Date.now();
-    if(!planManagementReturn&&now-lastPlanRecheck<PLAN_RECHECK_INTERVAL_MS)return;
+    if(!planManagementReturn&&!networkReturned&&now-lastPlanRecheck<PLAN_RECHECK_INTERVAL_MS)return;
     planManagementReturn=false;lastPlanRecheck=now;
+    // Alpha started with no network: this check's scope is the one the network's return is for.
+    if(state.inferenceOffline)networkLostUnder??=planCheckScope();
     if(ownProviderSelected()){void restoreOwnProviderCloudServices();return;}
     // Without bound Cloud inference (no plan, offline, signed out) or without a running agent, the
     // account and plan are read again; the agent is rebound or restarted only when that changes.
@@ -3166,9 +3180,10 @@ export function ConnectionChooser() {
   useEffect(() => { void connectionController.initialize(); }, []);
   useEffect(()=>{const offline=()=>connectionController.networkChanged(false),online=()=>connectionController.networkChanged(true);window.addEventListener('offline',offline);window.addEventListener('online',online);return()=>{window.removeEventListener('offline',offline);window.removeEventListener('online',online);};},[]);
   // Plan state is checked again when the owner returns (for example from Eliza Cloud's plan page).
-  // The network coming back lifts the once-a-minute limit for the next check: at once while Alpha
-  // is shown, else when the owner comes back to it (Wi-Fi and Airplane mode open Android Settings).
-  useEffect(()=>{const visible=(event:Event)=>{if(event.type==='online')planManagementReturn=true;if(!document.hidden){if(service)void refreshMembershipBalance();if(residentCloudFlow())connectionController.recheckPlanOnReturn();}};document.addEventListener('visibilitychange',visible);window.addEventListener('pageshow',visible);window.addEventListener('online',visible);return()=>{document.removeEventListener('visibilitychange',visible);window.removeEventListener('pageshow',visible);window.removeEventListener('online',visible);};},[]);
+  // The network coming back (networkChanged above runs first) lifts the once-a-minute limit for the
+  // next check: at once while Alpha is shown, else when the owner comes back to it (Wi-Fi and
+  // Airplane mode open Android Settings).
+  useEffect(()=>{const visible=()=>{if(!document.hidden){if(service)void refreshMembershipBalance();if(residentCloudFlow())connectionController.recheckPlanOnReturn();}};document.addEventListener('visibilitychange',visible);window.addEventListener('pageshow',visible);window.addEventListener('online',visible);return()=>{document.removeEventListener('visibilitychange',visible);window.removeEventListener('pageshow',visible);window.removeEventListener('online',visible);};},[]);
   useEffect(()=>{
     if(isAndroid)return;
     const changed=(event:StorageEvent)=>{
