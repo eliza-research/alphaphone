@@ -14,7 +14,7 @@ test.beforeEach(async({page})=>{await page.route('**/src/build-flags.ts*',route=
 const voiceFailureCases=new Set([
  'API dictation and assistant stay distinct: draft editing never sends, voice conversation submits',
  'API interruptSpeech preserves listening; Mute controls capture with pressed state',
- 'API dictation recovery: without an echo canceller, speech during playback never interrupts (input held); a lost Transcribe capture can start again',
+ 'API dictation recovery: without an echo canceller, speech during playback never interrupts; a lost Transcribe capture can start again',
 ]);
 test.afterEach(async({page},info)=>{if(info.status!==info.expectedStatus&&voiceFailureCases.has(info.title))await attachVoiceFailureMetadata(page,info);});
 async function captureApi(page:Page){
