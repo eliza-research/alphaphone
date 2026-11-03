@@ -200,29 +200,44 @@ test('a resident send with a network binds its conversation as before', async ()
   assert.equal(f.context.sending, null);
 });
 // Owner, 2026-11-03: a refused composer send gets its text back with no toast; a refusal that
-// carries its own reason, or a send from outside the composer, still says so.
-const refusalEnd = "else if(!fromComposer)this.toast('Not sent.');";
-const refusalToast = stripTypeScriptTypes(adapter.slice(adapter.indexOf('if(e instanceof NotDispatched)this.toast(message);'), adapter.indexOf(refusalEnd) + refusalEnd.length), {mode: 'transform'});
+// carries its own reason, or a send from outside the composer, still says so. The real statement
+// runs, including the preview gate read before the held send is released.
+const refusalStart = adapter.indexOf('if(this.live){', adapter.indexOf('// Nothing reached the agent: put the text back'));
+const refusal = stripTypeScriptTypes(adapter.slice(refusalStart, adapter.indexOf('\n        else if(fromComposer)this.composerDraft?.release();', refusalStart)), {mode: 'transform'});
 class NotDispatched extends Error {}
 class AlphaClientError extends Error { constructor(code, message) { super(message); this.code = code; } }
-const toastsFor = (e, fromComposer = true) => {
-  const toasts = [];
-  vm.runInNewContext(`(function(){${refusalToast}})`, {e, message: e.message, fromComposer, NotDispatched, AlphaClientError}).call({toast: text => toasts.push(text)});
+const toastsFor = (e, {fromComposer = true, preview = false, holding = true} = {}) => {
+  const toasts = [], composerDraft = {holding};
+  const shell = {live: true, composerDraft, setState() {}, toast: text => toasts.push(text)};
+  vm.runInNewContext(`(function(){${refusal}})`, {e, message: e.message, fromComposer, privateLocalPreviewEnabled: preview, NotDispatched, AlphaClientError, userId: 'user-1', heldKey: 'one', heldText: 'Words', reviewedSource: null, releaseComposerSend: () => { composerDraft.holding = false; }}).call(shell);
   return toasts;
 };
-test('a composer send refused before dispatch (offline, IPC reject, busy, starting) shows no toast', () => {
-  for (const refusal of [
+const reasonRefusals = [
+  [Object.assign(new AlphaClientError('transport-failed', 'The agent is busy and did not accept this message. Wait, then send it again.'), {refusedBeforeTurn: true}), 'Not sent. The agent is busy and did not accept this message. Wait, then send it again.'],
+  [new AlphaClientError('unconfigured', 'AI replies aren’t available right now.'), 'Not sent. AI replies aren’t available right now.'],
+  [new AlphaClientError('sensitive', 'Agent observation is paused on this screen.'), 'Not sent. Agent observation is paused on this screen.'],
+  [new NotDispatched('Agent changed. Review this message again.'), 'Agent changed. Review this message again.'],
+];
+test('a composer send refused before dispatch (offline, IPC reject, busy) shows no toast', () => {
+  for (const preview of [false, true]) for (const refusal of [
     Object.assign(new AlphaClientError('transport-failed', 'The agent did not accept this message. Check its connection before trying again.'), {notDispatched: true}),
     new Error('Wait for the current reply before sending another message.'),
-    new Error('Your agent is starting.'),
-  ]) assert.deepEqual(toastsFor(refusal), [], refusal.message);
+  ]) assert.deepEqual(toastsFor(refusal, {preview}), [], refusal.message);
   assert.doesNotMatch(adapter, /Not sent\. Your message is back in the composer/);
 });
 test('a refusal with its own reason, and a send from outside the composer, still show their toast', () => {
-  assert.deepEqual(toastsFor(Object.assign(new AlphaClientError('transport-failed', 'The agent is busy and did not accept this message. Wait, then send it again.'), {refusedBeforeTurn: true})), ['Not sent. The agent is busy and did not accept this message. Wait, then send it again.']);
-  assert.deepEqual(toastsFor(new AlphaClientError('unconfigured', 'AI replies aren’t available right now.')), ['Not sent. AI replies aren’t available right now.']);
-  assert.deepEqual(toastsFor(new NotDispatched('Agent changed. Review this message again.')), ['Agent changed. Review this message again.']);
-  assert.deepEqual(toastsFor(new Error('Wait for the current reply before sending another message.'), false), ['Not sent.']);
+  for (const [refusal, toast] of reasonRefusals) {
+    assert.deepEqual(toastsFor(refusal), [toast]);
+    assert.deepEqual(toastsFor(refusal, {fromComposer: false, preview: true}), [toast]);
+  }
+  assert.deepEqual(toastsFor(new Error('Wait for the current reply before sending another message.'), {fromComposer: false}), ['Not sent.']);
+  assert.deepEqual(toastsFor(new Error('Wait for the current reply before sending another message.'), {fromComposer: false, preview: true}), ['Not sent.']);
+});
+test('the private local preview keeps a held composer send\'s refusal out of toasts, as before', () => {
+  for (const [refusal, toast] of reasonRefusals) {
+    assert.deepEqual(toastsFor(refusal, {preview: true}), [], refusal.message);
+    assert.deepEqual(toastsFor(refusal, {preview: true, holding: false}), [toast], 'a send no longer held still says why');
+  }
 });
 // Owner, 2026-11-03: Cloud being unreachable shows no banner; a plan that is needed still does.
 const planNoticeLine = section('    const notice=residentCloudFlow()&&snapshot.session', '\n');
@@ -238,29 +253,38 @@ test('a needed plan still shows its notice beside the running agent', () => {
   assert.equal(planNotice({session: null, residentPlanNotice: 'needs-plan', cloudAccount: {}}), null);
   assert.equal(planNotice({session: {}, residentPlanNotice: null, cloudAccount: {}}), null);
 });
-// With no Try again, the network's return is what brings AI back: it skips the once-a-minute limit.
+// With no Try again, the network's return is what brings AI back: it lifts the once-a-minute limit
+// for the next plan check, at once while Alpha is shown or when the owner comes back to it.
 const recheckStart = source.indexOf('  recheckPlanOnReturn(');
-const recheckMethod = stripTypeScriptTypes(`const controller={${source.slice(recheckStart, source.indexOf('  /**', recheckStart))}};globalThis.check=controller.recheckPlanOnReturn;`, {mode: 'transform'});
-function recheckFixture() {
-  const box = {residentCloudFlow: () => true, operation: null, sending: null, state: {busy: false, session: {}}, Date, planManagementReturn: false, lastPlanRecheck: -Infinity, PLAN_RECHECK_INTERVAL_MS: 60_000, ownProviderSelected: () => false, residentBinding: 'kept', rechecks: 0};
+const recheckMethod = stripTypeScriptTypes(`globalThis.connectionController={${source.slice(recheckStart, source.indexOf('  /**', recheckStart))}};`, {mode: 'transform'});
+const returnEffect = stripTypeScriptTypes(section('  useEffect(()=>{const visible=', '\n'), {mode: 'transform'});
+function returnFixture() {
+  const listeners = {}, target = {addEventListener: (type, listener) => { listeners[type] = listener; }, removeEventListener() {}};
+  const box = {residentCloudFlow: () => true, operation: null, sending: null, state: {busy: false, session: {}}, Date, planManagementReturn: false, lastPlanRecheck: -Infinity, PLAN_RECHECK_INTERVAL_MS: 60_000, ownProviderSelected: () => false, residentBinding: 'kept', rechecks: 0, service: null, useEffect: run => run(), document: {...target, hidden: false}, window: target};
   box.recheckResidentPlan = () => { box.rechecks++; };
-  vm.createContext(box); vm.runInContext(recheckMethod, box);
+  vm.createContext(box); vm.runInContext(recheckMethod, box); vm.runInContext(returnEffect, box);
+  box.fire = (type, hidden = false) => { box.document.hidden = hidden; listeners[type]({type}); };
   return box;
 }
-test('the network coming back checks the plan at once, inside the once-a-minute limit', () => {
-  const box = recheckFixture();
-  box.check(); assert.equal(box.rechecks, 1);
-  box.check(); assert.equal(box.rechecks, 1, 'a second return within a minute is still throttled');
-  box.check(true); assert.equal(box.rechecks, 2);
-  box.state.busy = true; box.check(true); assert.equal(box.rechecks, 2, 'busy work is never interrupted');
+test('returns to Alpha with no network change check the plan at most once a minute', () => {
+  const box = returnFixture();
+  box.fire('visibilitychange'); assert.equal(box.rechecks, 1);
+  box.fire('pageshow'); box.fire('visibilitychange', true); box.fire('visibilitychange'); box.fire('pageshow');
+  assert.equal(box.rechecks, 1);
 });
-test('only the online event bypasses the limit; visibility and page-show returns stay throttled', () => {
-  const effect = stripTypeScriptTypes(section('  useEffect(()=>{const visible=', '\n'), {mode: 'transform'});
-  const listeners = {}, calls = [];
-  const target = {addEventListener: (type, listener) => { listeners[type] = listener; }, removeEventListener() {}};
-  vm.runInNewContext(effect, {useEffect: run => run(), document: {...target, hidden: false}, window: target, service: null, residentCloudFlow: () => true, connectionController: {recheckPlanOnReturn: networkReturned => calls.push(networkReturned)}});
-  for (const type of ['online', 'visibilitychange', 'pageshow']) listeners[type]({type});
-  assert.deepEqual(calls, [true, false, false]);
+test('the network coming back while Alpha is shown checks the plan at once, inside the limit', () => {
+  const box = returnFixture();
+  box.fire('visibilitychange'); box.fire('online'); assert.equal(box.rechecks, 2);
+  box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'the lifted limit is used once');
+  box.state.busy = true; box.fire('online'); assert.equal(box.rechecks, 2, 'busy work is never interrupted');
+  box.state.busy = false; box.fire('visibilitychange'); assert.equal(box.rechecks, 3, 'the check held back by busy work runs on the next return');
+});
+test('the network coming back while Alpha is in the background is checked when the owner comes back, inside the limit', () => {
+  const box = returnFixture();
+  box.fire('visibilitychange'); box.fire('visibilitychange', true);
+  box.fire('online', true); assert.equal(box.rechecks, 1, 'nothing is checked while Alpha is hidden');
+  box.fire('visibilitychange'); assert.equal(box.rechecks, 2);
+  box.fire('pageshow'); assert.equal(box.rechecks, 2);
 });
 test('unknown balance does not bypass missing, expired or busy conversation guards', async () => {
   for (const balance of ['checking', 'unavailable', undefined]) {

@@ -531,7 +531,7 @@ test.describe('outages and offline use',()=>{
   expect(await configured(page)).toBe(0);
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('offline-recent-plan.png'),animations:'disabled'});
  });
- test('the network coming back binds AI at once, with no Try again and inside the once-a-minute limit',async({page})=>{
+ for(const background of [false,true])test(`the network coming back${background?' while Alpha is in the background binds AI on the next return':' binds AI at once'}, with no Try again and inside the once-a-minute limit`,async({page})=>{
   const recent=JSON.stringify({version:1,environment:'production',credentialId:CREDENTIAL,userId:USER,organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-3600_000,endsAt:null});
   await boot(page,{...await entitlements(),identity:'offline',storage:{'alpha.connection.plan-admission.v1':recent}});
   await started(page);await idle(page);
@@ -549,7 +549,12 @@ test.describe('outages and offline use',()=>{
   expect(await configured(page)).toBe(0);
   // The network returns: the plan is read again at once and Cloud AI is bound, with no tap.
   await fixture(page,{identity:'ok'});
-  await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+  if(background){
+   // Wi-Fi and Airplane mode open Android Settings, so the network often returns while Alpha is hidden.
+   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});window.dispatchEvent(new Event('online'));});await idle(page);
+   expect(await identityReads()).toBe(before+1);
+   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});document.dispatchEvent(new Event('visibilitychange'));});
+  }else await page.evaluate(()=>window.dispatchEvent(new Event('online')));
   // Within the minute only the online event could have read Cloud again (the rebind reads it once more).
   await admitted(page);
   expect(await identityReads()).toBeGreaterThan(before+1);
