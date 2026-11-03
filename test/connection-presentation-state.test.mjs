@@ -341,6 +341,16 @@ test('a check already running when the network comes back answers it; no second 
   own.fire('offline'); own.fire('visibilitychange'); own.fire('online'); assert.equal(own.rechecks, 1);
   own.ownCloudServiceRestore = null; own.fire('pageshow'); assert.equal(own.rechecks, 1);
 });
+test('a return while still offline, with a check running, leaves the network return its own check', () => {
+  const cloud = returnFixture();
+  cloud.recheckResidentPlan = () => { cloud.rechecks++; cloud.operation = cloud.planRecheck = {}; };
+  cloud.fire('offline'); cloud.fire('visibilitychange'); cloud.fire('pageshow'); assert.equal(cloud.rechecks, 1);
+  cloud.operation = cloud.planRecheck = null; cloud.fire('online'); assert.equal(cloud.rechecks, 2);
+  const own = returnFixture(); own.state.providerStatus = {selected: true, provider: 'cerebras'};
+  own.restoreOwnProviderCloudServices = () => { own.rechecks++; own.ownCloudServiceRestore = {}; };
+  own.fire('offline'); own.fire('visibilitychange'); own.fire('pageshow'); assert.equal(own.rechecks, 1);
+  own.ownCloudServiceRestore = null; own.fire('online'); assert.equal(own.rechecks, 2);
+});
 test('a network return held back by a reply, an edit or other work checks on the next return, once', () => {
   for (const [name, hold] of Object.entries({
     reply: (box, on) => { box.sending = on ? {} : null; },
