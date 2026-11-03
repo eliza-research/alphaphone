@@ -366,15 +366,20 @@ test('a network return held back by a reply, an edit or other work checks on the
   }
 });
 // The network's return belongs to the admission it was lost under (Root, #743). Every Cloud sign-in,
-// sign-out and provider change runs a new admission (connectResident, after residentSignedIn for a
-// sign-in), which retires a return still waiting, so an A→B→A change never spends it on a second
-// plan read. Both run here from source up to their first read, which never settles.
+// sign-out and provider change runs a new admission (residentSignedIn, then its own start of the
+// agent, connectResident with that admission; otherwise connectResident), which retires a return
+// still waiting, so an A→B→A change never spends it on a second plan read. An admission that runs
+// with no network records its own. Both run here from source up to their first Cloud or agent read,
+// which never settles; the provider read answers with the provider status shown.
 const admissionCode = stripTypeScriptTypes(section('async function residentSignedIn(', '/** The key is stored;') + section('async function connectResident(', 'async function connectCloud('), {mode: 'transform'});
+const signInAdmission = {binding: 'unbound'};
 function admissions(box) {
   vm.runInContext(admissionCode, box);
-  Object.assign(box, {isAndroid: true, localProviderStatus: () => new Promise(() => {}), cloudCredentialStore: {read: () => new Promise(() => {})}});
-  return {connect: () => void box.connectResident(new AbortController().signal), signIn: () => void box.residentSignedIn(new AbortController().signal, false)};
+  const pending = () => new Promise(() => {}), signal = new AbortController().signal;
+  Object.assign(box, {isAndroid: true, localProviderStatus: async () => box.state.providerStatus, stopEntitlementRefresh() {}, testMocksEnabled: false, admitCloudResident: pending, applyResidentBinding: pending, localAgentPackaged: pending, cloudCredentialStore: {read: pending}});
+  return {connect: admitted => void box.connectResident(signal, admitted), signIn: () => void box.residentSignedIn(signal, false)};
 }
+const settled = () => new Promise(resolve => setImmediate(resolve));
 // The network comes back while a busy step holds the check, or while Alpha is hidden; `release` ends
 // that and is the next return.
 const waits = {
@@ -382,35 +387,73 @@ const waits = {
   hidden: {hold: box => { box.fire('visibilitychange'); box.fire('offline'); box.fire('visibilitychange', true); box.fire('online', true); }, release: box => box.fire('visibilitychange')},
 };
 const ownProvider = {selected: true, provider: 'cerebras'};
-test('a Cloud account changed and changed back while a network return waits does not spend it', () => {
+test('a Cloud account changed and changed back while a network return waits does not spend it', async () => {
   for (const [how, wait] of Object.entries(waits)) for (const provider of [undefined, ownProvider]) {
     const box = returnFixture(), name = `${how}, ${provider ? 'own provider' : 'Cloud'}`, {connect, signIn} = admissions(box);
     box.state.providerStatus = provider;
     wait.hold(box); assert.equal(box.rechecks, 1, name);
-    for (const credentialId of ['credential-2', 'credential-1']) { signIn(); box.state.cloudAccount = {credentialId}; connect(); }
-    wait.release(box); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
+    for (const credentialId of ['credential-2', 'credential-1']) { signIn(); box.state.cloudAccount = {credentialId}; connect(signInAdmission); }
+    await settled(); wait.release(box); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
     box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks`);
   }
 });
-test('a sign-out and sign-in, a provider round trip or a Cloud environment round trip retires a waiting network return', () => {
+test('a sign-out and sign-in, a provider round trip or a Cloud environment round trip retires a waiting network return', async () => {
   for (const [name, change] of Object.entries({
-    'sign-out, then sign-in again': (box, {connect, signIn}) => { box.state.cloudAccount = null; connect(); signIn(); box.state.cloudAccount = {credentialId: 'credential-1'}; connect(); },
+    'sign-out, then sign-in again': (box, {connect, signIn}) => { box.state.cloudAccount = null; connect(); signIn(); box.state.cloudAccount = {credentialId: 'credential-1'}; connect(signInAdmission); },
     'Cloud, own provider, Cloud': (box, {connect}) => { box.state.providerStatus = ownProvider; connect(); box.state.providerStatus = {selected: false}; connect(); },
     // setResidentQa reloads Alpha, which starts the agent again.
     'Cloud environment and back': (box, {connect}) => { box.environment = 'staging'; connect(); box.environment = 'production'; connect(); },
   })) for (const [how, wait] of Object.entries(waits)) {
     const box = returnFixture(), entries = admissions(box);
-    wait.hold(box); change(box, entries); wait.release(box);
+    wait.hold(box); change(box, entries); await settled(); wait.release(box);
     assert.equal(box.rechecks, 1, `${name}, ${how}`);
   }
 });
-test('a fresh start, restart, rebind, redeem or sign-in retires a waiting network return: no second plan read', () => {
-  for (const admission of ['connect', 'signIn']) for (const [how, wait] of Object.entries(waits)) {
+test('a fresh start, restart, rebind, redeem or sign-in retires a waiting network return: no second plan read', async () => {
+  for (const [admission, run] of Object.entries({connect: ({connect}) => connect(), signIn: ({connect, signIn}) => { signIn(); connect(signInAdmission); }})) for (const [how, wait] of Object.entries(waits)) {
     const box = returnFixture(), entries = admissions(box), name = `${admission}, ${how}`;
-    wait.hold(box); entries[admission](); wait.release(box); box.fire('pageshow');
+    wait.hold(box); run(entries); await settled(); wait.release(box); box.fire('pageshow');
     assert.equal(box.rechecks, 1, name);
     box.fire('offline'); box.fire('online'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks once`);
   }
+});
+// The network coming back while Alpha is shown, or while hidden and then when the owner comes back.
+const networkReturns = {shown: box => box.fire('online'), hidden: box => { box.fire('visibilitychange', true); box.fire('online', true); box.fire('visibilitychange'); }};
+test('the network lost during a sign-in is that sign-in\'s own: its return checks at once, once', async () => {
+  // It may come back before the sign-in starts the agent, while the sign-in holds the check.
+  for (const during of [false, true]) for (const [how, back] of Object.entries(networkReturns)) for (const provider of [undefined, ownProvider]) {
+    const box = returnFixture(), {connect, signIn} = admissions(box), name = `back ${during ? 'during the sign-in' : 'after it'}, ${how}, ${provider ? 'own provider' : 'Cloud'}`;
+    box.state.providerStatus = provider;
+    box.fire('visibilitychange'); signIn(); box.fire('offline');
+    if (during) { box.state.busy = true; box.fire('online'); }
+    connect(signInAdmission); await settled(); box.state.busy = false;
+    back(box); assert.equal(box.rechecks, 2, name);
+    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${name}: once`);
+  }
+});
+test('an admission that runs with no network leaves the network\'s return its own check, once', async () => {
+  for (const [admission, run] of Object.entries({
+    'start, restart or rebind': ({connect}) => connect(),
+    'sign-in': ({connect, signIn}) => { signIn(); connect(signInAdmission); },
+  })) for (const [how, back] of Object.entries(networkReturns)) for (const provider of [undefined, ownProvider]) {
+    const box = returnFixture(), entries = admissions(box), name = `${admission}, ${how}, ${provider ? 'own provider' : 'Cloud'}`;
+    box.state.providerStatus = provider;
+    box.fire('visibilitychange'); box.fire('offline'); run(entries); await settled();
+    back(box); assert.equal(box.rechecks, 2, name);
+    box.fire('pageshow'); box.fire('visibilitychange'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: once`);
+  }
+  // Alpha started offline: its start reads its own provider first, and the return made offline
+  // after it is for that scope.
+  const box = returnFixture({offline: true}), {connect} = admissions(box);
+  box.state.cloudAccount = null; box.localProviderStatus = async () => ownProvider;
+  connect(); await settled(); box.fire('visibilitychange'); assert.equal(box.rechecks, 1);
+  box.fire('online'); assert.equal(box.rechecks, 2, 'started offline, own provider');
+});
+test('a return lost while an admission reads an unknown provider keeps that scope: a changed one drops it', async () => {
+  const box = returnFixture(), {connect} = admissions(box);
+  box.localProviderStatus = async () => ownProvider;
+  box.fire('visibilitychange'); connect(); box.fire('offline'); await settled();
+  box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1);
 });
 // The check the network's return allows may still not reach Cloud. Nothing unverified is admitted,
 // recorded or shown as a valid plan; there is no sign-in or rebind. An identity read that fails shows

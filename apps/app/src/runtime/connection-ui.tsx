@@ -271,9 +271,11 @@ let planManagementReturn = false;
  * account only serves optional services (a failed read detaches it), so the provider stands for it. */
 function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.cloudAccount?.credentialId??null),residentEnvironment()]);}
 /** The plan check scope when the network went away. Once it is back, the next return in that same
- * scope checks inside the once-a-minute limit, once. A new admission retires it (connectResident,
- * residentSignedIn): every Cloud sign-in, sign-out and provider change runs one, and a change of
- * Cloud environment reloads Alpha. */
+ * scope checks inside the once-a-minute limit, once. A new admission (connectResident,
+ * residentSignedIn) retires it, and records its own when it runs with no network. A Cloud sign-in,
+ * sign-out or completed provider change runs one, and setResidentQa reloads the tab that makes it;
+ * any other change (a QA environment set in another tab, test mocks only) is caught only when the
+ * scope differs at the return. */
 let networkLostUnder: string | null = null;
 /** The plan check a return started (recheckResidentPlan); while it runs it answers the network's return. */
 let planRecheck: AbortController | null = null;
@@ -1211,10 +1213,14 @@ async function restoreOwnProviderCloudServices():Promise<void>{
 }
 /** `admitted`: the admission a sign-in just made for this start (residentSignedIn); otherwise it is read here. */
 async function connectResident(signal: AbortSignal, admitted?: ResidentAdmission) {
-  // A new admission retires a network return still waiting from an earlier one.
-  networkLostUnder=null;
+  // A new admission retires a network return still waiting from an earlier one; a sign-in's own
+  // start keeps one lost during that sign-in (residentSignedIn retired the earlier one).
+  if(!admitted)networkLostUnder=null;
   let admission:ResidentAdmission|null=null,bound:Awaited<ReturnType<typeof applyResidentBinding>>|null=null;
   if(isAndroid||browserCloudResidentEnabled){const status=await localProviderStatus();signal.throwIfAborted();update({providerStatus:status});}
+  // One that runs with no network cannot read the plan: the network's return checks it, in the scope
+  // this admission runs under. A return lost earlier in it keeps its own scope.
+  if(state.inferenceOffline)networkLostUnder??=planCheckScope();
   const ownProvider=ownProviderSelected();
   // A prior Cloud plan may not rebind a resident now using its own keys.
   if(ownProvider){stopEntitlementRefresh();residentBinding='unbound';}
