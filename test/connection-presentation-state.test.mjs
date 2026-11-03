@@ -535,9 +535,17 @@ for (const [name, offline, before, after, run] of [
 // retry for an unavailable plan): a failed check writes the outage view through onView and never
 // runs connectResident.
 for (const [continuation, changes, run] of [
-  ['the sign-in\'s own admitted start', classChanges, async (box, {connect, signIn}, retire) => { signIn(); await retire(); connect(signInAdmission); await settled(); }],
+  // The sign-in's own follow-up runs from source, from its credential read to its own start with its
+  // admission; admitCloudResident stands in with the patch it writes when admitted with no network.
+  ['the sign-in\'s own follow-up and admitted start', classChanges, async (box, {signIn}, retire) => {
+    let read; Object.assign(box, {cloudCredentialStore: {read: () => new Promise(resolve => { read = resolve; })}, retire() {}, showPostSignInSetup() {}, async bindResidentCloudProvider() {},
+      async admitCloudResident() { box.update({residentPlanNotice: 'offline', residentSubscription: {kind: 'unavailable', reason: 'outage'}, planEndsAt: null}); return signInAdmission; }});
+    signIn(); await retire(); read({credentialId: 'credential-1'}); await settled(); assert.equal(box.state.residentStarting, true);
+  }],
   ['the admission\'s pending provider read completing', classChanges, async (box, {connect}, retire, after) => { let finish; box.localProviderStatus = () => new Promise(resolve => { finish = resolve; }); connect(); await retire(); finish(after); await settled(); }],
+  ['the admission\'s pending provider read completing with the earlier class', classChanges, async (box, {connect}, retire, after, before) => { let finish; box.localProviderStatus = () => new Promise(resolve => { finish = resolve; }); connect(); await retire(); finish(before); await settled(); }],
   ['a same-class public status refresh', classChanges, async (box, {read}, retire, after) => { await retire(); await read({...after}); }],
+  ['a public status refresh back to the earlier class', classChanges, async (box, {read}, retire, after, before) => { await retire(); await read(before); }],
   ['a busy step ending', classChanges, async (box, _, retire) => { await retire(); box.update({busy: true}); box.fire('visibilitychange'); box.update({busy: false}); }],
   ['Alpha hidden, then shown', classChanges, async (box, _, retire) => { await retire(); box.fire('visibilitychange', true); }],
   ['a render update', classChanges, async (box, _, retire) => { await retire(); box.update({message: 'Render update', open: true}); }],
@@ -546,12 +554,17 @@ for (const [continuation, changes, run] of [
     vm.runInContext(stripTypeScriptTypes(section('function detachService()', '\n'), {mode: 'transform'}), box);
     await retire(); box.detachService(); assert.equal(box.state.cloudAccount, null);
   }],
-  ['the admission\'s automatic plan retry failing', classChanges.filter(([, , after]) => after !== ownProvider), async (box, _, retire) => { await retire(); box.update({residentSubscription: {kind: 'unavailable', reason: 'outage'}}); }],
+  // The real onView of the admission's EntitlementRefresher, its account still the current service.
+  ['the admission\'s automatic plan retry failing', classChanges.filter(([, , after]) => after !== ownProvider), async (box, _, retire) => {
+    Object.assign(box, {planAdmission: (await import('../apps/app/src/runtime/subscription-entitlement.ts')).planAdmission, admitted: box.service});
+    const onView = vm.runInContext(stripTypeScriptTypes(`({${section('    onView:next=>{', '\n    onAuthFailure')}}).onView`, {mode: 'transform'}), box);
+    await retire(); onView({kind: 'unavailable', reason: 'outage'}); assert.deepEqual(box.state.residentSubscription, {kind: 'unavailable', reason: 'outage'});
+  }],
 ]) {
   test(`a continuation of the same admission after a status read retired the return with no network records nothing: ${continuation}`, async () => {
     for (const [name, before, after] of changes) {
       const box = returnFixture(), entries = classReads(box, before, after);
-      await run(box, entries, async () => { box.fire('offline'); await entries.read(after); }, after);
+      await run(box, entries, async () => { box.fire('offline'); await entries.read(after); }, after, before);
       box.fire('visibilitychange'); assert.equal(box.rechecks, 1, `${name}: the check with no network`);
       box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
       box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks`);
