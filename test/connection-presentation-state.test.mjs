@@ -484,8 +484,10 @@ test('an admission that runs with no network leaves the network\'s return its ow
 });
 // The network lost while an admission reads a provider of another class (Root, #743): the read
 // retires that return (the real update) and the same admission records no replacement for that
-// offline episode, as when a scope captured unknown differs at the return. A later new admission or
-// offline edge in it records its own, as does an offline admission with nothing captured.
+// offline episode, as when a scope captured unknown differs at the return; nor does a plan check with
+// no network after such a status read. A later new admission in that episode records its own, as do
+// the next offline edge (a new episode) and an offline admission with nothing captured.
+const classChanges = [['unknown, own provider', undefined, ownProvider], ['own provider, Cloud', ownProvider, {selected: false}], ['Cloud, own provider', {selected: false}, ownProvider]];
 function classReads(box, before, after) {
   const entries = admissions(box); statusReads(box);
   Object.assign(box, {browserCloudResidentEnabled: true, localProviderStatus: async () => after});
@@ -495,7 +497,7 @@ function classReads(box, before, after) {
 for (const [admission, run] of Object.entries({
   start: (box, {connect}) => { connect(); box.fire('offline'); },
   'sign-in': (box, {connect, signIn}) => { signIn(); box.fire('offline'); connect(signInAdmission); },
-})) for (const [name, before, after] of [['unknown, own provider', undefined, ownProvider], ['own provider, Cloud', ownProvider, {selected: false}], ['Cloud, own provider', {selected: false}, ownProvider]]) {
+})) for (const [name, before, after] of classChanges) {
   test(`a return lost while an admission reads a changed provider class is not replaced in that offline episode: ${admission}, ${name}`, async () => {
     const box = returnFixture(), entries = classReads(box, before, after);
     box.fire('visibilitychange'); run(box, entries); await settled();
@@ -504,13 +506,23 @@ for (const [admission, run] of Object.entries({
     box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'once');
   });
 }
+test('a plan check with no network after a status read changed the provider class records no network return', async () => {
+  for (const [name, before, after] of classChanges) {
+    const box = returnFixture(), read = statusReads(box);
+    box.state.providerStatus = before;
+    box.fire('offline'); await read(after); box.fire('visibilitychange'); assert.equal(box.rechecks, 1, `${name}: the check with no network`);
+    box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
+    box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks`);
+  }
+});
 for (const [name, offline, before, after, run] of [
   // The rule 6aacec1be made: a new admission that runs offline records its own.
   ['a later fresh admission, still offline', false, ownProvider, {selected: false}, async (box, {connect}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); connect(); await settled(); box.fire('online'); }],
-  ['a new offline edge before the return was seen', false, ownProvider, {selected: false}, async (box, {connect}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); box.fire('online', true); box.fire('offline', true); box.fire('online', true); box.fire('visibilitychange'); }],
+  ['a later sign-in, still offline', false, ownProvider, {selected: false}, async (box, {connect, signIn}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); signIn(); connect(signInAdmission); await settled(); box.fire('online'); }],
+  ['a new offline episode before the return was seen', false, ownProvider, {selected: false}, async (box, {connect}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); box.fire('online', true); box.fire('offline', true); box.fire('online', true); box.fire('visibilitychange'); }],
   ['started offline, unknown, own provider', true, undefined, ownProvider, async (box, {connect}) => { connect(); await settled(); box.fire('visibilitychange'); box.fire('online'); }],
 ]) {
-  test(`in that offline episode a later admission or offline edge, or an offline admission with nothing captured, records its own: ${name}`, async () => {
+  test(`a later admission, a new offline episode or an offline admission with nothing captured records its own: ${name}`, async () => {
     const box = returnFixture({offline}); await run(box, classReads(box, before, after));
     assert.equal(box.rechecks, 2, 'the network return checks');
     box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'once');

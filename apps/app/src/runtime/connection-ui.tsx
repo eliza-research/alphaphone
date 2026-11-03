@@ -275,11 +275,11 @@ function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.c
  * residentSignedIn) retires it, and records its own when it runs with no network. A provider status
  * write that changes the provider class (update) retires a recorded one too, so A→B→A seen by status
  * reads alone cannot spend it. That leaves '' (never a scope, so no check), which ??= and ?? keep:
- * the admission whose provider read changed the class records no replacement, and in that offline
- * episode only a new admission or the next offline edge records one. A Cloud sign-in, sign-out or
- * completed provider change runs an admission, and setResidentQa reloads the tab that makes it; any
- * other change (a QA environment set in another tab, test mocks only) is caught only when the scope
- * differs at the return. */
+ * the admission whose provider read changed the class, and a plan check with no network, record no
+ * replacement; in that offline episode only a later new admission records one, and the next offline
+ * edge starts a new episode. A Cloud sign-in, sign-out or completed provider change runs an
+ * admission, and setResidentQa reloads the tab that makes it; any other change (a QA environment set
+ * in another tab, test mocks only) is caught only when the scope differs at the return. */
 let networkLostUnder: string | null = null;
 /** The plan check a return started (recheckResidentPlan); while it runs it answers the network's return. */
 let planRecheck: AbortController | null = null;
