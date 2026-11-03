@@ -417,6 +417,38 @@ test('a fresh start, restart, rebind, redeem or sign-in retires a waiting networ
     box.fire('offline'); box.fire('online'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks once`);
   }
 });
+// A provider status read outside any admission (Settings, a cancelled key check) runs the real
+// public refreshProviderStatus and update (Root, #743). One that changes the provider class retires
+// a waiting network return, so A→B→A seen by such reads alone never spends it; a same-class read (a
+// failed one included), a busy or render update and an optional Cloud detach keep it.
+function statusReads(box) {
+  Object.assign(box, {isAndroid: false, testMocksEnabled: false, developmentPageSuspended: false, listeners: new Set(), flushConversationEvents() {}, providerStatusGeneration: 0});
+  vm.runInContext(stripTypeScriptTypes(section('function update(', '// P-43: where') + `Object.assign(connectionController,{${section('  async refreshProviderStatus(', '  /** Stops the running agent')}});`, {mode: 'transform'}), box);
+  return status => { box.localProviderStatus = async () => status; return box.connectionController.refreshProviderStatus(); };
+}
+test('a provider class changed and changed back by status reads alone while a network return waits does not spend it', async () => {
+  for (const [name, a, b] of [['own provider, Cloud, own provider', ownProvider, {selected: false}], ['Cloud, own provider, Cloud', {selected: false}, ownProvider]]) for (const [how, wait] of Object.entries(waits)) {
+    const box = returnFixture(), read = statusReads(box), row = `${name}, ${how}`;
+    box.state.providerStatus = a;
+    wait.hold(box); await read(b); await read({...a}); assert.deepEqual(box.state.providerStatus, a, row); wait.release(box);
+    assert.equal(box.rechecks, 1, `${row}: no second plan read`);
+    box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${row}: a later network return checks`);
+  }
+});
+test('same-class status reads, busy or render updates and an optional Cloud detach keep a waiting network return', async () => {
+  for (const [name, provider, keep] of [
+    ['own provider read again', ownProvider, async read => { await read({...ownProvider}); await read({...ownProvider}); }],
+    ['Cloud read again, then a failed read', {selected: false}, async (read, box) => { await read({selected: false}); box.localProviderStatus = async () => { throw Error('unavailable'); }; await box.connectionController.refreshProviderStatus(); assert.equal(box.state.providerStatus, null); }],
+    ['busy and render updates', undefined, (read, box) => { box.update({busy: true}); box.update({message: 'Render update', open: true}); box.update({busy: false}); }],
+    ['Cloud detached with its own provider', ownProvider, (read, box) => { box.update({cloudAccount: null}); }],
+  ]) for (const [how, wait] of Object.entries(waits)) {
+    const box = returnFixture(), read = statusReads(box), row = `${name}, ${how}`;
+    box.state.providerStatus = provider;
+    wait.hold(box); await keep(read, box); wait.release(box);
+    assert.equal(box.rechecks, 2, `${row}: the network return checks`);
+    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${row}: once`);
+  }
+});
 // The network coming back while Alpha is shown, or while hidden and then when the owner comes back.
 const networkReturns = {shown: box => box.fire('online'), hidden: box => { box.fire('visibilitychange', true); box.fire('online', true); box.fire('visibilitychange'); }};
 test('the network lost during a sign-in is that sign-in\'s own: its return checks at once, once', async () => {
