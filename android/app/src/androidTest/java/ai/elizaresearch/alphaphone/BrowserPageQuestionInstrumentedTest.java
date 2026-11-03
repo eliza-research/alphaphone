@@ -381,7 +381,7 @@ public final class BrowserPageQuestionInstrumentedTest {
     // refusal says so, no chooser opens, nothing is dispatched and the draft is kept.
     waitFor("document.querySelector('button[aria-label=Send]')&&!document.querySelector('button[aria-label=Send]').disabled");
     js("document.querySelector('button[aria-label=Send]').click()");
-    waitFor("['Nothing is sent until this phone is back online','Nothing was sent'].some(t=>document.body.innerText.includes(t))");
+    waitFor("['Your message is back in the composer','Nothing was sent'].some(t=>document.body.innerText.includes(t))");
     assertEquals("No connection chooser opens", "false", js("!!document.querySelector('.alpha-connection-scrim')"));
     assertEquals("Not mock mode", "null", js("document.documentElement.dataset.connectionMode==='mock'?'mock':null"));
     assertEquals("Send while inference is unavailable dispatches nothing: " + leaks(reviewed), 0, leaks(reviewed).length());

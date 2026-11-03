@@ -1447,8 +1447,6 @@ function pairingError(error: unknown, withCode: boolean): unknown {
 const AI_OFF_MESSAGE = 'Your agent is running. Sign in to Cloud to turn AI back on.';
 const PAIRING_RETIRED = 'Pairing is unavailable. Your agent runs on this device; sign in to Cloud for inference.';
 const RESIDENT_SIGN_IN_EXPIRED = 'Your Cloud sign-in has expired. Sign in with Cloud again.';
-/** Shown beside the composer while the resident is connected and the phone has no network. */
-export const INFERENCE_OFFLINE_NOTICE = 'Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.';
 const RATE_LIMITED = 'The agent provider is rate-limiting requests. Wait before sending again. Alpha Phone did not retry your message.';
 /** A turn that failed after its action committed: the owner is told the action went through, never the generic failure. */
 export const EFFECT_APPLIED_INTERRUPTED = 'The requested action went through, but the reply was cut off before it finished. Check the app it changed. Nothing was run again.';
@@ -2901,7 +2899,7 @@ export const connectionController = {
     try {
       requestSignal.throwIfAborted();
       // Hosted inference needs the network. Nothing leaves the phone while it reports none.
-      if (selected.kind === 'resident' && isAndroid && (state.inferenceOffline || navigator.onLine === false)) throw new Error(INFERENCE_OFFLINE_NOTICE);
+      if (selected.kind === 'resident' && isAndroid && (state.inferenceOffline || navigator.onLine === false)) throw new Error('Phone offline');
       if (selected.kind === 'remote' || selected.kind === 'local') {
         if (!selected.remote.session || selected.remote.session.expiresAt <= Date.now()) throw Object.assign(new Error('Your session has expired. Pair again.'), { code: 'session_expired' });
       }

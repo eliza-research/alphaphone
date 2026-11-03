@@ -137,18 +137,21 @@ for (const frame of ['done', 'error'] as const) test(`a provider-less turn witho
   expect(foreign).toEqual([]);
 });
 
-test('without a network the resident says AI needs a connection, sends nothing, and clears the notice when back online', async ({ page, context }) => {
+test('without a network the composer stays silent, sends nothing, keeps the draft, and sends when back online', async ({ page, context }) => {
   test.setTimeout(120_000);
   await connected(page);
-  const notice = page.getByText('Your agent is running; AI needs a connection. Nothing is sent until this phone is back online.', { exact: true });
-  await expect(notice).toHaveCount(0);
+  const draftStatus = page.getByRole('status', { name: 'Assistant draft status', exact: true });
+  const offlineText = page.getByText(/AI needs a connection|until this phone is back online/);
+  await expect(draftStatus).toHaveCount(0);
   await context.setOffline(true);
-  await expect(notice).toBeVisible();
+  await page.waitForFunction(() => navigator.onLine === false);
+  await expect(draftStatus).toHaveCount(0);
   await send(page, 'Sent while offline');
   await expect(page.getByText(NOT_SENT, { exact: true }).first()).toBeVisible();
+  await expect(offlineText).toHaveCount(0);
   await expect(composer(page)).toHaveValue('Sent while offline');
   expect(await harness(page, f => f.streams)).toBe(0);
-  // Local apps keep working: Notes opens and the notice stays beside the composer.
+  // Local apps keep working: Notes opens.
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
   await button(page, 'Notes').click();
   await expect(page.locator('html')).toHaveAttribute('data-active-view', 'notes');
@@ -160,7 +163,8 @@ test('without a network the resident says AI needs a connection, sends nothing, 
   await page.getByRole('button', { name: 'Back to Settings', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event('launcher-home')));
   await context.setOffline(false);
-  await expect(notice).toHaveCount(0);
+  await page.waitForFunction(() => navigator.onLine);
+  await expect(offlineText).toHaveCount(0);
   // Only the owner's own Send posts it, once.
   await composer(page).fill('Sent when back online'); await composer(page).press('Enter');
   await expect(bubble(page, 'Resident reply 1')).toHaveCount(1);

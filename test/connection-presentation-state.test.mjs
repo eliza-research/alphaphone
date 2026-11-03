@@ -94,6 +94,9 @@ const preflightSource = [
   section('  async prepareVoiceConversation(', '  async send('),
   section('  async send(', '      if(expectedConversationId!==undefined&&id!==expectedConversationId)'),
   '      return id;',
+  '    } catch (error) {',
+  section('      const refused = !!error', '      // Stop (or leaving the chat) after dispatch'),
+  '      throw error;',
   '    } finally { signal.removeEventListener("abort", cancel); if (sending === controller) sending = null; }',
   '  },',
   '}; globalThis.preflightController = preflightController;',
@@ -110,7 +113,6 @@ function preflightFixture(balance, options = {}) {
     residentStartInBackground: false, pendingBillingReview: null,
     operation: null, requestedCameraContinuation: undefined, clientObservationSession: undefined,
     NO_AGENT_SEND: 'No selected session', NO_AGENT_VOICE: 'No selected session',
-    INFERENCE_OFFLINE_NOTICE: 'Offline',
     noSessionError: () => Error('No selected session'),
     phoneContextMessage: (text, context) => ({text, context}),
     boundNavigation: () => undefined, cancelStoppedReply: () => {},
@@ -156,6 +158,47 @@ for (const balance of ['zero', 'checking', 'unavailable', undefined, 'funded', '
     }
   });
 }
+const adapter = await readFile(new URL('../apps/app/src/prototype/agent-adapter.ts', import.meta.url), 'utf8');
+const adapterStatus = adapter.slice(adapter.indexOf('const residentPending='), adapter.indexOf('out.draftConflict='));
+const composerStatus = ({connection, draft}) => {
+  const out = {};
+  vm.runInNewContext(adapterStatus, {out, connection, draft, residentAlwaysPresent: true, agentPendingText: () => 'Your agent stopped.'});
+  return out.draftStatus;
+};
+const residentRunning = {kind: 'resident', session: {sessionId: 'session-1'}};
+test('no network adds no composer text and drops no draft status', () => {
+  const offline = {...residentRunning, inferenceOffline: true};
+  assert.equal(composerStatus({connection: offline}), '');
+  assert.equal(composerStatus({connection: offline, draft: {message: 'Draft was not saved.'}}), 'Draft was not saved.');
+  assert.doesNotMatch(source + adapter, /AI needs a connection/);
+});
+test('an online composer keeps its empty status, draft status and recovery line', () => {
+  assert.equal(composerStatus({connection: residentRunning}), '');
+  assert.equal(composerStatus({connection: residentRunning, draft: {message: 'Draft was not saved.'}}), 'Draft was not saved.');
+  assert.equal(composerStatus({connection: {kind: 'recovering'}}), 'Your agent stopped.');
+});
+for (const [name, offline] of [['the connection state', {inferenceOffline: true}], ['the browser', {onLine: false}]]) {
+  test(`${name} reporting no network refuses a resident send before anything leaves the phone`, async () => {
+    const f = preflightFixture('funded');
+    f.context.active = {kind: 'resident'};
+    f.context.state.inferenceOffline = !!offline.inferenceOffline;
+    f.context.navigator = {onLine: offline.onLine !== false};
+    await assert.rejects(f.send(), error => {
+      // The composer keeps the text only for a refusal marked as never dispatched.
+      assert.equal(error.notDispatched, true);
+      return true;
+    });
+    assert.equal(f.bindings, 0);
+    assert.equal(f.context.sending, null);
+  });
+}
+test('a resident send with a network binds its conversation as before', async () => {
+  const f = preflightFixture('funded');
+  f.context.active = {kind: 'resident'};
+  assert.equal(await f.send(), 'conversation-1');
+  assert.equal(f.bindings, 1);
+  assert.equal(f.context.sending, null);
+});
 test('unknown balance does not bypass missing, expired or busy conversation guards', async () => {
   for (const balance of ['checking', 'unavailable', undefined]) {
     for (const method of ['voice', 'send']) {

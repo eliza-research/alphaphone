@@ -62,7 +62,7 @@ import { DailyApps } from '../daily';
 import { isAndroid } from '../native';
 import { registerPlugin } from '../platform-plugins';
 import { SystemBars, SystemBarsStyle } from '@capacitor/core';
-import {mergeConversationDelivery, connectionController, STOPPED_REPLY_NOTICE, STOPPED_CANCELLED_NOTICE, STOPPED_CONFIRMED_NOTICE, INFERENCE_OFFLINE_NOTICE, RESIDENT_STARTING_NOTICE, RESIDENT_RECOVERING_NOTICE, NO_AGENT_SEND, NO_AGENT_VOICE, residentAlwaysPresent, agentPendingText, agentAvailabilityNotice } from '../runtime/connection-ui';
+import {mergeConversationDelivery, connectionController, STOPPED_REPLY_NOTICE, STOPPED_CANCELLED_NOTICE, STOPPED_CONFIRMED_NOTICE, RESIDENT_STARTING_NOTICE, RESIDENT_RECOVERING_NOTICE, NO_AGENT_SEND, NO_AGENT_VOICE, residentAlwaysPresent, agentPendingText, agentAvailabilityNotice } from '../runtime/connection-ui';
 import { broaderPageNotice, honestTiles, handoffGate, watchReturnToApp, tileFactsFromSnapshot, tileSettingsPages, type TileFacts, type TileKey } from './native-adapter';
 const alphaDevice = registerPlugin<{ snapshot(): Promise<Record<string, unknown>>; openSettings(input: { page: string }): Promise<{ status: string; specific?: boolean }> }>('AlphaDevice');
 const elizaSystem = registerPlugin<{ setFlashlight(input: { enabled: boolean }): Promise<{ available: boolean; enabled: boolean }> }>('ElizaSystem');
@@ -618,8 +618,6 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
         });
       }
       syncStoppedReplyNotice(this,session!==undefined&&history?.sessionId===session?history:null);
-      const offline=!!connectionController.getSnapshot().inferenceOffline;
-      if(offline!==!!this.inferenceOffline){this.inferenceOffline=offline;if(this.live)this.setState({});}
       if (this.live) {syncCanonicalNotes(this);context(this);this.refreshDraftBinding();}
     });
     // Canonical is the default; no legacy store/migration/cleanup is opened.
@@ -1166,12 +1164,11 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     const draft=this.composerDraft?.state;
     out.draftRecovery=!!draft?.error&&!!this.composerDraft?.recovery();
     out.recoverDraft=()=>{const recovery=this.composerDraft?.recovery();if(!recovery)return;this.draftRecoveryAbort?.abort();const controller=this.draftRecoveryAbort=new AbortController();openDomainRecovery({capture:async signal=>{const captured=await recovery.capture(signal);return {...captured,raw:JSON.stringify({saved:captured.raw,currentDraft:String(this.S().draft||'')})};},reset:recovery.reset},'assistant draft','Assistant draft recovery','Download the saved bytes and current text before resetting this conversation’s draft. Reset does not delete messages or send anything. Reloading discards the current unsaved text.',controller.signal,undefined,Capacitor.getPlatform()==='android'?'device':'browser');};
-    // The resident's hosted inference needs a network; local apps keep working without one.
-    const connection=connectionController.getSnapshot(),offline=connection.inferenceOffline&&connection.kind==='resident'&&!!connection.session;
+    const connection=connectionController.getSnapshot();
     // Routine startup stays quiet. Recovery failures remain actionable, and an
     // attempted send still explains why it cannot dispatch before readiness.
     const residentPending=residentAlwaysPresent&&!connection.session&&connection.kind==='recovering'?agentPendingText(connection):'';
-    out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,offline?INFERENCE_OFFLINE_NOTICE:'',residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
+    out.draftRetry=!!draft?.error;out.draftStatus=[draft?.message,residentPending].filter(Boolean).join(' ');out.draftConflict=!!draft?.conflict;out.draftSavedText=draft?.savedText||'(Empty saved draft)';out.draftOpening=!!draft?.consuming;
     out.restoreSavedDraft=()=>{this.composerDraft?.restoreSaved();if(this.firstSendReview)this.refreshDraftBinding();};out.keepCurrentDraft=()=>{this.composerDraft?.keepCurrent();if(this.firstSendReview)this.refreshDraftBinding();};out.retryDraft=()=>{this.composerDraft?.retire();this.refreshDraftBinding();};
     const onDraft=out.onDraft;
     out.onDraft=(event:Event&{target:HTMLTextAreaElement})=>{
