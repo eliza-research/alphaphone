@@ -489,7 +489,7 @@ test('an admission that runs with no network leaves the network\'s return its ow
 // the next offline edge (a new episode) and an offline admission with nothing captured.
 const classChanges = [['unknown, own provider', undefined, ownProvider], ['own provider, Cloud', ownProvider, {selected: false}], ['Cloud, own provider', {selected: false}, ownProvider]];
 function classReads(box, before, after) {
-  const entries = admissions(box); statusReads(box);
+  const entries = {...admissions(box), read: statusReads(box)};
   Object.assign(box, {browserCloudResidentEnabled: true, localProviderStatus: async () => after});
   box.state.providerStatus = before;
   return entries;
@@ -526,6 +526,36 @@ for (const [name, offline, before, after, run] of [
     const box = returnFixture({offline}); await run(box, classReads(box, before, after));
     assert.equal(box.rechecks, 2, 'the network return checks');
     box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'once');
+  });
+}
+// Continuations of the same admission are not a later one (Root, #743). After a status read retired
+// the return with no network, none of these clears the retired marker or records an allowance, so a
+// plan check with no network after it records nothing and the network's return is no second plan
+// read. The automatic retry within an admission is its EntitlementRefresher (admitCloudResident,
+// retry for an unavailable plan): a failed check writes the outage view through onView and never
+// runs connectResident.
+for (const [continuation, changes, run] of [
+  ['the sign-in\'s own admitted start', classChanges, async (box, {connect, signIn}, retire) => { signIn(); await retire(); connect(signInAdmission); await settled(); }],
+  ['the admission\'s pending provider read completing', classChanges, async (box, {connect}, retire, after) => { let finish; box.localProviderStatus = () => new Promise(resolve => { finish = resolve; }); connect(); await retire(); finish(after); await settled(); }],
+  ['a same-class public status refresh', classChanges, async (box, {read}, retire, after) => { await retire(); await read({...after}); }],
+  ['a busy step ending', classChanges, async (box, _, retire) => { await retire(); box.update({busy: true}); box.fire('visibilitychange'); box.update({busy: false}); }],
+  ['Alpha hidden, then shown', classChanges, async (box, _, retire) => { await retire(); box.fire('visibilitychange', true); }],
+  ['a render update', classChanges, async (box, _, retire) => { await retire(); box.update({message: 'Render update', open: true}); }],
+  ['the optional Cloud account detached', classChanges.filter(([, , after]) => after === ownProvider), async (box, _, retire) => {
+    Object.assign(box, {retireReadReplies() {}, clearPersonalSetup() {}, appRequests: new Set(), membershipRead: null, pendingBillingReview: null});
+    vm.runInContext(stripTypeScriptTypes(section('function detachService()', '\n'), {mode: 'transform'}), box);
+    await retire(); box.detachService(); assert.equal(box.state.cloudAccount, null);
+  }],
+  ['the admission\'s automatic plan retry failing', classChanges.filter(([, , after]) => after !== ownProvider), async (box, _, retire) => { await retire(); box.update({residentSubscription: {kind: 'unavailable', reason: 'outage'}}); }],
+]) {
+  test(`a continuation of the same admission after a status read retired the return with no network records nothing: ${continuation}`, async () => {
+    for (const [name, before, after] of changes) {
+      const box = returnFixture(), entries = classReads(box, before, after);
+      await run(box, entries, async () => { box.fire('offline'); await entries.read(after); }, after);
+      box.fire('visibilitychange'); assert.equal(box.rechecks, 1, `${name}: the check with no network`);
+      box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1, `${name}: no second plan read`);
+      box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, `${name}: a later network return checks`);
+    }
   });
 }
 // The check the network's return allows may still not reach Cloud. Nothing unverified is admitted,
