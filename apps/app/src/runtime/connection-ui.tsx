@@ -1216,12 +1216,14 @@ async function restoreOwnProviderCloudServices():Promise<void>{
 /** `admitted`: the admission a sign-in just made for this start (residentSignedIn); otherwise it is read here. */
 async function connectResident(signal: AbortSignal, admitted?: ResidentAdmission) {
   // A new admission retires a network return still waiting from an earlier one; a sign-in's own
-  // start keeps one lost during that sign-in (residentSignedIn retired the earlier one).
+  // start keeps one lost during that sign-in (residentSignedIn retired the earlier one) while the
+  // provider read below keeps the provider class.
   if(!admitted)networkLostUnder=null;
   let admission:ResidentAdmission|null=null,bound:Awaited<ReturnType<typeof applyResidentBinding>>|null=null;
   if(isAndroid||browserCloudResidentEnabled){const status=await localProviderStatus();signal.throwIfAborted();update({providerStatus:status});}
   // One that runs with no network cannot read the plan: the network's return checks it, in the scope
-  // this admission runs under. A return lost earlier in it keeps its own scope.
+  // this admission runs under. A return lost earlier in it keeps its own scope while the provider read
+  // keeps the class; a changed class retired it (update), and this records the admission's own.
   if(state.inferenceOffline)networkLostUnder??=planCheckScope();
   const ownProvider=ownProviderSelected();
   // A prior Cloud plan may not rebind a resident now using its own keys.
