@@ -68,6 +68,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
     const references: Record<string, string> = kept('flag-off-references', {});
     const persist = () => { sessionStorage.setItem('flag-off-references', JSON.stringify(references)); sessionStorage.setItem('flag-off-slots', JSON.stringify(slots)); sessionStorage.setItem('flag-off-agent', JSON.stringify(agent)); sessionStorage.setItem('flag-off-digests', JSON.stringify({ results: f.digests.results, acked: f.digests.acked, acks: f.digests.acks, inbox: f.digests.inbox })); };
     const f = w.flagOff = {
+      notificationListenerMetadata:{added:0,removed:0,active:0},
       calls: [] as string[], unexpected: [] as string[], installationId: '', posts: [] as string[], replies: [] as string[], streams: 0,
       mail: { accounts: structuredClone(options.accounts ?? null) as any[] | null, accountReads: 0, searches: 0, reads: [] as string[], prepares: [] as any[], dispatches: [] as any[], operations: {} as Record<string, any>, sent: [] as string[] },
       // Results the resident agent has produced, in cursor order. `acked` is the agent's cursor for
@@ -84,7 +85,12 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
       emit: (plugin: string, event: string, value: unknown = {}) => { listeners.filter(l => l.plugin === plugin && l.event === event).forEach(l => l.callback(value)); },
       slots, persist: () => persist(),
     };
-    const listeners: Array<{ plugin: string; event: string; callback: (value: unknown) => void }> = [];
+    const listeners: Array<{ plugin: string; event: string; callback: (value: unknown) => void; callbackId: string }> = [];
+    let listenerSequence=0;
+    const removeNotificationListener=(input:any)=>{
+      const index=listeners.findIndex(row=>row.plugin==='AlphaNotifications'&&row.callbackId===input?.callbackId&&row.event===input?.eventName);
+      if(index>=0){listeners.splice(index,1);f.notificationListenerMetadata.removed++;f.notificationListenerMetadata.active--;}
+    };
     const emitStream = (streamId: string, event: unknown) => f.emit('Agent', 'alphaAgentStream', { streamId, event });
     const data = (streamId: string, value: unknown) => emitStream(streamId, { type: 'chunk', dataBase64: btoa('data: ' + JSON.stringify(value) + '\n\n') });
     const ok = (value: unknown) => ({ status: 200, data: value });
@@ -251,13 +257,21 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
         { name: 'Agent', methods: withListeners(['getStatus', 'start', 'stop', 'configureCloudProvider', 'clearProvider', 'request', 'providerStatus', 'requestStream', 'cancelStream']) },
         { name: 'AlphaConnection', methods: withListeners(['secureRead', 'secureWrite', 'secureRemove', 'secureCompareExchange', 'request', 'cancel', 'openExternal']) },
         { name: 'AlphaActionJournal', methods: promise(['list', 'get']) },
-        { name: 'AlphaNotifications', methods: promise(['status', 'crossAppStatus']) },
+        { name: 'AlphaNotifications', methods: withListeners(['status', 'crossAppStatus']) },
         { name: 'AlphaVoiceCloud', methods: promise(['checkPermissions']) },
         ...(options.digests ? [{ name: 'AlphaHostedResults', methods: withListeners(['beginBackground', 'cancelBackground', 'configureBackground', 'disableBackground', 'syncInbox', 'inboxHistory', 'status', 'pendingResult', 'consumeResult', 'pendingSourceRenewal', 'settleSourceRenewal',
           ...(options.schedules?.native ? ['nativeSourceIdentity', 'nativeSourceConsent', 'scheduleSourceRenewal', 'clearSourceRenewal'] : [])]) }] : []),
         ...(options.calendar || options.schedules?.native ? [{ name: 'AlphaCalendar', methods: withListeners(['list', 'requestAccess', 'pendingCreations', 'listAlerts', ...(options.schedules?.native ? ['requestWorkflowReadAccess', 'workflowCalendars'] : [])]) }] : []),
       ],
-      nativeCallback: (plugin: string, method: string, input: any, callback: (value: unknown) => void) => { if (method === 'addListener') listeners.push({ plugin, event: input?.eventName, callback }); return String(listeners.length); },
+      nativeCallback: (plugin: string, method: string, input: any, callback: (value: unknown) => void) => {
+        if(method==='addListener'){
+          const callbackId=String(++listenerSequence);listeners.push({plugin,event:input?.eventName,callback,callbackId});
+          if(plugin==='AlphaNotifications'){f.notificationListenerMetadata.added++;f.notificationListenerMetadata.active++;}
+          return callbackId;
+        }
+        if(plugin==='AlphaNotifications'&&method==='removeListener'){removeNotificationListener(input);return '';}
+        return String(listenerSequence);
+      },
       nativePromise: async (plugin: string, method: string, input: any) => {
         if (plugin === 'AlphaDeletions' && method === 'pending') return { deletions: [] };
         f.calls.push(plugin + '.' + method);
@@ -279,6 +293,7 @@ export async function flagOffAndroid(page: Page, options: FlagOffOptions = {}) {
           if (plugin === 'AlphaMailAttachments' && method === 'openSourceReference') { d.opened.push(structuredClone(input)); if (references[input.reference] !== input.sha256 || input.sha256 !== await sha(doc.text)) throw Error('Source changed'); return { message: 'Opened ' + doc.name + '.' }; }
           if (plugin === 'AlphaMailAttachments' && method === 'cancel') return {};
         }
+        if(plugin==='AlphaNotifications'&&method==='removeListener'){removeNotificationListener(input);return {};}
         if (plugin === 'AlphaNotifications') return { permissionGranted: true, appEnabled: true };
         if (plugin === 'AlphaVoiceCloud') return { microphone: 'granted' };
         if (plugin === 'AlphaActionJournal') return method === 'list' ? { entries: [] } : { entry: null };
