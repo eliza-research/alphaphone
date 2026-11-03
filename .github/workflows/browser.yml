@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      qualification_scope:
+        description: Normal MVP or exact current-source native voice fixture three-case probe
+        type: choice
+        options: [normal, current-native-voice-three]
+        default: normal
       cross_browser:
         description: Also qualify Firefox and macOS WebKit storage (expensive; not the Android engine)
         type: boolean
@@ -17,6 +22,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 jobs:
   changes:
+    if: github.event_name != 'workflow_dispatch' || inputs.qualification_scope != 'current-native-voice-three'
     uses: ./.github/workflows/changes.yml
   verify:
     name: Repository verification
@@ -154,7 +160,7 @@ jobs:
   result:
     name: Browser MVP result
     needs: [changes, verify, browser, production]
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.qualification_scope != 'current-native-voice-three')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -171,7 +177,7 @@ jobs:
           PRODUCTION_SELECTED: ${{ github.event_name != 'push' && needs.changes.outputs.browser == 'true' && needs.changes.outputs.browser_production }}
         run: node scripts/ci/required-result.mjs "changes=$CHANGES" "verify=$VERIFY:$VERIFY_SELECTED" "browser=$BROWSER:$BROWSER_SELECTED" "production=$PRODUCTION:$PRODUCTION_SELECTED"
   storage:
-    if: github.event_name == 'workflow_dispatch' && inputs.cross_browser
+    if: github.event_name == 'workflow_dispatch' && inputs.qualification_scope != 'current-native-voice-three' && inputs.cross_browser
     name: Browser storage (${{ matrix.browser }}, shard ${{ matrix.shard }}/2)
     # Linux WebKit lacks MediaRecorder in the hosted build. Run the complete
     # WebKit inventory on macOS so Notes records real audio before storage,
@@ -220,3 +226,251 @@ jobs:
             test-results/browser/
             test-results/browser-report/
           retention-days: 3
+
+  current-native-voice-three:
+    name: Exact current native-fixture three-case probe (not live Direct or device acceptance)
+    if: github.event_name == 'workflow_dispatch' && inputs.qualification_scope == 'current-native-voice-three'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4
+          path: successor
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: Admit only the reviewed product and SDK identities before preparation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export QA_ROOT="$RUNNER_TEMP/current-voice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/current-voice-browsers-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "QA_ROOT=$QA_ROOT" "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
+          mkdir -p "$QA_ROOT"/{logs,reports,receipts,home,tmp,cache,tooling}
+          chmod 700 "$QA_ROOT"
+          cat > "$QA_ROOT/tooling/cleanup.sh" <<'CLEANUP'
+          #!/bin/bash
+          set -euo pipefail
+          for record in "$QA_ROOT"/receipts/*.unit; do
+            test -f "$record" || continue
+            unit=$(cat "$record")
+            case "$unit" in alpha-currentvoice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-*.service) ;; *) exit 125;; esac
+            [[ "$unit" =~ ^alpha-currentvoice-[0-9]+-[0-9]+-[a-z0-9-]+\.service$ ]]
+            phase=${record##*/}; phase=${phase%.unit}
+            sudo systemctl stop "$unit" || { load=$(sudo systemctl show "$unit" -p LoadState --value 2>/dev/null || true); test "$load" = not-found; }
+            # The unit itself records its actual kernel cgroup before running source or tests.
+            actual="$QA_ROOT/receipts/$phase.actual-cgroup"
+            if ! test -s "$actual"; then echo "INCOMPLETE missing actual cgroup: $phase" >&2; exit 125; fi
+            group=$(sed -n 's/^0:://p' "$actual")
+            test "$group" = "/system.slice/$unit"
+            if test -e "/sys/fs/cgroup$group/cgroup.procs"; then test -z "$(sudo cat "/sys/fs/cgroup$group/cgroup.procs")"; fi
+            printf '%s\n' "$group empty-or-absent" > "$QA_ROOT/receipts/$phase.closure"
+          done
+          CLEANUP
+          for lane in successor; do
+            test "$(git -C "$lane" ls-tree HEAD vendor/eliza | awk '{print $1,$2,$3}')" = '160000 commit b60a34b62025a1736e1a09723002feed2d8114fe'
+            test "$(git -C "$lane" config -f .gitmodules --get submodule.vendor/eliza.url)" = https://github.com/elizaOS/eliza.git
+            test "$(sha256sum "$lane/package-lock.json" | cut -d' ' -f1)" = 84029a1d65017782877b3cc3e71b81f48f7f7441be2eb892d2df91e83a4ac3ff
+            git -C "$lane" diff --exit-code
+          done
+          test "$(git -C successor rev-parse HEAD)" = b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4
+      # Ordinary full SDK source at the exact gitlink. No recursive/nested modules or SDK install.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: elizaOS/eliza
+          ref: b60a34b62025a1736e1a09723002feed2d8114fe
+          path: successor/vendor/eliza
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # existing v7.1.0
+        with:
+          node-version-file: successor/.nvmrc
+          cache: npm
+          cache-dependency-path: successor/package-lock.json
+      - name: Bootstrap only the locked ordinary consumer and Chromium, with install hooks suppressed
+        shell: bash
+        env:
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_SYSTEM: /dev/null
+          GIT_NO_LAZY_FETCH: '1'
+          GIT_NO_REPLACE_OBJECTS: '1'
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = v24.15.0
+          test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 8388608
+          command -v systemd-run; command -v systemctl; command -v setpriv
+          for lane in successor; do
+            test "$(git -C "$lane/vendor/eliza" rev-parse HEAD)" = b60a34b62025a1736e1a09723002feed2d8114fe
+            test -z "$(git -C "$lane/vendor/eliza" status --porcelain --untracked-files=normal)"
+            (cd "$lane" && timeout --kill-after=15s 360s npm ci --ignore-scripts --include=optional --no-audit --no-fund)
+          done
+          cd successor
+          timeout --kill-after=15s 360s npx --no-install playwright install --with-deps chromium
+      - name: Exact isolated current-source three-case send preparation probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -f 262144
+          trap 'status=$?; trap - EXIT INT TERM; /bin/bash "$QA_ROOT/tooling/cleanup.sh" || status=125; exit "$status"' EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          uid=$(id -u); gid=$(id -g)
+          # A normal hosted test process cgroup/namespace, not a new test controller.
+          run_owned() {
+            local phase=$1 seconds=$2 lane=$3
+            shift 3
+            local unit="alpha-currentvoice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${phase}"
+            mkdir -p "$QA_ROOT/home/$phase" "$QA_ROOT/tmp/$phase" "$QA_ROOT/cache/$phase" || return 125
+            test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 5242880 || return 125
+            printf '%s\n' "$unit.service" >"$QA_ROOT/receipts/$phase.unit" || return 125
+            local code=0
+            if sudo systemd-run --quiet --wait --pipe --unit="$unit" --uid="$uid" --gid="$gid" \
+              --working-directory="$GITHUB_WORKSPACE/$lane" \
+              -p PrivateNetwork=yes -p NoNewPrivileges=yes -p KillMode=control-group \
+              -p MemoryMax=6G -p TasksMax=256 -p CPUQuota=200% \
+              -p "RuntimeMaxSec=$seconds" -p TimeoutStopSec=15s -p LimitFSIZE=268435456 \
+              --setenv="PATH=$PATH" --setenv="HOME=$QA_ROOT/home/$phase" \
+              --setenv="TMPDIR=$QA_ROOT/tmp/$phase" --setenv="NPM_CONFIG_CACHE=$QA_ROOT/cache/$phase" \
+              --setenv="PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" \
+              --setenv=CI=true --setenv=NODE_OPTIONS=--max-old-space-size=3072 \
+              --setenv=GIT_CONFIG_GLOBAL=/dev/null --setenv=GIT_CONFIG_SYSTEM=/dev/null \
+              --setenv=GIT_NO_LAZY_FETCH=1 --setenv=GIT_NO_REPLACE_OBJECTS=1 \
+              /bin/bash -c 'cat /proc/self/cgroup > "$1"; shift; exec "$@"' _ "$QA_ROOT/receipts/$phase.actual-cgroup" "$@" >"$QA_ROOT/logs/$phase.log" 2>&1; then code=0; else code=$?; fi
+            printf '%s\n' "$code" >"$QA_ROOT/receipts/$phase.exit" || return 125
+            /bin/bash "$QA_ROOT/tooling/cleanup.sh" || return 125
+            if test -d "$GITHUB_WORKSPACE/$lane/test-results/browser"; then
+              mkdir -p "$QA_ROOT/reports/$phase" || return 125
+              cp -a "$GITHUB_WORKSPACE/$lane/test-results/browser" "$QA_ROOT/reports/$phase/" || return 125
+            fi
+            test "$(du -sk "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" | awk '{n+=$1} END{print n}')" -le 524288 || return 125
+            test "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -xdev | wc -l)" -le 20000 || return 125
+            test -z "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -type l -print -quit)" || return 125
+            return "$code"
+          }
+          node - "$QA_ROOT/receipts/admission.json" <<'NODE'
+          const fs=require('node:fs'),c=require('node:crypto'),p=require('node:path');
+          const hash=f=>c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+          fs.writeFileSync(process.argv[2],JSON.stringify({workflowCommit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,sourceCandidate:'b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4',sdk:'b60a34b62025a1736e1a09723002feed2d8114fe',node:process.version,lockSHA256:hash(p.join(process.env.GITHUB_WORKSPACE,'successor/package-lock.json')),memoryMaxBytes:6442450944,tasksMax:256,cpuQuotaPercent:200,privateNetwork:'loopback-only per test cgroup; bootstrap/artifact network outside',nodeOldSpaceMiB:3072,realProviderCredentialsPassed:false,rootOrDependencyInstallHooksExecuted:false},null,2)+'\n');
+          NODE
+          cat > "$QA_ROOT/tooling/expected.json" <<'EXPECTED'
+          {"source":"b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4","productParent":"2647bb09738f7213da09a66d8bc821f0821e6164","sdk":"b60a34b62025a1736e1a09723002feed2d8114fe","file":"test/browser/chat-dictation-api.spec.ts","project":"chromium","names":["API dictation and assistant stay distinct: draft editing never sends, voice conversation submits","API interruptSpeech preserves listening; Mute controls capture with pressed state","API dictation recovery: without an echo canceller, speech during playback never interrupts; a lost Transcribe capture can start again"],"selector":"(?:API\\ dictation\\ and\\ assistant\\ stay\\ distinct:\\ draft\\ editing\\ never\\ sends,\\ voice\\ conversation\\ submits|API\\ interruptSpeech\\ preserves\\ listening;\\ Mute\\ controls\\ capture\\ with\\ pressed\\ state|API\\ dictation\\ recovery:\\ without\\ an\\ echo\\ canceller,\\ speech\\ during\\ playback\\ never\\ interrupts;\\ a\\ lost\\ Transcribe\\ capture\\ can\\ start\\ again)$"}
+          EXPECTED
+          cat > "$QA_ROOT/tooling/validate.cjs" <<'VALIDATOR'
+          const fs=require('node:fs'),p=require('node:path'),assert=require('node:assert/strict');
+          const [root,phase]=process.argv.slice(2),expected=JSON.parse(fs.readFileSync(p.join(root,'tooling/expected.json')));
+          const read=name=>JSON.parse(fs.readFileSync(p.join(root,'reports',name+'.json')));
+          function specs(r){const out=[];function walk(s){out.push(...s.specs||[]);for(const x of s.suites||[])walk(x)}walk(r);return out;}
+          const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+          function keys(x,allowed){assert.ok(object(x),'Expected bounded metadata object');assert.ok(Object.keys(x).every(k=>allowed.includes(k)),'Unexpected metadata field');}
+          const count=n=>Number.isSafeInteger(n)&&n>=0;
+          function errorFields(e,messageAllowed){
+           keys(e,['type','name','code','causeName','causeCode',...(messageAllowed?['message']:[])]);
+           assert.ok(['object','string','number','boolean','undefined','function','symbol','bigint'].includes(e.type),'Wrong error type metadata');
+           for(const k of ['name','code','causeName','causeCode'])if(e[k]!==undefined)assert.ok(typeof e[k]==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(e[k]),'Unbounded error token');
+           if(e.message!==undefined)assert.ok(typeof e.message==='string'&&e.message.length<=256&&!/[\u0000-\u001f\u007f\u2028\u2029]/.test(e.message),'Public error message must be bounded single-line');
+          }
+          function attachmentJSON(a){
+           // TestInfo.attach(Buffer) is retained as inline base64 in the JSON reporter. No arbitrary path reads.
+           assert.ok(typeof a.body==='string'&&a.body.length>0&&a.body.length<=43692,'Missing or oversized inline attachment bytes');
+           assert.ok(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(a.body),'Invalid inline base64');
+           const bytes=Buffer.from(a.body,'base64');assert.ok(bytes.length>0&&bytes.length<=32768&&bytes.toString('base64')===a.body,'Noncanonical/oversized metadata');
+           const text=bytes.toString('utf8');assert.ok(Buffer.from(text,'utf8').equals(bytes),'Invalid metadata UTF8');
+           const m=JSON.parse(text);assert.ok(object(m)&&m.version===1,'Wrong metadata version');
+           if(m.diagnosticCaptureFailed===true){keys(m,['version','diagnosticCaptureFailed','errorType','errorName']);assert.ok(typeof m.errorType==='string'&&typeof m.errorName==='string'&&m.errorName.length<=80,'Wrong failed-capture metadata');return {publicSnapshotQuality:'INSUFFICIENT_DIAGNOSTIC_CAPTURE_FAILED_UNKNOWN',sendBoundaryQuality:'INSUFFICIENT_DIAGNOSTIC_CAPTURE_FAILED_UNKNOWN',sendObservationCount:0};}
+           keys(m,['version','scope','snapshotAvailable','snapshot','counts','nativeRequests','notifications','sendPreparation']);
+           assert.ok(m.scope==='synthetic-voice-fixture-failure-only'&&typeof m.snapshotAvailable==='boolean','Wrong metadata scope/snapshot flag');
+           const numericCounts=['captures','stops','asrRoutes','closeRoutes','routeFrames','syntheses','plays','playbackStops','posts','unexpectedNativeRequests','forbiddenVoiceRequests'];
+           keys(m.counts,[...numericCounts,'activeCapturePresent']);for(const k of numericCounts)assert.ok(count(m.counts[k]),'Wrong native/capture count');assert.ok(typeof m.counts.activeCapturePresent==='boolean','Wrong active capture flag');
+           assert.ok(Array.isArray(m.nativeRequests)&&m.nativeRequests.length<=64,'Unbounded native-call metadata');
+           for(const row of m.nativeRequests){
+            keys(row,['plugin','method','operation','outcome','status','error']);assert.ok(['Agent','AlphaVoiceCloud'].includes(row.plugin),'Wrong native plugin');
+            assert.ok(['request','requestStream','cancelStream','startLiveCapture','stopLiveCapture','synthesizeLocal','play','stopPlayback','cancel','releaseLocalSpeech','cancelRecording'].includes(row.method),'Wrong native method');
+            assert.ok(['conversation-stream','live-status','live-asr','end-of-turn','other-native-request','capture-or-playback'].includes(row.operation),'Wrong native operation class');assert.ok(['pending','resolved','rejected'].includes(row.outcome),'Wrong native outcome');
+            if(row.status!==undefined)assert.ok(Number.isInteger(row.status)&&row.status>=100&&row.status<=599,'Wrong native status');if(row.error!==undefined)errorFields(row.error,false);
+           }
+           if(m.notifications!==undefined){keys(m.notifications,['added','removed','active']);assert.ok(count(m.notifications.added)&&count(m.notifications.removed)&&count(m.notifications.active)&&m.notifications.added-m.notifications.removed===m.notifications.active,'Wrong listener custody counts');}
+           assert.ok(Array.isArray(m.sendPreparation)&&m.sendPreparation.length<=16,'Unbounded/missing send-boundary observations');
+           const categories=new Set(["connection-operation-busy","reply-busy","reply-target-conversation-mismatch","connection-or-conversation-changed","voice-conversation-changed","reply-target-changed","voice-response-incomplete","session-expired","conversation-selection-recovery","conversation-selection-owner-invalid","conversation-selection-changed","conversation-selection-unconfirmed","browser-selection-recovery-unavailable","navigation-observation-changed","navigation-binding-changed","navigation-claim-missing","renderer-view-owner-changed","unclassified-source-error"]),names=new Set(["Error","TypeError","RangeError","AbortError","AlphaClientError","RemoteProtocolError","unclassified-name"]),codes=new Set(["authentication_in_progress","busy","cancelled","connection_changed","https_required","identity_changed","invalid-response","invalid_cursor","invalid_origin","invalid_response","invalid_room","invalid_view_client_id","invalid_view_route","machine_session_required","not_connected","origin_required","owner_session_required","pairing_identity_mismatch","pairing_unavailable","proposal-unavailable","remote_request_failed","sensitive","session_expired","stale","transport-failed","unconfigured","unclassified-code"]),factKeys=["expectedConversationProvided","selectedConversationPresent","expectedConversationMatchesSelected","connectionSessionPresent","clientSessionPresent","connectionAndClientSessionMatch","contextRevisionMatches","contextViewMatches","contextSensitivityMatches","selectedSourceMatches"];
+           const sourceFlags=['notDispatched','beforeDispatch','refusedBeforeTurn','beforeObservationFailed','afterObservationFailed'];
+           for(const row of m.sendPreparation){
+            if(row.observationUnavailable===true){keys(row,['observationUnavailable']);continue;}
+            keys(row,['category','name','code',...sourceFlags,'before','after']);assert.ok(categories.has(row.category)&&names.has(row.name)&&codes.has(row.code),'Nonallowlisted source error metadata');
+            for(const key of sourceFlags)assert.ok(typeof row[key]==='boolean','Wrong send-boundary flag');
+            for(const phase of ['before','after']){if(row[phase+'ObservationFailed'])assert.ok(row[phase]===undefined,'Contradictory failed equality capture');else{keys(row[phase],factKeys);assert.equal(Object.keys(row[phase]).length,factKeys.length);for(const key of factKeys)assert.ok(typeof row[phase][key]==='boolean','Wrong public equality fact');}}
+           }
+           const sendBoundaryQuality=!m.sendPreparation.length?'INSUFFICIENT_PUBLIC_SEND_NOT_OBSERVED_UNKNOWN':m.sendPreparation.every(r=>r.observationUnavailable===true)?'INSUFFICIENT_SEND_OBSERVER_UNAVAILABLE_UNKNOWN':m.sendPreparation.some(r=>r.category!=='unclassified-source-error'&&r.category!==undefined)?'SOURCE_LITERAL_CATEGORY_OBSERVED':m.sendPreparation.some(r=>r.code!=='unclassified-code'&&r.code!==undefined)?'SOURCE_ALLOWLISTED_CODE_OBSERVED':'INSUFFICIENT_UNCLASSIFIED_SOURCE_ERROR_UNKNOWN';
+           const probe={sendBoundaryQuality,sendObservationCount:m.sendPreparation.length};
+           if(!m.snapshotAvailable){assert.ok(m.snapshot===undefined,'Contradictory missing snapshot');return {publicSnapshotQuality:'INSUFFICIENT_NO_PUBLIC_SNAPSHOT_UNKNOWN',...probe};}
+           keys(m.snapshot,['phase','hearing','muted','inputHeld','hasPendingText','hasTranscript','error']);assert.ok(['idle','starting','listening','thinking','awaiting-user-input','speaking','error'].includes(m.snapshot.phase),'Wrong public snapshot phase');for(const k of ['hearing','muted','inputHeld','hasPendingText','hasTranscript'])assert.ok(typeof m.snapshot[k]==='boolean','Wrong public snapshot flag');
+           if(m.snapshot.error!==undefined)errorFields(m.snapshot.error,true);
+           return {publicSnapshotQuality:typeof m.snapshot.error?.message==='string'&&m.snapshot.error.message.trim()?'PUBLIC_SNAPSHOT_MESSAGE_RETAINED_CONTROLLED_SYNTHETIC_ONLY':'INSUFFICIENT_NO_PUBLIC_ERROR_MESSAGE_UNKNOWN',...probe};
+          }
+          function validate(name){
+           const r=read(name),rows=specs(r);assert.deepEqual(r.errors,[]);assert.equal(r.stats.skipped,0);assert.equal(rows.length,3);assert.deepEqual(rows.map(s=>s.title).sort(),[...expected.names].sort());
+           return rows.map(s=>{
+            assert.ok(s.file===expected.file||s.file.endsWith('/'+expected.file)||s.file===p.basename(expected.file));assert.equal(s.tests.length,1);const t=s.tests[0];assert.equal(t.projectName,expected.project);assert.equal(t.expectedStatus,'passed');assert.equal(t.results.length,1);
+            const result=t.results[0];assert.equal(result.retry,0);assert.ok(['passed','failed','timedOut'].includes(result.status));let diagnosticQuality;
+            if(result.status!=='passed'){const attachments=result.attachments?.filter(a=>a.name==='voice-fixture-failure-metadata'&&a.contentType==='application/json');assert.equal(attachments?.length,1,'A failed fixture case must retain its diagnostic attachment');diagnosticQuality=attachmentJSON(attachments[0]);}
+            return {name:s.title,status:result.status,...(diagnosticQuality?{diagnosticQuality}:{})};
+           });
+          }
+          const current=validate('current-three'),exit=Number(fs.readFileSync(p.join(root,'receipts/current-three.exit')));
+          const ok=current.every(row=>row.status==='passed')&&exit===0;
+          fs.writeFileSync(p.join(root,'receipts/result.json'),JSON.stringify({state:ok?'EXACT_CURRENT_NATIVE_FIXTURE_THREE_PASS_NOT_LIVE_DIRECT_OR_DEVICE_ACCEPTANCE':'EXACT_CURRENT_NATIVE_FIXTURE_THREE_FAILURES_RETAINED_NOT_QUALIFIED',source:expected.source,productParent:expected.productParent,sdk:expected.sdk,exit,cases:current,typesOrRealDirectBrowserOrNativeDeviceOrProviderAcceptance:false},null,2)+'\n');
+          if(!ok)process.exitCode=1;
+          VALIDATOR
+          # Hook-free esbuild must use its installed platform binary, never a downloader.
+          smoke="import {version,transform} from 'esbuild'; if(version!=='0.28.2')throw Error('Wrong esbuild'); await transform('const value: number = 1',{loader:'ts'});"
+          for lane in successor; do
+            run_owned "$lane-projection" 180 "$lane" npm run upstream:prepare-client
+            run_owned "$lane-tool-smoke" 30 "$lane" node --input-type=module -e "$smoke"
+            run_owned "$lane-projection-proof" 30 "$lane" node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('.eliza/client-features/.source.json')); if(p.baseCommit!=='b60a34b62025a1736e1a09723002feed2d8114fe')throw Error('Wrong projected SDK');"
+          done
+          selected='["test/browser/chat-dictation-api.spec.ts"]'
+          selector=$(node -e "process.stdout.write(require(process.argv[1]).selector)" "$QA_ROOT/tooling/expected.json")
+          if run_owned current-three 300 successor env ELIZA_DEV_ALLOW_TEST_MOCKS=1 ALPHA_CI_BROWSER_SPECS="$selected" \
+            PLAYWRIGHT_JSON_OUTPUT_FILE="$QA_ROOT/reports/current-three.json" \
+            node scripts/ci/run-browser.mjs --forbid-only --workers=1 --retries=0 --global-timeout=240000 --reporter=json --grep "$selector"; then code=0; else code=$?; fi
+          test "$code" = "$(cat "$QA_ROOT/receipts/current-three.exit")"
+          node "$QA_ROOT/tooling/validate.cjs" "$QA_ROOT" current
+      - name: Independently close only exact recorded units, including cancellation
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$QA_ROOT/tooling/cleanup.sh"
+          /bin/bash "$QA_ROOT/tooling/cleanup.sh"
+          for record in "$QA_ROOT"/receipts/*.unit; do
+            test -f "$record" || continue
+            test -s "${record%.unit}.closure"
+          done
+          echo 'closed=true' >> "$GITHUB_OUTPUT"
+      - name: Bound the exact upload scope even after a failed or interrupted phase
+        id: artifact_gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$QA_ROOT/receipts"
+          test "$(du -sk "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" | awk '{n+=$1} END{print n}')" -le 524288
+          test "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -xdev | wc -l)" -le 20000
+          test -z "$(find "$QA_ROOT/logs" "$QA_ROOT/reports" "$QA_ROOT/receipts" -type l -print -quit)"
+          if test '${{ steps.cleanup.outputs.closed }}' != true; then
+            printf '%s\n' INCOMPLETE_NO_CLOSURE_RECEIPT > "$QA_ROOT/receipts/INCOMPLETE"
+            node -e 'const fs=require("node:fs"),p=process.argv[1],prior=fs.existsSync(p)?JSON.parse(fs.readFileSync(p)):null;fs.writeFileSync(p,JSON.stringify({state:"INCOMPLETE_NO_CLOSURE_RECEIPT",preCleanupQualification:prior},null,2)+"\n")' "$QA_ROOT/receipts/result.json"
+          fi
+          echo 'allowed=true' >> "$GITHUB_OUTPUT"
+      - name: Retain only owned reports, logs and receipts, including current fixture failures
+        if: always() && steps.artifact_gate.outputs.allowed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # existing v7.0.2
+        with:
+          name: current-native-voice-three-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.QA_ROOT }}/logs/
+            ${{ env.QA_ROOT }}/reports/
+            ${{ env.QA_ROOT }}/receipts/
+          retention-days: 3
+          if-no-files-found: error
