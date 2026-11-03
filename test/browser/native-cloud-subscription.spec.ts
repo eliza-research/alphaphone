@@ -513,30 +513,60 @@ test.describe('outages and offline use',()=>{
   expect(await page.evaluate(()=>(window as any).planController.getSnapshot().residentSubscription)).toEqual({kind:'unavailable',reason:'outage'});
   await release(page);
  });
+ // Owner, 2026-11-03: Cloud being unreachable shows no banner or status text.
+ const noCloudNotice=async(page:Page)=>{
+  await expect(page.getByRole('region',{name:'Eliza Cloud plan notice',exact:true})).toHaveCount(0);
+  await expect(page.getByText(/Cloud cannot be reached/)).toHaveCount(0);
+  expect(await page.evaluate(()=>(window as any).planController.getSnapshot().message)).toBe('');
+ };
  test('offline with a recent plan: the resident runs and retains the saved sign-in without claiming verification',async({page},info)=>{
   const recent=JSON.stringify({version:1,environment:'production',credentialId:CREDENTIAL,userId:USER,organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-3600_000,endsAt:null});
   await boot(page,{identity:'offline',storage:{'alpha.connection.plan-admission.v1':recent}});
   await started(page);await idle(page);
-  const notice=page.getByRole('region',{name:'Eliza Cloud plan notice',exact:true});
-  await expect(notice).toContainText('Cloud cannot be reached right now.');
-  await expect(notice.getByRole('button',{name:'Try again',exact:true})).toBeEnabled();
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentPlanNotice)).toBe('offline');
+  await noCloudNotice(page);
   await expect(signInPage(page)).toHaveCount(0);
   expect(await page.evaluate(()=>(window as any).planController.getSnapshot())).toMatchObject({cloudAccount:null,residentSavedCredential:true,residentPlanNotice:'offline',residentInference:'unknown'});
   expect((await calls(page)).filter(c=>c.method==='clearProvider'||c.plugin==='AlphaCloudSignIn'&&!['addListener','removeListener'].includes(c.method))).toEqual([]);
-  await page.keyboard.press('Escape');await expect(notice).toBeVisible();expect(await configured(page)).toBe(0);
+  expect(await configured(page)).toBe(0);
   await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:info.outputPath('offline-recent-plan.png'),animations:'disabled'});
+ });
+ test('the network coming back binds AI at once, with no Try again and inside the once-a-minute limit',async({page})=>{
+  const recent=JSON.stringify({version:1,environment:'production',credentialId:CREDENTIAL,userId:USER,organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-3600_000,endsAt:null});
+  await boot(page,{...await entitlements(),identity:'offline',storage:{'alpha.connection.plan-admission.v1':recent}});
+  await started(page);await idle(page);
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentPlanNotice)).toBe('offline');
+  const identityReads=async()=>(await calls(page)).filter(c=>c.path==='/api/v1/user').length;
+  // A return to the app while Cloud is unreachable checks once; a second return within a minute does not.
+  const before=await identityReads();
+  await page.evaluate(()=>(window as any).planController.recheckPlanOnReturn());
+  await expect.poll(identityReads).toBe(before+1);
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentSubscription?.kind)).toBe('unavailable');
+  await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));await idle(page);
+  expect(await identityReads()).toBe(before+1);
+  await noCloudNotice(page);
+  await expect(page.getByRole('button',{name:'Try again',exact:true})).toHaveCount(0);
+  expect(await configured(page)).toBe(0);
+  // The network returns: the plan is read again at once and Cloud AI is bound, with no tap.
+  await fixture(page,{identity:'ok'});
+  await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+  // Within the minute only the online event could have read Cloud again (the rebind reads it once more).
+  await admitted(page);
+  expect(await identityReads()).toBeGreaterThan(before+1);
+  await release(page);
+  await noCloudNotice(page);
  });
  for(const age of ['stale','other-credential'] as const)test(`offline without a recent plan retains sign-in but unbinds inference (${age})`,async({page})=>{
   const record=JSON.stringify({version:1,environment:'production',credentialId:age==='other-credential'?'99999999-9999-4999-8999-999999999999':CREDENTIAL,userId:USER,organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-(age==='stale'?8:0)*24*3600_000,endsAt:null});
   await boot(page,{identity:'offline',storage:{'alpha.connection.plan-admission.v1':record}});
   await started(page);await idle(page);
-  const notice=page.getByRole('region',{name:'Eliza Cloud plan notice',exact:true});
-  await expect(notice).toContainText('Cloud cannot be reached right now.');
+  await expect.poll(()=>page.evaluate(()=>(window as any).planController.getSnapshot().residentPlanNotice)).toBe('offline');
+  await noCloudNotice(page);
   await expect(signInPage(page)).toHaveCount(0);
   expect(await page.evaluate(()=>(window as any).planController.getSnapshot())).toMatchObject({cloudAccount:null,residentSavedCredential:true,residentPlanNotice:'offline',residentInference:'unavailable'});
   expect((await calls(page)).filter(c=>c.method==='clearProvider')).toHaveLength(1);
   expect((await calls(page)).filter(c=>c.plugin==='AlphaCloudSignIn'&&!['addListener','removeListener'].includes(c.method))).toEqual([]);
-  await page.keyboard.press('Escape');await expect(notice).toBeVisible();expect(await configured(page)).toBe(0);
+  expect(await configured(page)).toBe(0);
  });
 });
 

@@ -199,6 +199,69 @@ test('a resident send with a network binds its conversation as before', async ()
   assert.equal(f.bindings, 1);
   assert.equal(f.context.sending, null);
 });
+// Owner, 2026-11-03: a refused composer send gets its text back with no toast; a refusal that
+// carries its own reason, or a send from outside the composer, still says so.
+const refusalEnd = "else if(!fromComposer)this.toast('Not sent.');";
+const refusalToast = stripTypeScriptTypes(adapter.slice(adapter.indexOf('if(e instanceof NotDispatched)this.toast(message);'), adapter.indexOf(refusalEnd) + refusalEnd.length), {mode: 'transform'});
+class NotDispatched extends Error {}
+class AlphaClientError extends Error { constructor(code, message) { super(message); this.code = code; } }
+const toastsFor = (e, fromComposer = true) => {
+  const toasts = [];
+  vm.runInNewContext(`(function(){${refusalToast}})`, {e, message: e.message, fromComposer, NotDispatched, AlphaClientError}).call({toast: text => toasts.push(text)});
+  return toasts;
+};
+test('a composer send refused before dispatch (offline, IPC reject, busy, starting) shows no toast', () => {
+  for (const refusal of [
+    Object.assign(new AlphaClientError('transport-failed', 'The agent did not accept this message. Check its connection before trying again.'), {notDispatched: true}),
+    new Error('Wait for the current reply before sending another message.'),
+    new Error('Your agent is starting.'),
+  ]) assert.deepEqual(toastsFor(refusal), [], refusal.message);
+  assert.doesNotMatch(adapter, /Not sent\. Your message is back in the composer/);
+});
+test('a refusal with its own reason, and a send from outside the composer, still show their toast', () => {
+  assert.deepEqual(toastsFor(Object.assign(new AlphaClientError('transport-failed', 'The agent is busy and did not accept this message. Wait, then send it again.'), {refusedBeforeTurn: true})), ['Not sent. The agent is busy and did not accept this message. Wait, then send it again.']);
+  assert.deepEqual(toastsFor(new AlphaClientError('unconfigured', 'AI replies aren’t available right now.')), ['Not sent. AI replies aren’t available right now.']);
+  assert.deepEqual(toastsFor(new NotDispatched('Agent changed. Review this message again.')), ['Agent changed. Review this message again.']);
+  assert.deepEqual(toastsFor(new Error('Wait for the current reply before sending another message.'), false), ['Not sent.']);
+});
+// Owner, 2026-11-03: Cloud being unreachable shows no banner; a plan that is needed still does.
+const planNoticeLine = section('    const notice=residentCloudFlow()&&snapshot.session', '\n');
+const planNotice = snapshot => vm.runInNewContext(`${planNoticeLine};notice`, {residentCloudFlow: () => true, snapshot});
+test('Cloud being unreachable shows no plan notice or text', () => {
+  assert.equal(planNotice({session: {}, residentPlanNotice: 'offline', cloudAccount: null}), null);
+  assert.equal(planNotice({session: {}, residentPlanNotice: 'offline', cloudAccount: {}}), null);
+  assert.doesNotMatch(source, /Cloud cannot be reached right now/);
+});
+test('a needed plan still shows its notice beside the running agent', () => {
+  assert.equal(planNotice({session: {}, residentPlanNotice: 'needs-plan', cloudAccount: {}}), 'needs-plan');
+  assert.equal(planNotice({session: {}, residentPlanNotice: 'needs-plan', cloudAccount: null}), null);
+  assert.equal(planNotice({session: null, residentPlanNotice: 'needs-plan', cloudAccount: {}}), null);
+  assert.equal(planNotice({session: {}, residentPlanNotice: null, cloudAccount: {}}), null);
+});
+// With no Try again, the network's return is what brings AI back: it skips the once-a-minute limit.
+const recheckStart = source.indexOf('  recheckPlanOnReturn(');
+const recheckMethod = stripTypeScriptTypes(`const controller={${source.slice(recheckStart, source.indexOf('  /**', recheckStart))}};globalThis.check=controller.recheckPlanOnReturn;`, {mode: 'transform'});
+function recheckFixture() {
+  const box = {residentCloudFlow: () => true, operation: null, sending: null, state: {busy: false, session: {}}, Date, planManagementReturn: false, lastPlanRecheck: -Infinity, PLAN_RECHECK_INTERVAL_MS: 60_000, ownProviderSelected: () => false, residentBinding: 'kept', rechecks: 0};
+  box.recheckResidentPlan = () => { box.rechecks++; };
+  vm.createContext(box); vm.runInContext(recheckMethod, box);
+  return box;
+}
+test('the network coming back checks the plan at once, inside the once-a-minute limit', () => {
+  const box = recheckFixture();
+  box.check(); assert.equal(box.rechecks, 1);
+  box.check(); assert.equal(box.rechecks, 1, 'a second return within a minute is still throttled');
+  box.check(true); assert.equal(box.rechecks, 2);
+  box.state.busy = true; box.check(true); assert.equal(box.rechecks, 2, 'busy work is never interrupted');
+});
+test('only the online event bypasses the limit; visibility and page-show returns stay throttled', () => {
+  const effect = stripTypeScriptTypes(section('  useEffect(()=>{const visible=', '\n'), {mode: 'transform'});
+  const listeners = {}, calls = [];
+  const target = {addEventListener: (type, listener) => { listeners[type] = listener; }, removeEventListener() {}};
+  vm.runInNewContext(effect, {useEffect: run => run(), document: {...target, hidden: false}, window: target, service: null, residentCloudFlow: () => true, connectionController: {recheckPlanOnReturn: networkReturned => calls.push(networkReturned)}});
+  for (const type of ['online', 'visibilitychange', 'pageshow']) listeners[type]({type});
+  assert.deepEqual(calls, [true, false, false]);
+});
 test('unknown balance does not bypass missing, expired or busy conversation guards', async () => {
   for (const balance of ['checking', 'unavailable', undefined]) {
     for (const method of ['voice', 'send']) {
@@ -339,7 +402,7 @@ for (const identityPatch of [{userId: 'other-owner'}, {organizationId: 'other-or
 
 // Actual saved-credential admission + production projection, with synthetic identity failures only.
 const savedAdmissionCode=stripTypeScriptTypes([
- section('function cloudUnreachable(', 'const OFFLINE_NOTICE'),
+ section('function cloudUnreachable(', '/** Notice shown when Cloud inference'),
  section('async function verifyService(', 'let pendingBillingReview:'),
  section('async function admitCloudResident(', '/**\n * Cloud reported, on a background refresh'),
  section('async function applyResidentBinding(', '/** The packaged-runtime refusal.'),
@@ -352,7 +415,7 @@ async function offlineRestoreFixture({kind='offline',recent=false,newer=null}={}
  const f=fixture({account:null});let historyReads=0,credentialWrites=0,unbinds=0,identityReads=0;
  class CloudProtocolError extends Error {constructor(code,status){super(code);this.code=code;this.status=status;}}
  const client={environment:'production',async identity(){identityReads++;if(kind==='expired')throw new CloudProtocolError('expired');if(kind==='revoked')throw new CloudProtocolError('http',401);if(kind==='changed')throw new residentBinding.CloudResidentBindingError('account-changed');throw new Error('Connection request failed');}};
- Object.assign(f.context,{Error,DOMException,CloudProtocolError,EntitlementError:class extends Error{},cloud:null,service:null,OFFLINE_NOTICE:'Cloud unavailable; resident remains local.',RESIDENT_UNBIND_UNCONFIRMED:'Unbind not confirmed',residentCloudFlow:()=>true,residentBindable:()=>true,residentEnvironment:()=> 'production',makeCloud:()=>client,stopEntitlementRefresh:()=>{},CloudResidentBindingController:residentBinding.CloudResidentBindingController,CloudResidentBindingError:residentBinding.CloudResidentBindingError,recentResidentPlanAdmission:residentBinding.recentResidentPlanAdmission,readPlanAdmission:()=>recent?{version:1,environment:'production',credentialId:'synthetic-retained-credential',userId:'synthetic-user',organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-1000,endsAt:null}:null,writePlanAdmission:()=>{},isEntitlementSignInFailure:()=>false,LocalCloudProviderStopUnconfirmed:class extends Error{},cloudCredentialStore:{read:async()=>kind==='missing'?null:{credentialId:'synthetic-retained-credential'},write:async()=>{credentialWrites++;}},detachService:()=>{f.context.service=null;f.update({cloudAccount:null});},clearLocalProvider:async()=>{unbinds++;},restoreSavedHistory:async()=>{historyReads++;f.update({history:{messages:Array.from({length:15},(_,id)=>({id:'synthetic-'+id,text:'Fixture'}))}});},refreshActionReview:async()=>{},browserLocalAgentEnabled:false,residentBinding:null});
+ Object.assign(f.context,{Error,DOMException,CloudProtocolError,EntitlementError:class extends Error{},cloud:null,service:null,RESIDENT_UNBIND_UNCONFIRMED:'Unbind not confirmed',residentCloudFlow:()=>true,residentBindable:()=>true,residentEnvironment:()=> 'production',makeCloud:()=>client,stopEntitlementRefresh:()=>{},CloudResidentBindingController:residentBinding.CloudResidentBindingController,CloudResidentBindingError:residentBinding.CloudResidentBindingError,recentResidentPlanAdmission:residentBinding.recentResidentPlanAdmission,readPlanAdmission:()=>recent?{version:1,environment:'production',credentialId:'synthetic-retained-credential',userId:'synthetic-user',organizationId:null,status:'active',planName:'Synthetic plan',verifiedAt:Date.now()-1000,endsAt:null}:null,writePlanAdmission:()=>{},isEntitlementSignInFailure:()=>false,LocalCloudProviderStopUnconfirmed:class extends Error{},cloudCredentialStore:{read:async()=>kind==='missing'?null:{credentialId:'synthetic-retained-credential'},write:async()=>{credentialWrites++;}},detachService:()=>{f.context.service=null;f.update({cloudAccount:null});},clearLocalProvider:async()=>{unbinds++;},restoreSavedHistory:async()=>{historyReads++;f.update({history:{messages:Array.from({length:15},(_,id)=>({id:'synthetic-'+id,text:'Fixture'}))}});},refreshActionReview:async()=>{},browserLocalAgentEnabled:false,residentBinding:null});
  if(newer)f.context.service=newer;
  vm.runInContext(savedAdmissionCode+';globalThis.admit=admitCloudResident;globalThis.bind=applyResidentBinding;',f.context);
  f.update({startupResolved:false,automaticRestore:true});
@@ -363,7 +426,7 @@ async function offlineRestoreFixture({kind='offline',recent=false,newer=null}={}
 }
 test('retained credential with unreachable identity restores history without forcing fresh Welcome',async()=>{
  for(const recent of [false,true]){
-  const f=await offlineRestoreFixture({recent});assert.equal(f.historyReads,1);assert.equal(f.snapshot().history.messages.length,15);assert.equal(f.snapshot().residentSavedCredential,true);assert.equal(f.snapshot().residentPlanNotice,'offline');assert.equal(f.snapshot().cloudAccount,null,'offline identity is never fabricated as authenticated');assert.equal(f.context.service,null);assert.equal(f.context.admission.binding,recent?'kept':'unbound');assert.equal(f.credentialWrites,0);assert.equal(f.identityReads,1);assert.equal(f.context.residentSignInRequired(),false);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.snapshot().open,false);assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
+  const f=await offlineRestoreFixture({recent});assert.equal(f.historyReads,1);assert.equal(f.snapshot().history.messages.length,15);assert.equal(f.snapshot().residentSavedCredential,true);assert.equal(f.snapshot().residentPlanNotice,'offline');assert.equal(f.snapshot().cloudAccount,null,'offline identity is never fabricated as authenticated');assert.equal(f.context.admission.notice,undefined,'Cloud being unreachable adds no notice or status text');assert.equal(f.context.service,null);assert.equal(f.context.admission.binding,recent?'kept':'unbound');assert.equal(f.credentialWrites,0);assert.equal(f.identityReads,1);assert.equal(f.context.residentSignInRequired(),false);assert.equal(f.context.productionCloudSignInRequired(f.snapshot()),false);assert.equal(f.snapshot().open,false);assert.equal(f.context.connectionChooserVisible(f.snapshot()),false);
  }
 });
 test('retained offline exception cannot bypass missing, expired or revoked sign-in',async()=>{

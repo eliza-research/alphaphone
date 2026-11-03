@@ -57,7 +57,7 @@ import { workflowSha, validateWorkflowResult } from '../runtime/workflow-device-
 import { WorkflowReminderOverflow, workflowReminderRows } from '../runtime/workflow-reminder-read';
 import { getMapsSelectedObject, clearMapsSelection } from '../maps/agent-context';
 import { alphaClient, AlphaClientError, type AlphaView } from '../runtime/alpha-client';
-import { testMocksEnabled, devSurfacesEnabled, privateLocalPreviewEnabled } from '../build-flags';
+import { testMocksEnabled, devSurfacesEnabled } from '../build-flags';
 import { DailyApps } from '../daily';
 import { isAndroid } from '../native';
 import { registerPlugin } from '../platform-plugins';
@@ -576,7 +576,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
     this.stopTileWatch = watchReturnToApp(() => { if (this.live && this.S().shade) this.refreshTileFacts(); });
     this.dialogBackObserver = new MutationObserver(() => updateBackAvailability(this));
     this.dialogBackObserver.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['open']});
-    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});});
+    // A refused send puts its text back with no line under the composer (owner, 2026-11-03).
+    this.composerDraft=new AssistantDraftController(assistantDraftStore,()=>String(this.S().draft||''),(text,expected,current)=>new Promise<void>(resolve=>{if(!this.live||current&&!current()){resolve();return;}this.setState((previous:Shell)=>{if(current&&!current()||expected!==undefined&&String(previous.draft||'')!==expected)return null;if(this.startupDraft!==null)this.startupDraft=undefined;this.reviewedSourceDraft=null;return {draft:text};},resolve);}),()=>{if(this.live)this.setState({});},{notSent:''});
     this.refreshDraftBinding=()=>{this.draftBindingAbort?.abort();if(residentAlwaysPresent&&!connectionController.getSnapshot().session){this.draftBindingTask=Promise.resolve();return;}const controller=this.draftBindingAbort=new AbortController();this.draftBindingTask=connectionController.assistantDraftBinding(controller.signal).then(async key=>{if(!this.live||controller.signal.aborted)return;const review=await firstSendReview(this,key,controller.signal);if(!this.live||controller.signal.aborted)return;await this.composerDraft.open(review.open??key);if(review.moved&&this.composerDraft.binding===key)void settleFirstSendSlot(review.moved,key,String(this.S().draft||''),()=>this.live&&this.composerDraft.binding===key);}).catch(()=>{if(this.live&&!controller.signal.aborted)this.composerDraft.unavailable();});};
     this.refreshDraftBinding();
     this.connectionSession = connectionController.getSnapshot().session?.sessionId;
@@ -1438,7 +1439,8 @@ export function installAgentAdapter(Component: Shell, views: Shell) {
       await transportSettled(attempt);
       if(!dispatched(attempt,e)){
         // Nothing reached the agent: put the text back and drop the unsent bubble. Never resend.
-        if(this.live){const inlineNotice=fromComposer&&privateLocalPreviewEnabled&&this.composerDraft?.holding===true;this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));if(fromComposer)releaseComposerSend(this,heldKey,heldText);if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(!inlineNotice)this.toast(e instanceof NotDispatched?message:e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true)?'Not sent. '+message:fromComposer?'Not sent. Your message is back in the composer.':'Not sent.');}
+        // The text back in the composer says it was not sent; only a refusal with its own reason is shown.
+        if(this.live){this.setState((previous:Shell)=>({msgs:previous.msgs.filter((item:Shell)=>item.id!==userId)}));if(fromComposer)releaseComposerSend(this,heldKey,heldText);if(reviewedSource&&!this.reviewedSourceDraft)this.reviewedSourceDraft=reviewedSource;if(e instanceof NotDispatched)this.toast(message);else if(e instanceof AlphaClientError&&(['unconfigured','sensitive','busy'].includes(e.code)||(e as {refusedBeforeTurn?:unknown}).refusedBeforeTurn===true))this.toast('Not sent. '+message);else if(!fromComposer)this.toast('Not sent.');}
         else if(fromComposer)this.composerDraft?.release();
       }else{
         if(pageLeaving){if(fromComposer)this.composerDraft?.abandon();return;}
