@@ -2193,7 +2193,7 @@ export const connectionController = {
   openProviderSettings(){update({open:true,automaticRestore:false,purpose:'provider',error:'',message:''});void connectionController.refreshProviderStatus();},
   open() { update({ open: true, automaticRestore:false, purpose:'agent', error: state.kind === 'recovering' ? state.error : '' }); },
   /** Window online/offline events. Offline retracts readiness and refuses sends to the resident;
-   * local apps are untouched. Coming back online clears only the notice. */
+   * local apps are untouched. Coming back online only allows sends again. */
   networkChanged(online: boolean) {
     if (online === !state.inferenceOffline) return;
     update({ inferenceOffline: !online });
