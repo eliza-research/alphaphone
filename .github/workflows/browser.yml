@@ -235,7 +235,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4
+          ref: 1c961c7bb893e29293b7f3412f0299aaf10779e7
           path: successor
           fetch-depth: 1
           submodules: false
@@ -274,7 +274,7 @@ jobs:
             test "$(sha256sum "$lane/package-lock.json" | cut -d' ' -f1)" = 84029a1d65017782877b3cc3e71b81f48f7f7441be2eb892d2df91e83a4ac3ff
             git -C "$lane" diff --exit-code
           done
-          test "$(git -C successor rev-parse HEAD)" = b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4
+          test "$(git -C successor rev-parse HEAD)" = 1c961c7bb893e29293b7f3412f0299aaf10779e7
       # Ordinary full SDK source at the exact gitlink. No recursive/nested modules or SDK install.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -352,10 +352,10 @@ jobs:
           node - "$QA_ROOT/receipts/admission.json" <<'NODE'
           const fs=require('node:fs'),c=require('node:crypto'),p=require('node:path');
           const hash=f=>c.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
-          fs.writeFileSync(process.argv[2],JSON.stringify({workflowCommit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,sourceCandidate:'b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4',sdk:'b60a34b62025a1736e1a09723002feed2d8114fe',node:process.version,lockSHA256:hash(p.join(process.env.GITHUB_WORKSPACE,'successor/package-lock.json')),memoryMaxBytes:6442450944,tasksMax:256,cpuQuotaPercent:200,privateNetwork:'loopback-only per test cgroup; bootstrap/artifact network outside',nodeOldSpaceMiB:3072,realProviderCredentialsPassed:false,rootOrDependencyInstallHooksExecuted:false},null,2)+'\n');
+          fs.writeFileSync(process.argv[2],JSON.stringify({workflowCommit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,sourceCandidate:'1c961c7bb893e29293b7f3412f0299aaf10779e7',sdk:'b60a34b62025a1736e1a09723002feed2d8114fe',node:process.version,lockSHA256:hash(p.join(process.env.GITHUB_WORKSPACE,'successor/package-lock.json')),memoryMaxBytes:6442450944,tasksMax:256,cpuQuotaPercent:200,privateNetwork:'loopback-only per test cgroup; bootstrap/artifact network outside',nodeOldSpaceMiB:3072,realProviderCredentialsPassed:false,rootOrDependencyInstallHooksExecuted:false},null,2)+'\n');
           NODE
           cat > "$QA_ROOT/tooling/expected.json" <<'EXPECTED'
-          {"source":"b5d0d69bfbf9bc8bc3a2c431bcb0ee1bd359ecd4","productParent":"2647bb09738f7213da09a66d8bc821f0821e6164","sdk":"b60a34b62025a1736e1a09723002feed2d8114fe","file":"test/browser/chat-dictation-api.spec.ts","project":"chromium","names":["API dictation and assistant stay distinct: draft editing never sends, voice conversation submits","API interruptSpeech preserves listening; Mute controls capture with pressed state","API dictation recovery: without an echo canceller, speech during playback never interrupts; a lost Transcribe capture can start again"],"selector":"(?:API\\ dictation\\ and\\ assistant\\ stay\\ distinct:\\ draft\\ editing\\ never\\ sends,\\ voice\\ conversation\\ submits|API\\ interruptSpeech\\ preserves\\ listening;\\ Mute\\ controls\\ capture\\ with\\ pressed\\ state|API\\ dictation\\ recovery:\\ without\\ an\\ echo\\ canceller,\\ speech\\ during\\ playback\\ never\\ interrupts;\\ a\\ lost\\ Transcribe\\ capture\\ can\\ start\\ again)$"}
+          {"source":"1c961c7bb893e29293b7f3412f0299aaf10779e7","productParent":"2647bb09738f7213da09a66d8bc821f0821e6164","sdk":"b60a34b62025a1736e1a09723002feed2d8114fe","file":"test/browser/chat-dictation-api.spec.ts","project":"chromium","names":["API dictation and assistant stay distinct: draft editing never sends, voice conversation submits","API interruptSpeech preserves listening; Mute controls capture with pressed state","API dictation recovery: without an echo canceller, speech during playback never interrupts; a lost Transcribe capture can start again"],"selector":"(?:API\\ dictation\\ and\\ assistant\\ stay\\ distinct:\\ draft\\ editing\\ never\\ sends,\\ voice\\ conversation\\ submits|API\\ interruptSpeech\\ preserves\\ listening;\\ Mute\\ controls\\ capture\\ with\\ pressed\\ state|API\\ dictation\\ recovery:\\ without\\ an\\ echo\\ canceller,\\ speech\\ during\\ playback\\ never\\ interrupts;\\ a\\ lost\\ Transcribe\\ capture\\ can\\ start\\ again)$"}
           EXPECTED
           cat > "$QA_ROOT/tooling/validate.cjs" <<'VALIDATOR'
           const fs=require('node:fs'),p=require('node:path'),assert=require('node:assert/strict');
