@@ -137,8 +137,8 @@ not reuse production codes.
    shown and the stored binding is kept. Airplane mode on a never-admitted sign-in: the agent
    runs without Cloud AI and nothing is shown. A send while offline is not posted, its text stays
    in the composer with no line or toast, and nothing is sent later by itself. Turn airplane mode
-   off in Alpha Phone, or in Android Settings and come back: the plan is checked again at once
-   and AI replies return without a tap.
+   off in Alpha Phone, or in Android Settings and come back: the plan is checked again at once.
+   If Eliza Cloud is not reachable yet at that moment, the next check comes up to a minute later.
 10. **Reset Alpha data**: the local reset completes; the old key no longer authenticates
     (`GET /api/v1/user` with it returns 401) when Cloud was reachable.
 11. Sign-in key expiry warning: shown within 14 days of the key's `expiresAt` (in-app sign-in
