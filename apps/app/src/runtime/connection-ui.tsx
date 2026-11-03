@@ -1036,9 +1036,8 @@ async function admitCloudResident(signal:AbortSignal):Promise<ResidentAdmission>
   if(!admitted||!plan||!result)return {binding:'unbound',notice:{error:'Cloud account changed. Sign in again.',open:true}};
   if(admission.reason==='needs-plan'){
     // No admissible plan: the agent runs without Cloud inference; the plan notice offers Redeem
-    // code / Choose a plan / Check plan again. Nothing is bound. A plan read that failed in transport
-    // or in an outage (no plan verified in the last 7 days) is Cloud being unreachable: no notice.
-    update({residentSubscription:plan.view,residentPlanNotice:plan.outage?'offline':'needs-plan',planEndsAt:null});
+    // code / Choose a plan / Check plan again. Nothing is bound.
+    update({residentSubscription:plan.view,residentPlanNotice:'needs-plan',planEndsAt:null});
     return {binding:'unbound',account:admitted};
   }
   const endsAt=admission.endsAt??null,identity=admission.identity!;

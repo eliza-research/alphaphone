@@ -365,37 +365,40 @@ test('a network return held back by a reply, an edit or other work checks on the
     box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${name}: once`);
   }
 });
-// The check the network's return allows may still not reach Cloud: the plan stays unknown, with no
-// plan notice, sign-in or rebind. The shared controller and entitlement check decide it.
+// The check the network's return allows may still not reach Cloud. Nothing unverified is admitted,
+// recorded or shown as a valid plan; there is no sign-in or rebind. An identity read that fails shows
+// no notice; a plan read that fails after it keeps the plan notice (Root, #743: that contract is
+// tracked separately). The shared controller and entitlement check decide it.
 const recheckCode = stripTypeScriptTypes([
   section('function cloudUnreachable(', '/** Notice shown when Cloud inference'),
   section('async function admitCloudResident(', '/**\n * Cloud reported'),
   section('async function recheckResidentPlan(', '/** Bind or unbind'),
   section('function residentBindingController(', '/** The packaged-runtime refusal.'),
 ].join('\n'), {mode: 'transform'});
-test('a plan check that cannot reach Cloud leaves the plan unknown; a missing plan still shows its notice', async () => {
+test('a plan check that cannot reach Cloud admits nothing and reports no plan as valid; a missing plan still shows its notice', async () => {
   const shared = await import('../.eliza/client-features/packages/auth/src/auth/cloud-resident-binding.ts');
   const entitlement = await import('../apps/app/src/runtime/subscription-entitlement.ts');
   const unreachable = async () => { throw new Error('Connection request failed'); }, outage = {kind: 'unavailable', reason: 'outage'}, marked = [];
-  for (const [name, {identity = async () => {}, plan, recent = false, notice, subscription = outage}] of Object.entries({
+  for (const [name, {identity = async () => {}, plan, recent = false, notice, subscription = outage, binding = 'unbound'}] of Object.entries({
     'identity read fails': {identity: unreachable, notice: 'offline'},
-    'identity read fails, plan verified this week': {identity: unreachable, recent: true, notice: 'offline'},
-    'plan read fails after the identity read': {plan: unreachable, notice: 'offline'},
+    'identity read fails, plan verified this week': {identity: unreachable, recent: true, notice: 'offline', binding: 'kept'},
+    'plan read fails after the identity read': {plan: unreachable, notice: 'needs-plan'},
     'no plan': {plan: async () => null, notice: 'needs-plan', subscription: {kind: 'inactive', planName: null, status: 'none', source: 'billing-limits'}},
   })) {
-    const account = {credentialId: 'credential-1'}, identityRow = {credentialId: 'credential-1', userId: 'user-1', organizationId: null}, calls = [];
+    const account = {credentialId: 'credential-1'}, identityRow = {credentialId: 'credential-1', userId: 'user-1', organizationId: null}, calls = [], admitted = [], records = [];
     const client = {environment: 'production', entitlementSource: () => ({issuer: 'https://cloud.invalid', entitlement: plan, entitlementKeys: async () => [], fallbackPlan: async () => ({status: 'none', planName: null, periodEnd: null})})};
     const box = {operation: null, planRecheck: null, signInReadinessOwner: null, state: {session: {}, open: false, cloudAccount: account, residentPlanNotice: null}, active: {kind: 'resident'}, residentBinding: 'unbound', service: null, AbortController, DOMException, Date, Error,
       CloudProtocolError: class extends Error {}, EntitlementError: entitlement.EntitlementError, checkEntitlement: entitlement.checkEntitlement, planAdmission: entitlement.planAdmission, isEntitlementSignInFailure: entitlement.isEntitlementSignInFailure,
       CloudResidentBindingController: shared.CloudResidentBindingController, CloudResidentBindingError: shared.CloudResidentBindingError, recentResidentPlanAdmission: shared.recentResidentPlanAdmission,
       cloudCredentialStore: {read: async () => ({credentialId: 'credential-1'})}, cloudServiceName: () => 'Cloud',
       verifyService: async () => { marked.push(box.operation !== null && box.operation === box.planRecheck); await identity(); box.service = {client, identity: identityRow}; },
-      readPlanAdmission: () => recent ? {version: 1, environment: 'production', ...identityRow, status: 'active', planName: 'Synthetic plan', verifiedAt: Date.now() - 1000, endsAt: null} : null, writePlanAdmission() {},
+      readPlanAdmission: () => recent ? {version: 1, environment: 'production', ...identityRow, status: 'active', planName: 'Synthetic plan', verifiedAt: Date.now() - 1000, endsAt: null} : null, writePlanAdmission: record => records.push(record),
       ownProviderSelected: () => false, residentBindable: () => true, residentEnvironment: () => 'production', makeCloud: () => client, stopEntitlementRefresh() {}, update: patch => { Object.assign(box.state, patch); },
       detachService: () => calls.push('detach'), queueResidentRebind: () => calls.push('rebind'), residentRebinds: () => ({queue: () => calls.push('rebind')}), runQueuedResidentRebind() {}};
     vm.createContext(box); vm.runInContext(recheckCode, box);
+    const admit = box.admitCloudResident; box.admitCloudResident = async signal => { const admission = await admit(signal); admitted.push(admission.binding); return admission; };
     await box.recheckResidentPlan();
-    assert.deepEqual({notice: box.state.residentPlanNotice, subscription: {...box.state.residentSubscription}, open: box.state.open, account: box.state.cloudAccount, operation: box.operation, calls}, {notice, subscription, open: false, account, operation: null, calls: []}, name);
+    assert.deepEqual({notice: box.state.residentPlanNotice, subscription: {...box.state.residentSubscription}, planEndsAt: box.state.planEndsAt, open: box.state.open, account: box.state.cloudAccount, operation: box.operation, calls, admitted, recorded: records.filter(Boolean)}, {notice, subscription, planEndsAt: null, open: false, account, operation: null, calls: [], admitted: [binding], recorded: []}, name);
   }
   assert.deepEqual(marked, [true, true, true, true], 'a network return shares this running check');
 });

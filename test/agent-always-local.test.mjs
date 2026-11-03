@@ -183,7 +183,7 @@ test('the plan surface is a notice beside the running agent, not a gate', () => 
   assert.match(chooser, /if \(!visible\) \{\n\s+\/\/ Never a gate: the agent is running\./);
   assert.ok(chooser.includes('<aside className="alpha-plan-notice" role="region" aria-label={`${serviceName} plan notice`}>'));
   // Admission without a plan opens nothing; only a required sign-in opens (and locks) the dialog.
-  assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:plan.view,residentPlanNotice:plan.outage?'offline':'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account:admitted};"));
+  assert.ok(between(ui, 'async function admitCloudResident(', 'function residentPlanEnded(').includes("update({residentSubscription:plan.view,residentPlanNotice:'needs-plan',planEndsAt:null});\n    return {binding:'unbound',account:admitted};"));
   assert.ok(chooser.includes("const residentMustSignIn=!ownProviderSelected()&&residentCloudFlow()&&!snapshot.cloudAccount&&snapshot.residentPlanNotice!=='offline'&&!snapshot.residentStarting;"));
   assert.ok(chooser.includes('{!residentMustSignIn&&<button aria-label="Close connection settings"'));
   // Auth owns Back even while busy; the required top-level chooser remains protected.
