@@ -23,7 +23,9 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  private final ExecutorService rendererWorkers=new java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,new java.util.concurrent.SynchronousQueue<>());
  // Set only from in-process debug instrumentation; no route, intent or preference activation.
  static volatile java.net.ServerSocket instrumentationRecoveryEndpoint;
- private static String rootToken,ownerToken,ownerIdentity,notificationAgent;
+ // Written under lifecycleLock. Volatile so every Activity resume reads enrollment without waiting for it.
+ private static volatile String rootToken,ownerToken;
+ private static String ownerIdentity,notificationAgent;
  private static long expiresAt;
  private static final Object lifecycleLock=new Object(), enrollmentLock=new Object();
  private static long lifecycleEpoch;
@@ -52,8 +54,11 @@ public final class AlphaLocalAgentPlugin extends Plugin {
    return read.call();
   }}
  }
- /** Noncritical slots share the canonical lock order without changing credential authority. */
+ /** Noncritical slots share the canonical lock order without changing credential authority. A caller already
+  * in the vault (the shared mail delivery's Host.lock()) stays vault-only: taking lifecycle there inverts the
+  * order and deadlocks a lifecycle-first writer, and the vault alone keeps its fence and write atomic. */
  static <T> T withCredentialSlotMutation(Runnable guard,java.util.concurrent.Callable<T> commit)throws Exception{
+  if(Thread.holdsLock(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK)){guard.run();return commit.call();}
   synchronized(lifecycleLock){synchronized(ai.eliza.plugins.securestore.nativeonly.JsonCredentialSlots.LOCK){
    guard.run();return commit.call();
   }}
@@ -113,7 +118,7 @@ public final class AlphaLocalAgentPlugin extends Plugin {
  }
  /** Package-private observation for instrumentation; never a Capacitor method. */
  int ownedWorkCount(){synchronized(lifecycleLock){return pending.size()+streams.size();}}
- static boolean enrollmentPresent(){synchronized(lifecycleLock){return rootToken!=null&&ownerToken!=null;}}
+ static boolean enrollmentPresent(){return rootToken!=null&&ownerToken!=null;}
  /** Instrumentation-only: register a synthetic in-flight stream owned by this instance. */
  void adoptStreamForTest(String id,ElizaAgentService.LocalStreamHandle handle,Runnable invalidator){if(!BuildConfig.DEBUG)throw new IllegalStateException();synchronized(lifecycleLock){instances.add(this);streams.put(id,handle);streamInvalidators.put(id,invalidator);}}
  static void enrollForTest(String root,String owner,String identity,long expiry){if(!BuildConfig.DEBUG)throw new IllegalStateException();synchronized(lifecycleLock){rootToken=root;ownerToken=owner;ownerIdentity=identity;expiresAt=expiry;}}
