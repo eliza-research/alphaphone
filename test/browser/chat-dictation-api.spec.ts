@@ -126,9 +126,11 @@ test('API interruptSpeech preserves listening; Mute controls capture with presse
  expect(await page.evaluate(()=>(window as any).live.sharedVoiceSession.interruptSpeech())).toBe(true);
  await expect(voice(page)).toHaveAttribute('data-voice-state','listening');
  await expect.poll(()=>live(page,f=>f.stopped)).toBeGreaterThan(0);
- expect(await live(page,f=>({starts:f.captures.length,stops:f.stops.length}))).toEqual({starts:2,stops:1});
+ // The shared busy hold closes capture #2 on submission; interrupting playback reopens capture #3.
+ await expect.poll(()=>live(page,f=>({starts:f.captures.length,stops:f.stops.length}))).toEqual({starts:3,stops:2});
+ await expect.poll(()=>live(page,f=>f.active)).not.toBeNull();
  await button(page,'Stop voice conversation').click();
- await expect.poll(()=>live(page,f=>f.stops.length)).toBe(2);
+ await expect.poll(()=>live(page,f=>({starts:f.captures.length,stops:f.stops.length}))).toEqual({starts:3,stops:3});
  await expect(page.getByText('(Interrupted before this reply was played.)')).toBeVisible();
  expect(await posts(page)).toEqual(['How is the weather']);
  await clean(page,foreign);
@@ -143,9 +145,14 @@ test('API dictation recovery: without an echo canceller, speech during playback 
  await say(page,'When does the library close');
  await expect(voice(page)).toHaveAttribute('data-voice-state','speaking');
  const stopped=await live(page,f=>f.stopped);
- await say(page,'closes at six tonight');
+ // No-canceller playback is still a busy hold: the closed capture cannot route speech.
+ expect(await live(page,f=>f.active)).toBeNull();
+ expect(await live(page,f=>f.sharedVoiceSession.getSnapshot().inputHeld)).toBe(true);
+ const routed=await live(page,f=>f.routes.length);
+ await page.evaluate(()=>{const f=(window as any).live,t=Date.now();f.frames([t-64,t-32,t],[{type:'speech-start',timestampMs:t-64}]);f.frames([t],[{type:'speech-end',timestampMs:t}]);});
  await page.waitForTimeout(1600);
  expect(await live(page,f=>f.stopped)).toBe(stopped);
+ expect(await live(page,f=>f.routes.length)).toBe(routed);
  await expect(voice(page)).toHaveAttribute('data-voice-state','speaking');
  expect(await posts(page)).toEqual(['When does the library close']);
  await button(page,'Stop voice conversation').click();
