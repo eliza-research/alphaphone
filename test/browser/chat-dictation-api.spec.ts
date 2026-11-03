@@ -40,7 +40,7 @@ test('API dictation: Transcribe cancellation discards late ASR and preserves the
  const foreign=await setupNative(page);await page.locator('textarea[data-alpha-composer]').fill('Keep this draft');await page.evaluate(()=>(window as any).nativeSpeech.holdTranscript=true);await invokeDictation(page);await expect(transcription(page)).toHaveAttribute('data-voice-state','recording');await button(page,'Stop recording').click();await expect(transcription(page)).toHaveAttribute('data-voice-state','transcribing');await button(page,'Cancel transcription').click();await expect(transcription(page)).toHaveCount(0);await page.evaluate(()=>(window as any).nativeSpeech.releaseTranscript());await expect(page.locator('textarea[data-alpha-composer]')).toHaveValue('Keep this draft');expect(await page.evaluate(()=>(window as any).flagOff.posts)).toEqual([]);expect(await page.evaluate(()=>(window as any).nativeSpeech.starts)).toBe(1);await noCloud(page,foreign);
 });
 test('API dictation: unavailable Transcribe retains keyboard and never starts a capture',async({page})=>{
- const foreign=await setupNative(page);await page.evaluate(()=>(window as any).nativeSpeech.ready=false);await invokeDictation(page);await expect(transcription(page).getByRole('button',{name:'On-device speech unavailable',exact:true})).toBeDisabled();await expect(transcription(page)).not.toContainText('Retry local speech');await button(page,'Switch to keyboard').click();await expect(transcription(page)).toHaveCount(0);await expect(page.locator('textarea[data-alpha-composer]')).toBeVisible();expect(await page.evaluate(()=>(window as any).nativeSpeech.starts)).toBe(0);await noCloud(page,foreign);
+ const foreign=await setupNative(page);await page.evaluate(()=>(window as any).nativeSpeech.ready=false);await invokeDictation(page);await expect(transcription(page).getByRole('button',{name:'On-device speech unavailable',exact:true})).toBeDisabled();await expect(transcription(page)).not.toContainText('On-device speech is unavailable');await expect(transcription(page)).not.toContainText('Retry local speech');await button(page,'Switch to keyboard').click();await expect(transcription(page)).toHaveCount(0);await expect(page.locator('textarea[data-alpha-composer]')).toBeVisible();expect(await page.evaluate(()=>(window as any).nativeSpeech.starts)).toBe(0);await noCloud(page,foreign);
 });
 test('API dictation: leaving foreground during Transcribe discards late output without changing the draft',async({page})=>{
  const foreign=await setupNative(page);await page.locator('textarea[data-alpha-composer]').fill('Original draft');await page.evaluate(()=>(window as any).nativeSpeech.holdTranscript=true);await invokeDictation(page);await expect(transcription(page)).toHaveAttribute('data-voice-state','recording');await button(page,'Stop recording').click();await expect(transcription(page)).toHaveAttribute('data-voice-state','transcribing');await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await expect(transcription(page)).toHaveCount(0);await page.evaluate(()=>(window as any).nativeSpeech.releaseTranscript());await expect(page.locator('textarea[data-alpha-composer]')).toHaveValue('Original draft');expect(await page.evaluate(()=>(window as any).flagOff.posts)).toEqual([]);await noCloud(page,foreign);
@@ -109,7 +109,7 @@ test('API interruptSpeech preserves listening; Mute controls capture with presse
  await expect.poll(()=>live(page,f=>({starts:f.captures.length,stops:f.stops.length}))).toEqual({starts:3,stops:2});
  await expect.poll(()=>live(page,f=>f.active)).not.toBeNull();
  await button(page,'Stop voice conversation').click();
- await expect.poll(()=>live(page,f=>f.stops.length)).toBe(3);
+ await expect.poll(()=>live(page,f=>({starts:f.captures.length,stops:f.stops.length}))).toEqual({starts:3,stops:3});
  await expect(page.getByText('(Interrupted before this reply was played.)')).toBeVisible();
  expect(await posts(page)).toEqual(['How is the weather']);
  await clean(page,foreign);
@@ -126,9 +126,11 @@ test('API dictation recovery: without an echo canceller, speech during playback 
  // Busy hold (pinned SDK): input stays closed through the reply's playback, so nothing hears it.
  expect(await live(page,f=>f.active)).toBeNull();
  expect(await live(page,f=>f.sharedVoiceSession.getSnapshot().inputHeld)).toBe(true);
+ const routed=await live(page,f=>f.routes.length);
  await page.evaluate(()=>{const f=(window as any).live,t=Date.now();f.frames([t-64,t-32,t],[{type:'speech-start',timestampMs:t-64}]);f.frames([t],[{type:'speech-end',timestampMs:t}]);});
  await page.waitForTimeout(1600);
  expect(await live(page,f=>f.stopped)).toBe(stopped);
+ expect(await live(page,f=>f.routes.length)).toBe(routed);
  await expect(voice(page)).toHaveAttribute('data-voice-state','speaking');
  expect(await posts(page)).toEqual(['When does the library close']);
  await button(page,'Stop voice conversation').click();

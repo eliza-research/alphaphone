@@ -17,6 +17,7 @@ async function fixture(page:Page,theme='light'){
   const client={gmailAccounts:async()=>{f.accountReads++;return f.accounts??[{connectionId:'grant-'+f.owner,label:'Synthetic mailbox '+f.owner,connected:true,grantedCapabilities:['google.gmail.triage']}];},
    gmailSearch:(account:string,query:string,signal:AbortSignal,limit:number)=>{f.reads++;const rows=structuredClone(f.rows),fail=f.fail,more=f.more,owner=f.owner;(f.requests??=[]).push({account,query,limit});signal.addEventListener('abort',()=>{(f.aborted??=[]).push(owner);},{once:true});const response=(async()=>{if(f.hold)await new Promise<void>(resolve=>{f.release=resolve;(f.releases??={})[owner]=resolve;});if(fail)throw Error('Synthetic provider unavailable');return {messages:rows,syncedAt:'fixture',nextPageToken:more?'next-fixture-page':null};})();(f.responses??={})[owner]=response.then(()=>{},()=>{});return response;},
    gmailRead:async()=>{f.bodyReads=(f.bodyReads??0)+1;throw Error('No body read in Home fixture');},gmailInboxCapabilities:async()=>({send:false,providerDrafts:false,mailboxMutations:false})};
+  f.notifyOwner=()=>c.close();
   c.getCloudClient=()=>({client,sessionId:'fixture-'+f.owner,credentialId:f.credential??'fixture-only'} as any);
   const original=c.getSnapshot(),snapshots=new Map();c.getSnapshot=()=>{const key=JSON.stringify([f.owner,f.omitOrg,f.credential]);if(!snapshots.has(key))snapshots.set(key,{...original,cloudAccount:{environment:'production',userId:'fixture-'+f.owner,...(f.omitOrg?{}:{organizationId:'fixture-org'}),sessionId:'fixture-'+f.owner,credentialId:f.credential??'fixture-only'}});return snapshots.get(key);};
  });
@@ -101,7 +102,7 @@ for(const scenario of ['recent','expired','owner-change-during-restore'] as cons
 // This Inbox fixture owns an existing installation, not fresh permission prompts.
 test.beforeEach(async({page})=>seedCompletedAccessSetup(page));
 
-const notifyHomeOwner=(page:Page)=>page.evaluate(async()=>{(await import('/src/runtime/connection-ui.tsx')).connectionController.close();});
+const notifyHomeOwner=(page:Page)=>page.evaluate(()=>{(window as any).homeInboxFixture.notifyOwner();});
 
 test('Home loads one current Inbox header summary before Inbox is opened, without bodies or rerender reads',async({page})=>{
  await fixture(page);await notifyHomeOwner(page);

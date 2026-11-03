@@ -10,6 +10,7 @@
 // plugin, its viewer handoff and Files provider are native and not exercised here.
 import {createHash} from 'node:crypto';
 import {test,expect,type Page} from '@playwright/test';
+import {seedCompletedAccessSetup} from './flag-off-android';
 
 const ATTACKER='attacker.invalid';
 const html=`<!doctype html><html><head><meta http-equiv="refresh" content="0;url=https://${ATTACKER}/meta"><link rel="stylesheet" href="https://${ATTACKER}/style.css"></head><body onload="top.hostile='onload'"><script>try{top.hostile='script'}catch(e){}window.hostile='script';fetch('https://${ATTACKER}/script');top.location='https://${ATTACKER}/navigate';</script><img src="https://${ATTACKER}/beacon.png"><img src="x" onerror="top.hostile='onerror';fetch('https://${ATTACKER}/onerror')"><a id="a" href="https://${ATTACKER}/link">Invoice</a><form action="https://${ATTACKER}/form"><input name="password"></form></body></html>`;
@@ -39,6 +40,8 @@ async function expectInert(page:Page,seen:Awaited<ReturnType<typeof watch>>){
  expect(await page.evaluate(()=>document.querySelectorAll('a#a, input[name="password"], img[src*="attacker"], svg image, foreignObject').length)).toBe(0);
 }
 async function setup(page:Page,parts:Part[],options:{opaque?:boolean;agent?:boolean}={}){
+ // This mail fixture represents a completed installation; dedicated startup tests own access review.
+ await seedCompletedAccessSetup(page);
  await page.goto('/');
  await page.evaluate(async({parts,options})=>{
   const {connectionController:c}=await import('/src/runtime/connection-ui.tsx');
