@@ -378,16 +378,48 @@ jobs:
           const [root,phase]=process.argv.slice(2),expected=JSON.parse(fs.readFileSync(p.join(root,'tooling/expected.json')));
           const read=name=>JSON.parse(fs.readFileSync(p.join(root,'reports',name+'.json')));
           function specs(r){const out=[];function walk(s){out.push(...s.specs||[]);for(const x of s.suites||[])walk(x)}walk(r);return out;}
+          const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+          function keys(x,allowed){assert.ok(object(x),'Expected bounded metadata object');assert.ok(Object.keys(x).every(k=>allowed.includes(k)),'Unexpected metadata field');}
+          const count=n=>Number.isSafeInteger(n)&&n>=0;
+          function errorFields(e,messageAllowed){
+           keys(e,['type','name','code','causeName','causeCode',...(messageAllowed?['message']:[])]);
+           assert.ok(['object','string','number','boolean','undefined','function','symbol','bigint'].includes(e.type),'Wrong error type metadata');
+           for(const k of ['name','code','causeName','causeCode'])if(e[k]!==undefined)assert.ok(typeof e[k]==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(e[k]),'Unbounded error token');
+           if(e.message!==undefined)assert.ok(typeof e.message==='string'&&e.message.length<=256&&!/[\u0000-\u001f\u007f\u2028\u2029]/.test(e.message),'Public error message must be bounded single-line');
+          }
+          function attachmentJSON(a){
+           // TestInfo.attach(Buffer) is retained as inline base64 in the JSON reporter. No arbitrary path reads.
+           assert.ok(typeof a.body==='string'&&a.body.length>0&&a.body.length<=43692,'Missing or oversized inline attachment bytes');
+           assert.ok(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(a.body),'Invalid inline base64');
+           const bytes=Buffer.from(a.body,'base64');assert.ok(bytes.length>0&&bytes.length<=32768&&bytes.toString('base64')===a.body,'Noncanonical/oversized metadata');
+           const text=bytes.toString('utf8');assert.ok(Buffer.from(text,'utf8').equals(bytes),'Invalid metadata UTF8');
+           const m=JSON.parse(text);assert.ok(object(m)&&m.version===1,'Wrong metadata version');
+           if(m.diagnosticCaptureFailed===true){keys(m,['version','diagnosticCaptureFailed','errorType','errorName']);assert.ok(typeof m.errorType==='string'&&typeof m.errorName==='string'&&m.errorName.length<=80,'Wrong failed-capture metadata');return 'INSUFFICIENT_DIAGNOSTIC_CAPTURE_FAILED_UNKNOWN';}
+           keys(m,['version','scope','snapshotAvailable','snapshot','counts','nativeRequests','notifications']);
+           assert.ok(m.scope==='synthetic-voice-fixture-failure-only'&&typeof m.snapshotAvailable==='boolean','Wrong metadata scope/snapshot flag');
+           const numericCounts=['captures','stops','asrRoutes','closeRoutes','routeFrames','syntheses','plays','playbackStops','posts','unexpectedNativeRequests','forbiddenVoiceRequests'];
+           keys(m.counts,[...numericCounts,'activeCapturePresent']);for(const k of numericCounts)assert.ok(count(m.counts[k]),'Wrong native/capture count');assert.ok(typeof m.counts.activeCapturePresent==='boolean','Wrong active capture flag');
+           assert.ok(Array.isArray(m.nativeRequests)&&m.nativeRequests.length<=64,'Unbounded native-call metadata');
+           for(const row of m.nativeRequests){
+            keys(row,['plugin','method','operation','outcome','status','error']);assert.ok(['Agent','AlphaVoiceCloud'].includes(row.plugin),'Wrong native plugin');
+            assert.ok(['request','requestStream','cancelStream','startLiveCapture','stopLiveCapture','synthesizeLocal','play','stopPlayback','cancel','releaseLocalSpeech','cancelRecording'].includes(row.method),'Wrong native method');
+            assert.ok(['conversation-stream','live-status','live-asr','end-of-turn','other-native-request','capture-or-playback'].includes(row.operation),'Wrong native operation class');assert.ok(['pending','resolved','rejected'].includes(row.outcome),'Wrong native outcome');
+            if(row.status!==undefined)assert.ok(Number.isInteger(row.status)&&row.status>=100&&row.status<=599,'Wrong native status');if(row.error!==undefined)errorFields(row.error,false);
+           }
+           if(m.notifications!==undefined){keys(m.notifications,['added','removed','active']);assert.ok(count(m.notifications.added)&&count(m.notifications.removed)&&count(m.notifications.active)&&m.notifications.added-m.notifications.removed===m.notifications.active,'Wrong listener custody counts');}
+           if(!m.snapshotAvailable){assert.ok(m.snapshot===undefined,'Contradictory missing snapshot');return 'INSUFFICIENT_NO_PUBLIC_SNAPSHOT_UNKNOWN';}
+           keys(m.snapshot,['phase','hearing','muted','inputHeld','hasPendingText','hasTranscript','error']);assert.ok(['idle','starting','listening','thinking','awaiting-user-input','speaking','error'].includes(m.snapshot.phase),'Wrong public snapshot phase');for(const k of ['hearing','muted','inputHeld','hasPendingText','hasTranscript'])assert.ok(typeof m.snapshot[k]==='boolean','Wrong public snapshot flag');
+           if(m.snapshot.error!==undefined)errorFields(m.snapshot.error,true);
+           return typeof m.snapshot.error?.message==='string'&&m.snapshot.error.message.trim()?'PUBLIC_SNAPSHOT_MESSAGE_RETAINED_CONTROLLED_SYNTHETIC_ONLY':'INSUFFICIENT_NO_PUBLIC_ERROR_MESSAGE_UNKNOWN';
+          }
           function validate(name){
-            const r=read(name),rows=specs(r);assert.deepEqual(r.errors,[]);assert.equal(r.stats.skipped,0);assert.equal(rows.length,3);
-            assert.deepEqual(rows.map(s=>s.title).sort(),[...expected.names].sort());
-            for(const s of rows){
-              assert.ok(s.file===expected.file||s.file.endsWith('/'+expected.file)||s.file===p.basename(expected.file));
-              assert.equal(s.tests.length,1);const t=s.tests[0];assert.equal(t.projectName,expected.project);assert.equal(t.expectedStatus,'passed');assert.equal(t.results.length,1);
-              const result=t.results[0];assert.equal(result.retry,0);assert.ok(['passed','failed','timedOut'].includes(result.status));
-              if(result.status!=='passed')assert.equal(result.attachments?.filter(a=>a.name==='voice-fixture-failure-metadata'&&a.contentType==='application/json').length,1,'A failed fixture case must retain its diagnostic attachment');
-            }
-            return rows.map(s=>({name:s.title,status:s.tests[0].results[0].status}));
+           const r=read(name),rows=specs(r);assert.deepEqual(r.errors,[]);assert.equal(r.stats.skipped,0);assert.equal(rows.length,3);assert.deepEqual(rows.map(s=>s.title).sort(),[...expected.names].sort());
+           return rows.map(s=>{
+            assert.ok(s.file===expected.file||s.file.endsWith('/'+expected.file)||s.file===p.basename(expected.file));assert.equal(s.tests.length,1);const t=s.tests[0];assert.equal(t.projectName,expected.project);assert.equal(t.expectedStatus,'passed');assert.equal(t.results.length,1);
+            const result=t.results[0];assert.equal(result.retry,0);assert.ok(['passed','failed','timedOut'].includes(result.status));let diagnosticQuality;
+            if(result.status!=='passed'){const attachments=result.attachments?.filter(a=>a.name==='voice-fixture-failure-metadata'&&a.contentType==='application/json');assert.equal(attachments?.length,1,'A failed fixture case must retain its diagnostic attachment');diagnosticQuality=attachmentJSON(attachments[0]);}
+            return {name:s.title,status:result.status,...(diagnosticQuality?{diagnosticQuality}:{})};
+           });
           }
           if(phase!=='compare'){validate(phase);return;}
           const base=validate('base-three'),candidate=validate('candidate-three');
