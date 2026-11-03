@@ -273,10 +273,13 @@ function planCheckScope(){return JSON.stringify([ownProviderSelected()||(state.c
 /** The plan check scope when the network went away. Once it is back, the next return in that same
  * scope checks inside the once-a-minute limit, once. A new admission (connectResident,
  * residentSignedIn) retires it, and records its own when it runs with no network. A provider status
- * write that changes the provider class (update) retires it too, so A→B→A seen by status reads alone
- * cannot spend it. A Cloud sign-in, sign-out or completed provider change runs an admission, and
- * setResidentQa reloads the tab that makes it; any other change (a QA environment set in another
- * tab, test mocks only) is caught only when the scope differs at the return. */
+ * write that changes the provider class (update) retires a recorded one too, so A→B→A seen by status
+ * reads alone cannot spend it. That leaves '' (never a scope, so no check), which ??= and ?? keep:
+ * the admission whose provider read changed the class records no replacement, and in that offline
+ * episode only a new admission or the next offline edge records one. A Cloud sign-in, sign-out or
+ * completed provider change runs an admission, and setResidentQa reloads the tab that makes it; any
+ * other change (a QA environment set in another tab, test mocks only) is caught only when the scope
+ * differs at the return. */
 let networkLostUnder: string | null = null;
 /** The plan check a return started (recheckResidentPlan); while it runs it answers the network's return. */
 let planRecheck: AbortController | null = null;
@@ -724,7 +727,7 @@ async function signedIn(client: CloudProtocol, outcome: CloudSignInAuthenticated
 function developmentCloud(): DevelopmentCloudAgentProtocol { if (!testMocksEnabled || !(cloud instanceof DevelopmentCloudAgentProtocol)) throw Error(PAIRING_RETIRED); return cloud; }
 function update(patch: Partial<ConnectionSnapshot>) {
   const next = { ...state, ...patch };
-  if('providerStatus' in patch&&ownProviderSelected(next)!==ownProviderSelected(state))networkLostUnder=null;
+  if('providerStatus' in patch&&ownProviderSelected(next)!==ownProviderSelected(state))networkLostUnder&&='';
   if (state.purpose === 'cloud-account' && patch.cloudAccount && !state.cloudAccount) { next.open = false; next.purpose = 'agent'; }
   if(next.purpose!=='plan'||patch.open===false||next.cloudAccount?.sessionId!==state.cloudAccount?.sessionId)next.membershipCodeEntry=false;
   // Modal ownership follows production presentation. Automatic restore only suppresses rendering
@@ -1223,7 +1226,7 @@ async function connectResident(signal: AbortSignal, admitted?: ResidentAdmission
   if(isAndroid||browserCloudResidentEnabled){const status=await localProviderStatus();signal.throwIfAborted();update({providerStatus:status});}
   // One that runs with no network cannot read the plan: the network's return checks it, in the scope
   // this admission runs under. A return lost earlier in it keeps its own scope while the provider read
-  // keeps the class; a changed class retired it (update), and this records the admission's own.
+  // keeps the class; a changed class retired it (update) and this records no replacement.
   if(state.inferenceOffline)networkLostUnder??=planCheckScope();
   const ownProvider=ownProviderSelected();
   // A prior Cloud plan may not rebind a resident now using its own keys.

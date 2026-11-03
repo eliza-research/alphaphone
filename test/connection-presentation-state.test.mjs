@@ -17,7 +17,7 @@ const code=stripTypeScriptTypes(functions,{mode:'transform'});
 function fixture({android=true,dev=false,browserResident=false,account={expiresAt:Date.now()+60000},purpose='agent',open=false}={}){
  const entries=[{id:'review-1',state:'reconciliation_required'}];let release;
  const selected={request(){},actions:{}};
- const context=vm.createContext({isAndroid:android,testMocksEnabled:dev,browserCloudResidentEnabled:browserResident,developmentPageSuspended:false,sending:null,flushConversationEvents:()=>{},listeners:new Set(),state:{open,automaticRestore:false,busy:false,error:'',cloudAccount:account,purpose,signIn:null,message:'Finish signing in in your browser.',session:{}},active:selected,epoch:1,navigationContext:()=>({view:'home'}),errorMessage:()=> 'Sign-in expired',readActionHistory:async()=>entries,Date,
+ const context=vm.createContext({isAndroid:android,testMocksEnabled:dev,browserCloudResidentEnabled:browserResident,developmentPageSuspended:false,sending:null,flushConversationEvents:()=>{},listeners:new Set(),state:{open,automaticRestore:false,busy:false,error:'',cloudAccount:account,purpose,signIn:null,message:'Finish signing in in your browser.',session:{}},active:selected,epoch:1,networkLostUnder:null,navigationContext:()=>({view:'home'}),errorMessage:()=> 'Sign-in expired',readActionHistory:async()=>entries,Date,
   ViewNavigationClient:class {constructor(request,current,context){this.current=current;this.context=context;}connectRenderer(){return()=>{};}}});
  vm.runInContext(code,context);
  return {context,entries,update:patch=>context.update(patch),snapshot:()=>context.state,review:()=>context.refreshActionReview(new AbortController().signal),navigation:()=>context.boundNavigation()};
@@ -482,18 +482,40 @@ test('an admission that runs with no network leaves the network\'s return its ow
   connect(); await settled(); box.fire('visibilitychange'); assert.equal(box.rechecks, 1);
   box.fire('online'); assert.equal(box.rechecks, 2, 'started offline, own provider');
 });
-// The network lost while an admission reads a provider of another class: the read retires that
-// return (the real update) and the admission, still offline, records its own.
-test('a return lost while an admission reads a changed provider class is that admission\'s own: it checks once', async () => {
-  for (const [name, before, after] of [['unknown, own provider', undefined, ownProvider], ['own provider, Cloud', ownProvider, {selected: false}]]) {
-    const box = returnFixture(), {connect} = admissions(box); statusReads(box);
-    Object.assign(box, {browserCloudResidentEnabled: true, localProviderStatus: async () => after});
-    box.state.providerStatus = before;
-    box.fire('visibilitychange'); connect(); box.fire('offline'); await settled();
-    box.fire('online'); assert.equal(box.rechecks, 2, name);
-    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, `${name}: once`);
-  }
-});
+// The network lost while an admission reads a provider of another class (Root, #743): the read
+// retires that return (the real update) and the same admission records no replacement for that
+// offline episode, as when a scope captured unknown differs at the return. A later new admission or
+// offline edge in it records its own, as does an offline admission with nothing captured.
+function classReads(box, before, after) {
+  const entries = admissions(box); statusReads(box);
+  Object.assign(box, {browserCloudResidentEnabled: true, localProviderStatus: async () => after});
+  box.state.providerStatus = before;
+  return entries;
+}
+for (const [admission, run] of Object.entries({
+  start: (box, {connect}) => { connect(); box.fire('offline'); },
+  'sign-in': (box, {connect, signIn}) => { signIn(); box.fire('offline'); connect(signInAdmission); },
+})) for (const [name, before, after] of [['unknown, own provider', undefined, ownProvider], ['own provider, Cloud', ownProvider, {selected: false}], ['Cloud, own provider', {selected: false}, ownProvider]]) {
+  test(`a return lost while an admission reads a changed provider class is not replaced in that offline episode: ${admission}, ${name}`, async () => {
+    const box = returnFixture(), entries = classReads(box, before, after);
+    box.fire('visibilitychange'); run(box, entries); await settled();
+    box.fire('online'); box.fire('pageshow'); assert.equal(box.rechecks, 1, 'no second plan read');
+    box.fire('offline'); box.fire('online'); assert.equal(box.rechecks, 2, 'a later network return checks');
+    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'once');
+  });
+}
+for (const [name, offline, before, after, run] of [
+  // The rule 6aacec1be made: a new admission that runs offline records its own.
+  ['a later fresh admission, still offline', false, ownProvider, {selected: false}, async (box, {connect}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); connect(); await settled(); box.fire('online'); }],
+  ['a new offline edge before the return was seen', false, ownProvider, {selected: false}, async (box, {connect}) => { box.fire('visibilitychange'); connect(); box.fire('offline'); await settled(); box.fire('online', true); box.fire('offline', true); box.fire('online', true); box.fire('visibilitychange'); }],
+  ['started offline, unknown, own provider', true, undefined, ownProvider, async (box, {connect}) => { connect(); await settled(); box.fire('visibilitychange'); box.fire('online'); }],
+]) {
+  test(`in that offline episode a later admission or offline edge, or an offline admission with nothing captured, records its own: ${name}`, async () => {
+    const box = returnFixture({offline}); await run(box, classReads(box, before, after));
+    assert.equal(box.rechecks, 2, 'the network return checks');
+    box.fire('pageshow'); box.fire('visibilitychange'); assert.equal(box.rechecks, 2, 'once');
+  });
+}
 // The check the network's return allows may still not reach Cloud. Nothing unverified is admitted,
 // recorded or shown as a valid plan; there is no sign-in or rebind. An identity read that fails shows
 // no notice; a plan read that fails after it keeps the plan notice (Root, #743: that contract is
