@@ -22,8 +22,19 @@ async function captureApi(page:Page){
  await expect.poll(()=>page.evaluate(()=>!!(window as any).dictationApiFixture)).toBe(true);
 }
 async function setupNative(page:Page){const foreign=await setupNativeSpeech(page);await captureApi(page);return foreign;}
+async function expectHappyVoiceOnline(page:Page){
+ await expect.poll(()=>page.evaluate(async()=>{
+  const {connectionController}=await import('/src/runtime/connection-ui.tsx');
+  return {simulatedNavigatorOnline:navigator.onLine===true,appInferenceOffline:connectionController.getSnapshot().inferenceOffline};
+ }),{message:'Happy voice fixture requires simulated online input and actual app inferenceOffline=false before voice'}).toEqual({simulatedNavigatorOnline:true,appInferenceOffline:false});
+}
 async function setupLive(page:Page){
+ // These three synthetic happy-path cases model an online phone. The hosted network namespace
+ // remains loopback-only; no provider requests or credentials are enabled by this browser input.
+ await page.context().setOffline(false);
+ await page.addInitScript(()=>{Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>true});});
  const foreign=await setupLiveAssistant(page);await captureApi(page);
+ await expectHappyVoiceOnline(page);
  await observeVoiceFixture(page);
  // Observe the actual shared controller, not an obsolete renderer callback.
  await page.evaluate(async()=>{const {VoiceAssistantSession}=await import('/src/runtime/voice-assistant.ts');const start=VoiceAssistantSession.prototype.start;VoiceAssistantSession.prototype.start=function(){(window as any).live.sharedVoiceSession=this;return start.call(this);};});
@@ -80,6 +91,7 @@ test('API dictation and assistant stay distinct: draft editing never sends, voic
 
  await page.locator('textarea[data-alpha-composer]').fill('');
  await expect(button(page,'Talk')).toBeVisible();
+ await expectHappyVoiceOnline(page);
  await button(page,'Talk').click();
  await expect(voice(page)).toHaveAttribute('data-voice-state','listening');
  expect(await live(page,f=>f.captures.map((c:any)=>c.echoCancel))).toEqual([false,true]);
@@ -96,6 +108,7 @@ test('API dictation and assistant stay distinct: draft editing never sends, voic
 test('API interruptSpeech preserves listening; Mute controls capture with pressed state',async({page})=>{
  const foreign=await setupLive(page);
  await page.evaluate(()=>{(window as any).flagOff.replies.push('Here is a long answer about the weather this week.');});
+ await expectHappyVoiceOnline(page);
  await button(page,'Talk').click();
  await expect(voice(page)).toHaveAttribute('data-voice-state','listening');
  const mute=voice(page).getByRole('button',{name:'Mute microphone',exact:true});
@@ -124,6 +137,7 @@ test('API interruptSpeech preserves listening; Mute controls capture with presse
 test('API dictation recovery: without an echo canceller, speech during playback never interrupts; a lost Transcribe capture can start again',async({page})=>{
  const foreign=await setupLive(page);
  await page.evaluate(()=>{const w=window as any;w.live.noCanceller=true;w.flagOff.replies.push('The library closes at six tonight.');});
+ await expectHappyVoiceOnline(page);
  await button(page,'Talk').click();
  await expect(voice(page)).toHaveAttribute('data-voice-state','listening');
  await say(page,'When does the library close');
