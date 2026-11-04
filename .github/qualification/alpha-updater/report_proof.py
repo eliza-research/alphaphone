@@ -23,7 +23,7 @@ def reconcile_reports(out,cases):
    file=file_identity(data.get('file'));name=data.get('name');assert isinstance(name,str);key=(file,name)
    if key not in expected:
     assert name in [file,'/workspace/'+file]and data.get('nesting')==0 and data.get('line')==data.get('column')==1,'Unrecognized runner-file envelope'
-    assert kind!='test:fail'and not data.get('skip')and not data.get('todo');envelopes.append({'type':kind,**data});continue
+    assert kind!='test:fail'and not data.get('skip')and not data.get('todo');envelopes.append({**data,'eventType':kind});continue
    row=expected[key];assert data.get('nesting')==row['nesting']and data.get('line')==row['line']and data.get('column')==row['column'],'Wrong emitted source/nesting coordinates'
    assert not data.get('skip')and not data.get('todo')and not data.get('expectFailure'),'Case directive rejected'
    if kind in ['test:enqueue','test:dequeue']:assert data.get('type')=='test'
@@ -46,8 +46,8 @@ def reconcile_reports(out,cases):
  assert collections.Counter(s['file']for s in summaries)==collections.Counter([None,*by_file]),'Missing/duplicate per-file/global summaries'
  assert sum(p['file']is None for p in plans)==1,'Missing global normal test plan'
  # Runner FileTest envelopes are never counted as the33 ordinary test cases.
- for kind in set(x['type']for x in envelopes):
-  rows=[x for x in envelopes if x['type']==kind];assert len(rows)==len({file_identity(x['file'])for x in rows})and len(rows)<=3,'Duplicate runner-file envelopes'
+ for kind in set(x['eventType']for x in envelopes):
+  rows=[x for x in envelopes if x['eventType']==kind];assert len(rows)==len({file_identity(x['file'])for x in rows})and len(rows)<=3,'Duplicate runner-file envelopes'
  tap=bounded('normal.tap');junit_file=bounded('normal.junit.xml');tree=ET.parse(junit_file);root=tree.getroot();assert root.tag=='testsuites'
  assert not any(root.iter('failure'))and not any(root.iter('error'))and not any(root.iter('skipped')),'JUnit status elements reject'
  junit_cases=collections.Counter();file_attributes=0
