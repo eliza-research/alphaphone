@@ -1,0 +1,55 @@
+{
+  "state": "SOURCE_PARSERS_AND_LOCAL_IMPORT_BINDINGS_ONLY_NO_CANDIDATE_EXECUTION",
+  "checks": [
+    {
+      "file": "report_proof.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "run.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "validate.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "claim.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "source-frame.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "prepare-jdk.py",
+      "check": "Python AST only",
+      "PASS": true
+    },
+    {
+      "file": "projection-custody.mjs",
+      "check": "Node syntax only; no imports or callbacks executed",
+      "PASS": true
+    },
+    {
+      "file": "tool-provenance.mjs",
+      "check": "Node syntax only; no imports or callbacks executed",
+      "PASS": true
+    },
+    {
+      "file": "raw-events.mjs",
+      "check": "Node syntax only; no imports or callbacks executed",
+      "PASS": true
+    }
+  ],
+  "localOperatorImportsResolveByFilename": true,
+  "testModulesFixturesAndToolsImportedOrExecuted": false,
+  "sourceCaseIdentities": 33,
+  "originalThreeSourceFileSHA256Unchanged": true,
+  "NodeSchemaSource": "Six pinned Node24.15 primarysource files in node-source-evidence, bytes only. NoNode test runnerexecuted."
+}

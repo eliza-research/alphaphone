@@ -1,0 +1,43 @@
+{
+  "state": "AUTHORITATIVE_JDK_ARCHIVE_METADATA_ONLY_NO_BINARY_DOWNLOAD_OR_EXECUTION",
+  "atUTC": "2026-11-04T09:35:57.183999+00:00",
+  "queryURL": "https://api.adoptium.net/v3/assets/feature_releases/21/ga?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&page=0&page_size=1&project=jdk&vendor=eclipse",
+  "responseURL": "https://api.adoptium.net/v3/assets/feature_releases/21/ga?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&page=0&page_size=1&project=jdk&vendor=eclipse",
+  "responseBytes": 2635,
+  "responseSHA256": "b1292c7b562470c5b120966552523c5c144c1aac22e7f30fa1e697d92e8392b1",
+  "releaseName": "jdk-21.0.13+9",
+  "vendor": "eclipse",
+  "releaseType": "ga",
+  "version": {
+    "build": 9,
+    "major": 21,
+    "minor": 0,
+    "openjdk_version": "21.0.13+9-LTS",
+    "optional": "LTS",
+    "security": 13,
+    "semver": "21.0.13+9.0.LTS"
+  },
+  "binary": {
+    "architecture": "x64",
+    "download_count": 1048836,
+    "heap_size": "normal",
+    "image_type": "jdk",
+    "jvm_impl": "hotspot",
+    "os": "linux",
+    "package": {
+      "checksum": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+      "checksum_link": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz.sha256.txt",
+      "download_count": 1048836,
+      "link": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz",
+      "metadata_link": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz.json",
+      "name": "OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz",
+      "signature_link": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz.sig",
+      "size": 207858352
+    },
+    "project": "jdk",
+    "scm_ref": "jdk-21.0.13+9_adopt",
+    "updated_at": "2026-10-22T12:07:52Z"
+  },
+  "archiveDownloaded": false,
+  "installedOrExecuted": false
+}

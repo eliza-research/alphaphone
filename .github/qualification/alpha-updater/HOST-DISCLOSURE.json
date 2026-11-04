@@ -1,0 +1,12 @@
+{
+  "20261025.353.1": "Exact authenticated41741039106 setup + explicit Root source disposition; independent official tag/readme provenance gap OPEN, not capability waiver.",
+  "20261026.354.1": {
+    "officialTagCommitReadmeBound": true,
+    "releasePrerelease": false
+  },
+  "20261101.360.1": {
+    "officialTagCommitReadmeBound": true,
+    "releasePrerelease": true
+  },
+  "20261018.96.1": "Exact authenticated41750127407 setup/claim/earlymetadata plus explicitRoot source disposition; fresh officialtag404, independent officialtag/commit/readme provenance gap OPEN, not capability or execution admission."
+}

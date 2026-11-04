@@ -1,0 +1,119 @@
+{
+  "state": "SOURCE_SPANS_EXACT_AST_COPY_WITH_EXPLICIT_NEW_GLOBALS_CONTAINER_SCOPE",
+  "spans": [
+    {
+      "name": "PhaseExitError",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        51,
+        53
+      ],
+      "spanSHA256": "289010330ec8d107172cdde2f86ef2a1b0707543b06a66dbd6e9f5274d920455",
+      "currentSpanSHA256": "289010330ec8d107172cdde2f86ef2a1b0707543b06a66dbd6e9f5274d920455",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "identity",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        55,
+        59
+      ],
+      "spanSHA256": "82190576168ebbca48cb1ffcc2254cdc8cbedf7e53f397da0b89e5e7909b4c00",
+      "currentSpanSHA256": "82190576168ebbca48cb1ffcc2254cdc8cbedf7e53f397da0b89e5e7909b4c00",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "group_members",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        61,
+        67
+      ],
+      "spanSHA256": "8c8a7686996c686dbca4c888e63081dc76615bad36c4277aa1730780e6b6ed02",
+      "currentSpanSHA256": "8c8a7686996c686dbca4c888e63081dc76615bad36c4277aa1730780e6b6ed02",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "phase",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        69,
+        133
+      ],
+      "spanSHA256": "d4065a45ee53d023ae58af93b7d8660e1e0c6fc5ecf71ed13854626dae3daca8",
+      "currentSpanSHA256": "aaa196b6c504d8c1e9e65df54852a4ddf745155364c2fe979a4911756b922905",
+      "reuse": "ADAPTED_EXPLICIT_CID_OBSERVATION_OR_JAVA_ISOLATION_REVIEW_REQUIRED"
+    },
+    {
+      "name": "inspect_container",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        137,
+        142
+      ],
+      "spanSHA256": "6d3ac6b8cb7a45a04149e9f82158135c4afe37b6f03fc688cc04caabb16376a0",
+      "currentSpanSHA256": "6d3ac6b8cb7a45a04149e9f82158135c4afe37b6f03fc688cc04caabb16376a0",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "check_container",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        144,
+        147
+      ],
+      "spanSHA256": "ee2c7e5040bbbae39b07e6eea2badab278ad0a950177b909b03cb6adf4279e55",
+      "currentSpanSHA256": "ee2c7e5040bbbae39b07e6eea2badab278ad0a950177b909b03cb6adf4279e55",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "ResourcePolicyError",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        149,
+        150
+      ],
+      "spanSHA256": "4e5e41bdcb6cf796e08dfed5cc65a9c78ae39e6b05cc85907988a65ab325c2fc",
+      "currentSpanSHA256": "4e5e41bdcb6cf796e08dfed5cc65a9c78ae39e6b05cc85907988a65ab325c2fc",
+      "reuse": "EXACT_SOURCE_SPAN"
+    },
+    {
+      "name": "check_resources",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        152,
+        162
+      ],
+      "spanSHA256": "72e4ead113dd2e164bf315b324ade54de5ea824a40f9a763aaf7137e4237cbc8",
+      "currentSpanSHA256": "4d7f946529441373fa965b2c07e3ba98802dc4b1fb4f756741148f39edb3d168",
+      "reuse": "ADAPTED_EXPLICIT_CID_OBSERVATION_OR_JAVA_ISOLATION_REVIEW_REQUIRED"
+    },
+    {
+      "name": "cleanup_container",
+      "source": "/Users/nubs/.local/state/eliza-five-lane-coordination/ordinal-aee-normal-qualification-preparation-20261103/operator-v15-history-oracle-consumer-binding/run.py",
+      "sourceSHA256": "5d3da9c087aeaba6dc1a30fbb21f9947a2f15e4e11fbbaf2706e4b08e81950f9",
+      "lines": [
+        164,
+        183
+      ],
+      "spanSHA256": "35487aa7c7c054fade1993664e09fecb14ad1c950258f74258e1cd38f37b33af",
+      "currentSpanSHA256": "35487aa7c7c054fade1993664e09fecb14ad1c950258f74258e1cd38f37b33af",
+      "reuse": "EXACT_SOURCE_SPAN"
+    }
+  ],
+  "globalFormatters": [
+    "inspect_format",
+    "resource_inspect_format"
+  ],
+  "sourceOnly": true,
+  "JVMChildClosureLimit": "HostsupervisesexactDockerCLIgroups andCIDlabel/resourceidentity; in-containerchildPIDsterminatewithnamespaceinitandruntimecleanup. Per-JVMbirth/terminalevents are NOTdirectlyrecordedbythissource. Independentreview mustdecidewhethersatisfiesrequestedactualJVMownershipreceipt; do notpresentasmeasuredJVMprocessaudit."
+}

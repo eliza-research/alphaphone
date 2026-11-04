@@ -1,0 +1,273 @@
+{
+  "state": "SOURCE_DERIVED_NORMAL_COMPLETE_FILES_NOT_EXECUTED",
+  "Alpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+  "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+  "files": [
+    {
+      "path": "test/app-update.test.mjs",
+      "sha256": "a662176d6aaba1d4783dfce65a5ae948b5246ddd01ffa44cf24acac450bdc882",
+      "registrations": 4,
+      "tests": [
+        {
+          "name": "the download is admitted only at its declared size and SHA-256",
+          "line": 16,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "the update flow runs one attempt per process, fences a session Android still holds, keeps its confirmation for the bridge that asked, opens it once, and settles every failure quietly",
+          "line": 28,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Android installs only the offered newer build of this package, and only when no session of Alpha's fences the tap",
+          "line": 52,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Alpha stays nonprivileged and reads one configured HTTPS manifest from its own rolling release",
+          "line": 85,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        }
+      ]
+    },
+    {
+      "path": "test/plugin-worker-guard.test.mjs",
+      "sha256": "539faf52df8d24bcc058bdc07185b330b9610a9d1a7f53f62666ece50d2dea2d",
+      "registrations": 15,
+      "tests": [
+        {
+          "name": "the shared guard refuses work for a stopped, shut-down or full worker without throwing",
+          "line": 12,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaActionJournalPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaActionJournalPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaConnectionPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaConnectionPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaDevicePlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaDevicePlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaFilesPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaFilesPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaHostedResultsPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaHostedResultsPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaLocalAgentPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaLocalAgentPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaMailAttachmentsPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaMailAttachmentsPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaMapsTransportPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaMapsTransportPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaNoteAudioPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaNoteAudioPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "AlphaNoteDocumentsPlugin: every worker dispatch goes through PluginWorkers.submit",
+          "line": 34,
+          "source": "unchanged Object.entries(plugins) loop",
+          "row": "AlphaNoteDocumentsPlugin",
+          "column": 2,
+          "nesting": 0
+        },
+        {
+          "name": "the Maps deadline scheduler is the one dispatch that cannot use Executor and keeps its own catch",
+          "line": 47,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "every worker a plugin declares is listed and checked above",
+          "line": 55,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "the shared Photos bridge Alpha registers answers a call for a stopped worker instead of throwing",
+          "line": 63,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "the shared speech bridge AlphaVoiceCloudPlugin subclasses answers a stopped or full worker the same way",
+          "line": 78,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        }
+      ]
+    },
+    {
+      "path": "test/settings-truth.test.mjs",
+      "sha256": "cc34d9ae2ed8bb728e584df23618cd43ecf8faa79529041dcaf6fe7c306fdce1",
+      "registrations": 14,
+      "tests": [
+        {
+          "name": "the version row shows only what the build and Android report",
+          "line": 9,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "About shows only the install time Android recorded and never claims the app is current",
+          "line": 15,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Software update offers only a complete, newer manifest for this flavor and signer, with an HTTPS APK, a SHA-256 and a bounded size",
+          "line": 32,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "the automatic update check is due a day after the last answered check",
+          "line": 66,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "dead-end and negative Settings rows are gone from the adapter",
+          "line": 75,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "the Google accounts sheet has no Gmail notification settings button: Android lists Gmail with Alpha's other channels",
+          "line": 80,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Scheduled digests has one Settings entry, the top-level row",
+          "line": 84,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "prototype-only sheets (memory wipe, Wi-Fi password, forget network) never reach the renderer",
+          "line": 88,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "native system facts are read without new permissions and are omitted when unreadable",
+          "line": 93,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Cloud privacy facts describe AI and speech without model-navigation claims",
+          "line": 107,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "Cloud privacy hero includes speech while retaining native and offline/startup truth",
+          "line": 113,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "production Settings refuses Developer routes and preserves real About diagnostics",
+          "line": 129,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "one Developer gate: a development server build opened with ?tools=1, never the product",
+          "line": 138,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        },
+        {
+          "name": "explicit developer surfaces retain Developer navigation and route",
+          "line": 146,
+          "source": "literal normalNode registration",
+          "column": 1,
+          "nesting": 0
+        }
+      ]
+    }
+  ],
+  "expectedTotal": 33,
+  "expectedFailedSkippedTodo": 0,
+  "derivation": "Python lexical scanning literaltesttitles plus explicit10rowplugins registry; callback bodies not evaluated; internal Java assertions are not additionalNodecases.",
+  "coordinateDerivation": "Literal existing test() call line/column and ordinary top-level nesting0, including unchanged10row loop; no callbacks executed. Actual event coordinates must match where emitted and be present for pinned normal case events."
+}

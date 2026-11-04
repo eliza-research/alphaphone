@@ -1,0 +1,23 @@
+{
+  "NodeVersion": "24.15.0",
+  "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+  "nodeImageDigest": "sha256:152aceace5c03e2597988763165ee33e3fd3633636db0fc983cd2e126b02cfde",
+  "JDK": {
+    "vendor": "Eclipse Adoptium",
+    "release": "jdk-21.0.13+9",
+    "version": "21.0.13",
+    "runtimeVersion": "21.0.13+9-LTS",
+    "architecture": "x64",
+    "os": "linux",
+    "archiveURL": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz",
+    "archiveBytes": 207858352,
+    "archiveSHA256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+    "archiveRoot": "jdk-21.0.13+9",
+    "containerJAVA_HOME": "/opt/qualification-jdk",
+    "vendorVersionOutput": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)\n",
+    "authority": "ADOPTIUM-VENDOR-METADATA.json + JDK21-VENDOR-CHECKSUM.txt + JDK21-VENDOR-ARCHIVE-METADATA.json",
+    "futureActualBinaryProvenance": "Verify whole vendor archive before extraction; inventory every extracted file/link; requireimagejava/javac/releaseexacthashesmatchthosearchive-derivedbytes; captureactualversionsandhashesbeforetests. None observednow."
+  },
+  "GitAndPatch": "Supplied by exact Node image root filesystem; future realpath/ELF/hash/package metadata recorded, no borrowed hostbinary. image missing either rejects, neverinstallonead-hoc.",
+  "JSONJar": "Not needed: all three selected normalrunJvm calls havejson=false. SharedhelperjsonJarSkip unused. No Gradle/JARdownload orfakeemptyclasspath."
+}

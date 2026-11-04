@@ -1,0 +1,27 @@
+{
+  "state": "STATIC_BYTES_ONLY",
+  "unchangedControls": {
+    "validate.py": "8db801b97ed446b6f1ddef9a8e1743ee15e8e2bc4dc5e9173bd98210c5145d6d",
+    "claim.py": "b48152418f2bfcfd39f870852aea6851f10e0d4d8cd1c28a2bcad9e8a5faccad",
+    "Dockerfile": "9d8c6ea81207adef2853f548d64698bf1022f81529bfcdd7e403e812af4e89d7",
+    "raw-events.mjs": "28b959048d01cb2a5d09a86095f83e26cac07bb17c3f5c1f7c0c0dc2120d9d89",
+    "projection-custody.mjs": "89b1c1a530136850f2dbff16d360f84ff44e8bb294d87f9458daf64bb79f7a59",
+    "workflow.yml": "357b4cab1440c34ce720625334f099f36f4f30b50b11b24fb8f6f96c6c4ab5f2",
+    "TOOLCHAIN.json": "380af1dc1849e53b3dd5938f9e2f64d3270e7e3e6a7b1d29504ff45d074736f9",
+    "PLAN.json": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
+    "HOST-DISCLOSURE.json": "175d7bc1a613cce4e96edf919f1462f4dfc1b0fa60b7be14b9d6a3feb4247668",
+    "PROCESS-AND-EVIDENCE-CONTRACT.json": "b7ed958d4c2383a51b7a5ea39c41de01d1cf2ea6682a03d85e3d4308aef4496c",
+    "REUSED-INPUTS.json": "034895e8b081dd0c1aea0e6c2cd58b6f91fec83c8753b6b01e48fdba7bb6d5af"
+  },
+  "originalCasesAndFiles": {
+    "counts": [
+      4,
+      15,
+      14
+    ],
+    "total": 33,
+    "allNamesAndRowsUnchanged": true,
+    "newFieldsOnly": "expectedcolumn+nesting"
+  },
+  "noNewSourceToolRuntimeEffect": true
+}

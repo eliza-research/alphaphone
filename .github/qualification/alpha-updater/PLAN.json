@@ -1,0 +1,53 @@
+{
+  "state": "EXECUTABLE_SOURCE_CANDIDATE_UNPUBLISHED_UNRUN",
+  "Alpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+  "AlphaTree": "13eae4876ef42558ff504b0b37aabb6b30cbc157",
+  "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+  "SDKTree": "086d0c65fb3df530cb1d4f89758dc9d034e09adc",
+  "recipe": "alpha-updater-three-normal-wholefiles",
+  "expectedRegistrations": 33,
+  "commands": {
+    "producer": [
+      "/usr/local/bin/npm",
+      "run",
+      "upstream:prepare-client"
+    ],
+    "tests": [
+      "/usr/local/bin/node",
+      "--test",
+      "--test-concurrency=4",
+      "--test-reporter=tap",
+      "--test-reporter-destination=/results/normal.tap",
+      "--test-reporter=junit",
+      "--test-reporter-destination=/results/normal.junit.xml",
+      "--test-reporter=/results/raw-events.mjs",
+      "--test-reporter-destination=/results/normal.events.jsonl",
+      "test/app-update.test.mjs",
+      "test/plugin-worker-guard.test.mjs",
+      "test/settings-truth.test.mjs"
+    ]
+  },
+  "resourceBounds": {
+    "wholeSeconds": 1200,
+    "jobMinutes": 22,
+    "entryFreeBytes": 17179869184,
+    "stopFreeBytes": 8589934592,
+    "maxDiskGrowthBytes": 12884901888,
+    "phaseLogBytes": 8388608,
+    "containerMemoryBytes": 2147483648,
+    "containerSwapBytes": 2147483648,
+    "NodeOldSpaceMiB": 1536,
+    "JavaMaxHeapMiB": 512,
+    "CPU": 2,
+    "PIDs": 256,
+    "producerSeconds": 120,
+    "testSeconds": 600
+  },
+  "sourceRequired": "Fresh complete ancestry product8c30 guard and exact SDKff04 guard; bothcomplete required inthiscandidate. Source checkout not produced bySDKcode. No inheritedbcdefsourceclearance.",
+  "normalPrerequisites": "Full exactcleanAlpha+vendorff04source; Node24/npmimage/Git/patch/JDK21. No npmci/externalJSmodule imports needed byselectedwholefileorrealpreteststaticcone. Realdeclaredpretestproducer executed, normalclient-speech patch authenticated; no source rewriting byqualifier.",
+  "scope": "Selected3normalfiles33cases only. Their existingJava member slicing/deadline3s andSettingsTSsource-region execution retained asnormaltestsemantics; no qualifiercreatedcallbackextract/stub/alias/filter. JVMnestedassertions/stubAndroid notdeviceproof.",
+  "currentProduct": "bcdef/ff04 unchanged; no runtime/provider/money/device/signing/hosting actions.",
+  "noUnchanged12_253_113Replay": true,
+  "toolchainNotMaterialized": true,
+  "futureDownloadScope": "One exact207858352BvendorJDKarchive tofreshRunnerTemp afterRootone-useclaim; network permittedonly trustedimagepull/archive/exactsourcehistory setup. Tests/producers networknone."
+}
