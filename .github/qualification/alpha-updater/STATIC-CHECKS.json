@@ -1,0 +1,58 @@
+{
+  "state": "SOURCE_PARSERS_AND_EXCEPTION_PATH_BINDINGS_ONLY",
+  "checks": [
+    {
+      "file": "report_proof.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "run.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "flow_jvm_diagnostic.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "validate.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "claim.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "source-frame.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "prepare-jdk.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "projection-custody.mjs",
+      "check": "Node syntax only, no candidate/fixture/tool import",
+      "PASS": true
+    },
+    {
+      "file": "tool-provenance.mjs",
+      "check": "Node syntax only, no candidate/fixture/tool import",
+      "PASS": true
+    },
+    {
+      "file": "raw-events.mjs",
+      "check": "Node syntax only, no candidate/fixture/tool import",
+      "PASS": true
+    }
+  ],
+  "unboundFunctionGlobals": [],
+  "trustedLocalOperatorImportFilesPresent": true,
+  "sourceOrToolRuntimeExecuted": false
+}

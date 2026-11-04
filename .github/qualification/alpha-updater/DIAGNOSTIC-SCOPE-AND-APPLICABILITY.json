@@ -1,0 +1,42 @@
+{
+  "state": "SOURCE_ONLY_BOUNDED_FLOW_JVM_DIAGNOSTIC_FOR_EXACT_REVIEW_NOT_EXECUTED",
+  "sourceAlpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+  "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+  "priorRun": 41822080895,
+  "priorIntentFailedSpent": "5a13f4d5e90a453bbebd1fadc99a7cd7",
+  "staticHypothesisReceipt": "/Users/nubs/.local/state/eliza-five-lane-coordination/updater-linux600-static-diagnostic-20261104/STATIC-CONCLUSION-AND-DIAGNOSTIC-PROPOSAL.json",
+  "staticHypothesisReceiptSHA256": "d1a70a087655453a2ff91bf9c20e82af45d5293690a766fe9388cfdf2745ab4f",
+  "leadingHypothesis": "Fixturethreadaccumulation/pids256, unproven; noOOME/deadlock/listenerwarningcausalclaim.",
+  "preserved": "Exactnormalpretest/3wholefiles/33callbacksrc/Node+fullofficialimage/JDK/Cpu2/RAM2GiB/PID256/test600s/allguard/source/report/forest/retainedwrite/intentbounds. No qualification, no skip/extract/daemonization/forcedexit/timeoutorPIDincrease.",
+  "readonlyObservations": "At2sintervalonlysameownedtestCID/realUID+euid/fsUID/kernelPIDnamespace+PIDbirth processcmdline/mainclass/PPID/PGID/threadcount, cgroup256pids.current/max/events+memory.events. Fullcmdlineonlynewscopedprocessbirth; cumulativereadonlymetadata512KiB.",
+  "baseline": "Firstpurehost/proc+/sysfslookupestablishesactualtestinitnamespaceandcounterbaselinebeforeanydiagnosticdockerinspect/exec/jcmdcommand. Eachattachhasimmediatepre/postcounters; postobserverincrementsaloneneverapplication-failureproof. PassiveobservationCPU/IOitselfnotclaimedzeroeffect.",
+  "jcmd": "At60..110sageofEXACTUpdateFlowTestjavaargvandboundbirth, sameJDKbin/jcmdhashfromwholeverifiedarchive, sameUID/dedicateddockerexecCID. Atmost2Thread.print-l,minimum5safterpreviousend,combinedactivecommands+teardown10sbudget/2MiBcombinedoutput. No jcmd-l/broadps/directSIGQUITfallback/application signal.",
+  "targetProof": "BeforeeachattachexactPIDbirth/UID/mainclass/NSpid+namespace+CIDcgroup; ownedCIDlabel/resource/mount/User proof callbackandactualinitPID. Ifunknownorpermissiondeniedskipattachandrecordapplicabilitygap, no invented proof.",
+  "observerLifecycle": "HostdockerexecCLIgroupPIDbirth-ownedcleanup; exactsameUIDjcmd observerPIDbirth/cmdline/namespace/CID only may receiveTERM/KILL, neverFlow. Recordallbefore/aftereffects andallclosureuncertainties. Originalcontainer/wholeforestcleanupretainedatnormalendor600s.",
+  "limitsAndReviewQuestions": [
+    "Direct/proc namespace+cmdline metadata accessibility unobserved; observations may failclosed beforeattach.",
+    "JcmdmayneedextraPIDs/threads orAttachListener anditselfhit256; failure/deltasnotcausalapplicationPIDevidence.",
+    "Combinedcommand/teardowncap interpretedasactiveexecutionwall10s across<=2attempts; mandated5squietgap outsideactivebudget. KernelteardownandmetadataIOnotuniversalharddeadline guarantee.",
+    "Short-lived observerPIDmayfinishbeforesampling; explicitlyrecordincompletebirthtrace; do notinvent perobserver terminalproof fromCLIalone.",
+    "SameUIDJDKobserverterminationassumeskernelhonorsSIGKILL; ifstilllive disablefurtherattachandpreservegap; exactoriginalCIDcleanupremainsultimatecontainedforestwitness.",
+    "Hostsource/newdiagnosticGO/publication/guard/resourceadmission andrawdumpintake arefutureRootgates,notperformed.",
+    "NumericAttachPIDcannotbeatomicallypassedwithLinuxbirthidentitytoHotSpotjcmd. Exacttargetcheckedbeforeandduringcommand; targetchangeabortsobserverandmarksoutputunattributed. No generaladversarialPID-reuse/atomic-attachguarantee isclaimed."
+  ],
+  "artifactRetention": "ReadonlyFLOW-READONLY-OBSERVATIONS.jsonl<=512KiB andFLOW-DIAGNOSTIC.json<=256KiB retainedwhole; FLOW-STACK-*.log atmost2combined<=2MiB retainedwhole. FutureoneGETreaderrequiresknown-filenamecapsforthem,withinexistingboundedretainedmetadata/rawreportbudget; no silenthead-tail-only oropaquehash-onlyretentionoftheseessentialdiagnostics. No JDK/tool/SDKbinary retention.",
+  "effectsNow": "Source/JSON/ASTonly; no Java/jcmd/test/fixture/tool/candidate/Docker/layer/sourceacquisition/publication/dispatch/GO/provider/profile/device effect. All old intents failedspent.",
+  "observerBirthProof": "No preexistingmatchingjcmdallowed; newlyobservedexactargv/UID/CID/namespacejcmd musthavebirthat/aftercommandlaunchjiffy. ActualJVMPIDnamespace/targetsamebirthagaincheckedbeforelaunch; no broadtarget orappsignal.",
+  "noAuthorityOrRuntimeProof": true,
+  "existingSavedJcmdSupplierEvidence": {
+    "savedArchiveCustody": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater33-a245-fulltools-once-20261104T113459Z/owner-raw/JDK-ARCHIVE-CUSTODY.json",
+    "savedArchiveCustodySHA256": "c49aeb1642726c71aecd50e09a3a7946b6d3301a2ec7f9fb65165a66bf1ca2e2",
+    "archiveSHA256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+    "jcmdEntry": {
+      "path": "bin/jcmd",
+      "type": "file",
+      "bytes": 12392,
+      "mode": 493,
+      "sha256": "a302f66fa12d8dad59d8f6d770edda61be326872c39521e2ed1a3df014d61dbc"
+    },
+    "scope": "Existingarchivemetadataonly, no newbinaryread/download/execute. FuturefreshwholeJDKinventory andactualbeforeattachbinaryhash stillrequired; no oldruntimeacceptanceborrowed."
+  }
+}

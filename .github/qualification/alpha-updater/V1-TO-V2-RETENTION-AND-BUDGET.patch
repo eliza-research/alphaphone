@@ -1,0 +1,246 @@
+--- diagnostic-v1/run.py
++++ diagnostic-v2/run.py
+@@ -19,7 +19,7 @@
+ out.mkdir();start=time.monotonic();free_start=shutil.disk_usage(out).free;assert free_start>=bounds['entryFreeBytes']
+ # Inherited finite phase code uses the same sealed resourceBounds names.
+ plan['resourceBounds'].update(stopFreeBytes=bounds['stopFreeBytes'],maxDiskGrowthBytes=bounds['maxDiskGrowthBytes'])
+-records=[];owned=[];cleanup_errors=[];process_observations={};last_process_scan=0.0;status='FAILED';run_error=None;image=None;result_detail={};flow_diagnostic=None
++records=[];owned=[];cleanup_errors=[];process_observations={};last_process_scan=0.0;status='FAILED';run_error=None;image=None;result_detail={};flow_diagnostic=None;diagnostic_detail=None
+ runid=os.environ['GITHUB_RUN_ID'];assert runid.isdigit();prefix='alpha-updater-'+runid+'-1'
+ for key in ['DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH','DOCKER_API_VERSION','DOCKER_CONTEXT']:assert not os.environ.get(key)
+ assert os.environ.get('DOCKER_HOST','unix:///var/run/docker.sock')=='unix:///var/run/docker.sock'
+@@ -270,10 +270,13 @@
+  try:observed_processes=verify_observed_process_closure()
+  except BaseException as error:
+   cleanup_errors.append({'processClosureError':str(error)});observed_processes=[]
+-  diagnostic_detail=None
+  if flow_diagnostic is not None:
+-  try:diagnostic_detail=flow_diagnostic.finish()
+-  except BaseException as error:cleanup_errors.append({'diagnosticReceiptError':str(error)})
++  try:
++   diagnostic_detail=flow_diagnostic.finish()
++   if diagnostic_detail.get('closureComplete')is not True:cleanup_errors.append({'diagnosticClosureError':'Every observer launch intent was retained, but original observer group/transport/reap finalization is incomplete'})
++  except BaseException as error:
++   cleanup_errors.append({'diagnosticReceiptError':type(error).__name__+': '+str(error)[:2048]})
++   diagnostic_detail={'diagnosticOnly':True,'qualificationIssued':False,'complete':False,'finishError':type(error).__name__+': '+str(error)[:2048],'observerLaunchIntents':flow_diagnostic.observer_groups,'attemptCount':len(flow_diagnostic.attempts)}
+  resource_errors=[{'cid':item['cid'],**error}for item in owned for error in item.get('resourcePolicyFailures',[])]
+  result={'state':status if not cleanup_errors and not resource_errors else'CLEANUP_OR_RESOURCE_FAILURE','error':run_error,'phases':records,'containers':owned,'cleanupErrors':cleanup_errors,'resourceErrors':resource_errors,'source':{k:plan[k]for k in ['Alpha','AlphaTree','SDK','SDKTree']},'detail':result_detail,'observedNamespaceProcessCount':len(observed_processes),'observedJavaProcesses':sum(x['comm']in['java','javac']for x in observed_processes),'qualificationIssued':False,'diagnosticOnly':True,'diagnostic':diagnostic_detail,'seconds':time.monotonic()-start,'AndroidBinderDeviceProviderHumanAcceptance':False,'noUnchanged12_253_113Replay':True}
+  (out/'RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+--- diagnostic-v1/flow_jvm_diagnostic.py
++++ diagnostic-v2/flow_jvm_diagnostic.py
+@@ -117,7 +117,7 @@
+     assert self.target is not None and row['pid']!=self.target['pid'];answer.append(row)
+   return answer
+ 
+- def stop_observers(self,known,namespace_pid):
++ def stop_observers(self,known,namespace_pid,absolute_deadline):
+   # Signal ONLY exact observer jcmd births, never Flow, a broad ps result,
+   # wildcard PID, or a direct application SIGQUIT/termination fallback.
+   for sig in [signal.SIGTERM,signal.SIGKILL]:
+@@ -126,7 +126,7 @@
+     if current and current['birth']==old['birth']:
+      assert current['PIDNamespace']==self.initial_namespace and current['cgroup']==self.cgroup and current['argv']==['/opt/qualification-jdk/bin/jcmd',str(namespace_pid),'Thread.print','-l']and current['pid']!=self.target['pid']
+      os.kill(current['pid'],sig)
+-   deadline=time.monotonic()+0.4
++   deadline=min(time.monotonic()+0.4,absolute_deadline)
+    while time.monotonic()<deadline:
+     remaining=self.observers(namespace_pid)
+     if not remaining:return True
+@@ -134,23 +134,42 @@
+     time.sleep(.02)
+   return not self.observers(namespace_pid)
+ 
++
+  def attach(self):
+   assert len(self.attempts)<2 and not self.disabled
+   target=self.verify_target();assert not self.observers(target['namespacePID']),'Preexisting matching jcmd is not ours';pre=self.counters();index=len(self.attempts)+1
+-  attempt={'attempt':index,'preObserverCounters':pre,'originalBaseline':self.baseline,'verifiedTarget':target,'jcmdBinarySHA256':self.jcmd_sha,'effectWarning':'jcmd process/threads/attachlistener may itself hit or increment PID limits; post-observer deltas alone are not application failure proof.'};self.attempts.append(attempt)
++  attempt={'attempt':index,'preObserverCounters':pre,'originalBaseline':self.baseline,'verifiedTarget':target,'jcmdBinarySHA256':self.jcmd_sha,'effectWarning':'jcmd process/threads/attachlistener may itself hit or increment PID limits; post-observer deltas alone are not application failure proof.','errors':[]};self.attempts.append(attempt)
+   self.emit('PRE-JCMD-COUNTERS-AND-TARGET',attempt)
+   command=['docker','exec','--user',str(self.uid)+':'+str(os.getgid()),self.cid,'/opt/qualification-jdk/bin/jcmd',str(target['namespacePID']),'Thread.print','-l']
+-  path=self.out/('FLOW-STACK-'+str(index)+'.log');proc=None;leader=None;sel=None;known={};written=0;overflow=False;timed_out=False;target_changed=False;code=None;closed=False;started=time.monotonic()
+-  # Combined active command wall <=10s; reserve teardown room. The required
+-  # five-second inter-attempt quiet interval is outside active command time.
+-  available=10.-self.command_seconds
+-  if available<=1.:attempt['notLaunched']='Combined command/teardown budget depleted';return
+-  active_timeout=min(8.,available-1.);deadline=started+active_timeout
++  path=self.out/('FLOW-STACK-'+str(index)+'.log');proc=None;leader=None;sel=None;known={};written=0;overflow=False;timed_out=False;target_changed=False;code=None;closed=None;observer_closed=None;started=time.monotonic()
++  remaining=10.-self.command_seconds;cleanup_reserve=2.5;minimum_active=.25
++  if remaining<cleanup_reserve+minimum_active:
++   attempt['notLaunched']='Shared active+teardown budget cannot fit required reserve';return
++  absolute_deadline=started+remaining
++  active_deadline=min(started+6.5,absolute_deadline-cleanup_reserve)
++  attempt.update({'sharedAbsoluteDeadline':absolute_deadline,'activeDeadline':active_deadline,'plannedCleanupReserveSeconds':cleanup_reserve,'approvedTotalActiveAndTeardownSeconds':10})
+   minimum_observer_birth=int(float(self.read('/proc/uptime',256).split()[0])*os.sysconf('SC_CLK_TCK'))-1;attempt['minimumNewObserverBirthTick']=minimum_observer_birth
++  # Register every launch intent before Popen. PID is retained immediately on
++  # return, before any fallible identity/selector/observer operation. An absent
++  # initial birth remains unresolved; it is NEVER invented later for signalling.
++  launch={'attempt':index,'argv':command,'spawnAttempted':False,'PopenReturned':False,'pid':None,'birth':None,'pgid':None,'ownershipEstablished':False,'ownedGroupEmpty':None,'selectorClosed':None,'stdoutClosed':None,'reaped':False,'exit':None,'cleanupErrors':[]}
++  self.observer_groups.append(launch);attempt['observerLaunchIntent']=launch
++  def error(stage,problem,cleanup=False):
++   row={'stage':stage,'type':type(problem).__name__,'message':str(problem)[:1024]}
++   attempt['errors'].append(row)
++   if cleanup:launch['cleanupErrors'].append(row)
++   self.disabled=True
+   try:
+    with path.open('xb')as output:
++    if absolute_deadline-time.monotonic()<cleanup_reserve+minimum_active:
++     attempt['notLaunched']='Preparation used remaining active allowance';return
++    launch['spawnAttempted']=True
+     proc=subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True,env={'PATH':'/usr/bin:/usr/local/bin:/bin','LANG':'C','LC_ALL':'C','DOCKER_HOST':os.environ['DOCKER_HOST'],'DOCKER_CONFIG':os.environ['DOCKER_CONFIG']})
+-    leader=self.identity(proc.pid);assert leader and leader['pgid']==proc.pid
++    launch['PopenReturned']=True;launch['pid']=proc.pid
++    leader=self.identity(proc.pid)
++    if leader is not None:launch.update({'birth':leader['birth'],'pgid':leader['pgid']})
++    assert leader is not None and leader['pgid']==proc.pid,'Original CLI birth/PGID could not be established'
++    launch['ownershipEstablished']=True
+     sel=selectors.DefaultSelector();os.set_blocking(proc.stdout.fileno(),False);sel.register(proc.stdout,selectors.EVENT_READ)
+     while True:
+      live_target=self.process(target['pid'])
+@@ -160,36 +179,81 @@
+      for key,_ in sel.select(.02):
+       chunk=os.read(key.fileobj.fileno(),65536)
+       if not chunk:sel.unregister(key.fileobj);continue
+-      remaining=2097152-self.output_bytes
+-      if len(chunk)>remaining:
+-       output.write(chunk[:remaining]);written+=remaining;self.output_bytes+=remaining;overflow=True;break
++      capacity=2097152-self.output_bytes
++      if len(chunk)>capacity:
++       output.write(chunk[:capacity]);written+=capacity;self.output_bytes+=capacity;overflow=True;break
+       output.write(chunk);written+=len(chunk);self.output_bytes+=len(chunk)
+      if overflow:break
+-     if time.monotonic()>=deadline:timed_out=True;break
++     if time.monotonic()>=active_deadline:timed_out=True;break
+      if os.waitid(os.P_PID,proc.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT):
+       if not sel.get_map():break
++  except BaseException as problem:
++   error('attach-body',problem);raise
+   finally:
+-   if proc is not None:
+-    observer_closed=self.stop_observers(known,target['namespacePID'])
+-    # Own host docker-exec CLI group uses original PID/birth custody.
+-    for sig in [signal.SIGTERM,signal.SIGKILL]:
+-     if not self.group_members(proc.pid):break
+-     actual=self.identity(proc.pid);assert actual and actual['birth']==leader['birth']and actual['pgid']==proc.pid
+-     os.killpg(proc.pid,sig);wait=time.monotonic()+.3
+-     while self.group_members(proc.pid)and time.monotonic()<wait:time.sleep(.02)
+-    closed=not self.group_members(proc.pid)
+-    if closed:code=proc.wait(timeout=.3)
+-    self.observer_groups.append({'pid':proc.pid,'birth':leader['birth'],'ownedGroupEmpty':closed,'exit':code})
+-    attempt['observerJcmdBirths']=list(known.values());attempt['observerJcmdClosed']=observer_closed;attempt['hostCLIGroupClosed']=closed
+-    if not observer_closed or not closed:self.disabled=True
+-   if sel is not None:sel.close()
+-   if proc is not None and proc.stdout:proc.stdout.close()
+-   elapsed=time.monotonic()-started;self.command_seconds+=elapsed;self.last_end=time.monotonic()
+-   if self.command_seconds>10.:self.disabled=True;attempt['activeBudgetOvershootDuringBoundedTeardown']=True
+-   attempt.update({'argv':command,'exit':code,'timeout':timed_out,'targetChangedDuringAttempt':target_changed,'outputAttributedOnlyWhileExactTargetHeld':not target_changed,'overflow':overflow,'retainedBytes':written,'combinedRetainedBytes':self.output_bytes,'activeCommandAndTeardownSeconds':elapsed,'combinedActiveSeconds':self.command_seconds,'outputPath':path.name,'postObserverCounters':self.counters(),'interferenceAttribution':'Preserve all before/after counters. No application PID-limit cause inferred from post-attach counters alone.','completeEveryShortLivedObserverBirthTrace':bool(known)})
+-   if path.exists():attempt['outputSHA256']=hashlib.sha256(path.read_bytes()).hexdigest()
+-   self.emit('JCMD-ATTEMPT-RESULT',attempt)
+-
++   # Every stage has independent error retention. A scan/kill/custody failure
++   # must not skip host CLI cleanup, registration, streams or accounting.
++   try:
++    if proc is not None:
++     try:observer_closed=self.stop_observers(known,target['namespacePID'],absolute_deadline)
++     except BaseException as problem:error('observer-jcmd-cleanup',problem,True)
++     finally:attempt['observerJcmdBirths']=list(known.values());attempt['observerJcmdClosed']=observer_closed
++     # Never signal a group whose original birth was not established. Every
++     # already-authorised TERM/KILL stage is independently attempted; no wait
++     # is intentionally scheduled past the aggregate absolute deadline.
++     for sig in [signal.SIGTERM,signal.SIGKILL]:
++      try:
++       if launch['ownershipEstablished']is not True:raise RuntimeError('Unresolved original CLI ownership; no signal authorised')
++       actual=self.identity(proc.pid)
++       if actual is None:
++        if not self.group_members(proc.pid):closed=True;break
++        raise RuntimeError('Original leader absent but group remains; no unproved signal')
++       assert actual['birth']==launch['birth']and actual['pgid']==proc.pid,'Original CLI identity changed; no signal authorised'
++       try:members=self.group_members(proc.pid)
++       except BaseException as problem:error('host-cli-members-before-'+signal.Signals(sig).name,problem,True);members=None
++       if members==[]:closed=True;break
++       # A full /proc enumeration error does not erase a separately proven
++       # direct-child leader birth/PGID; retain it and perform authorised cleanup.
++       os.killpg(proc.pid,sig)
++       wait_until=min(time.monotonic()+.3,absolute_deadline)
++       while self.group_members(proc.pid)and time.monotonic()<wait_until:time.sleep(.02)
++      except BaseException as problem:error('host-cli-'+signal.Signals(sig).name,problem,True)
++     try:
++      if launch['ownershipEstablished']is not True:raise RuntimeError('CLI original birth/PGID unresolved')
++      closed=not self.group_members(proc.pid);launch['ownedGroupEmpty']=closed
++     except BaseException as problem:error('host-cli-group-closure-check',problem,True)
++     try:
++      if closed is True:
++       code=proc.wait(timeout=min(.3,max(0.,absolute_deadline-time.monotonic())));launch['reaped']=True;launch['exit']=code
++     except BaseException as problem:error('host-cli-reap',problem,True)
++    elif launch['spawnAttempted']is True:
++     error('spawn-outcome-unresolved',RuntimeError('Popen did not return a handle; no PID/birth invented'),True)
++    else:launch['ownedGroupEmpty']=True
++   finally:
++    try:
++     if sel is not None:sel.close()
++     launch['selectorClosed']=True
++    except BaseException as problem:launch['selectorClosed']=False;error('selector-close',problem,True)
++    finally:
++     try:
++      if proc is not None and proc.stdout:proc.stdout.close()
++      launch['stdoutClosed']=True
++     except BaseException as problem:launch['stdoutClosed']=False;error('stdout-close',problem,True)
++     finally:
++      # Pure in-memory accounting cannot be bypassed by fallible post-counter,
++      # hash or emitter reads. The attempt object is already in self.attempts.
++      elapsed=time.monotonic()-started;self.command_seconds+=elapsed;self.last_end=time.monotonic()
++      attempt.update({'argv':command,'exit':code,'timeout':timed_out,'targetChangedDuringAttempt':target_changed,'outputAttributedOnlyWhileExactTargetHeld':not target_changed,'overflow':overflow,'retainedBytes':written,'combinedRetainedBytes':self.output_bytes,'activeCommandAndTeardownSeconds':elapsed,'combinedActiveSeconds':self.command_seconds,'outputPath':path.name,'hostCLIGroupClosed':launch['ownedGroupEmpty'],'completeEveryShortLivedObserverBirthTrace':False,'sampledObserverJcmdBirthCount':len(known),'observerJcmdBirths':list(known.values()),'interferenceAttribution':'Before/after counters are separate; post-observer increments alone are not application PID-failure proof.'})
++      if self.command_seconds>10.:
++       self.disabled=True;attempt['unavoidableKernelOrMetadataBudgetOverrun']=True
++      if observer_closed is not True and proc is not None:self.disabled=True
++      if launch['ownedGroupEmpty']is not True:self.disabled=True
++      try:attempt['postObserverCounters']=self.counters()
++      except BaseException as problem:error('post-observer-counters',problem)
++      try:
++       if path.exists():assert path.stat().st_size<=2097152;attempt['outputSHA256']=hashlib.sha256(path.read_bytes()).hexdigest()
++      except BaseException as problem:error('output-hash',problem)
++      try:self.emit('JCMD-ATTEMPT-RESULT',attempt)
++      except BaseException as problem:error('attempt-receipt-emission',problem)
+  def tick(self):
+   if self.disabled:return
+   now=time.monotonic()
+@@ -207,17 +271,32 @@
+    self.disabled=True;self.emit('diagnostic-applicability-or-custody-gap',{'type':type(error).__name__,'message':str(error)[:1024],'noFurtherAttach':True})
+ 
+  def finish(self):
+-  final_groups=[]
++  final_groups=[];final_births=[];closure_errors=[]
++  # Reconcile EVERY launch intent, including Popen/identity/setup failures.
+   for row in self.observer_groups:
+-   live=self.identity(row['pid']);empty=not self.group_members(row['pid'])if live and live['birth']==row['birth']else True
+-   final_groups.append({**row,'finalOwnedGroupEmpty':empty});assert empty,'Observer CLI original group not closed after owned CID teardown'
++   checked={**row,'finalOwnedGroupEmpty':False}
++   try:
++    if row['spawnAttempted']is False:checked['finalOwnedGroupEmpty']=True
++    elif row['PopenReturned']is not True or row['pid']is None or row['birth']is None or row['ownershipEstablished']is not True:
++     raise RuntimeError('Launched or ambiguous observer original PID/birth/PGID unresolved')
++    elif row['ownedGroupEmpty']is True:checked['finalOwnedGroupEmpty']=True
++    else:checked['finalOwnedGroupEmpty']=not self.group_members(row['pid'])
++    if checked['finalOwnedGroupEmpty']is not True:raise RuntimeError('Observer original host group remains unclosed')
++    if row['spawnAttempted']and(row['reaped']is not True or row['selectorClosed']is not True or row['stdoutClosed']is not True or row['cleanupErrors']):raise RuntimeError('Observer transport/reap or cleanup proof remains incomplete; retained errors preserved')
++   except BaseException as problem:
++    checked['finalClosureError']={'type':type(problem).__name__,'message':str(problem)[:1024]};closure_errors.append(checked['finalClosureError'])
++   final_groups.append(checked)
+   observed={str(row['pid'])+':'+row['birth']:row for row in self.processes.values()}
+   for attempt in self.attempts:
+    for row in attempt.get('observerJcmdBirths',[]):observed[str(row['pid'])+':'+row['birth']]=row
+-  final_births=[]
+   for row in observed.values():
+-   now=self.identity(row['pid']);closed=now is None or now['birth']!=row['birth']or now['state']=='Z';assert closed,'Diagnostic sampled original process still live after CID cleanup'
+-   final_births.append({'pid':row['pid'],'birth':row['birth'],'originalBirthClosed':closed})
+-  data={'diagnosticOnly':True,'qualificationIssued':False,'ownedCID':self.cid,'initialCounterBaseline':self.baseline,'target':self.target,'attempts':self.attempts,'observerCommandActiveSeconds':self.command_seconds,'combinedOutputBytes':self.output_bytes,'readonlyMetadataBytes':self.metadata_bytes,'observerGroups':self.observer_groups,'finalObserverCLIGroupClosure':final_groups,'finalDiagnosticOriginalBirthClosure':final_births,'disabledOrGap':self.disabled,'sampledProcesses':list(self.processes.values()),'scope':'No per-case qualification or causal PID-failure conclusion. Before-active-observer counters and observer effects are separate; namespace and original-birth cleanup checked by owning controller.'}
++   item={'pid':row['pid'],'birth':row['birth'],'originalBirthClosed':False}
++   try:
++    now=self.identity(row['pid']);item['originalBirthClosed']=now is None or now['birth']!=row['birth']or now['state']=='Z'
++    if item['originalBirthClosed']is not True:raise RuntimeError('Diagnostic sampled original process still live after original CID cleanup')
++   except BaseException as problem:
++    item['closureError']={'type':type(problem).__name__,'message':str(problem)[:1024]};closure_errors.append(item['closureError'])
++   final_births.append(item)
++  data={'diagnosticOnly':True,'qualificationIssued':False,'closureComplete':not closure_errors and all(row['finalOwnedGroupEmpty']is True for row in final_groups),'closureErrors':closure_errors,'ownedCID':self.cid,'initialCounterBaseline':self.baseline,'target':self.target,'attempts':self.attempts,'observerCommandActiveSeconds':self.command_seconds,'combinedOutputBytes':self.output_bytes,'readonlyMetadataBytes':self.metadata_bytes,'observerGroups':self.observer_groups,'finalObserverCLIGroupClosure':final_groups,'finalDiagnosticOriginalBirthClosure':final_births,'disabledOrGap':self.disabled,'sampledProcesses':list(self.processes.values()),'completeEveryShortLivedObserverBirthTrace':False,'scope':'Every launch intent retained and reconciled, unresolved ownership fails closure. No per-case qualification or causal PID-failure conclusion; before-observer counters and observer effects remain separate.'}
+   text=json.dumps(data,indent=2)+'\n';assert len(text.encode())<=262144;(self.out/'FLOW-DIAGNOSTIC.json').write_text(text)
+   return data

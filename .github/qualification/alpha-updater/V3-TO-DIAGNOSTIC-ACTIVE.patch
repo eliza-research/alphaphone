@@ -1,0 +1,190 @@
+--- normal/validate.py
++++ diagnostic/validate.py
+@@ -4,9 +4,10 @@
+ sha=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+ def validate(go):
+  assert os.environ['RUNNER_ENVIRONMENT']=='github-hosted'and os.environ['GITHUB_REPOSITORY']=='eliza-research/alphaphone'and os.environ['GITHUB_EVENT_NAME']=='workflow_dispatch'and os.environ['GITHUB_RUN_ATTEMPT']=='1'
+- assert go['action']=='ONE_EXACT_QUALIFICATION_RUN'and go['recipe']=='alpha-updater-three-normal-wholefiles'and go['mode']=='qualify'
++ assert go['action']=='ONE_EXACT_DIAGNOSTIC_RUN'and go['recipe']=='alpha-updater-flow-jvm-diagnostic'and go['mode']=='diagnose'
+  assert go['operatorCommit']==os.environ['GITHUB_SHA']==os.environ['EXPECTED_WORKFLOW_SHA']
+  assert re.fullmatch('[a-f0-9]{32}',go['intentId'])and 0<go['issuedEpoch']<=time.time()<go['expiresEpoch']<=go['issuedEpoch']+1200
++ assert go['diagnosticOnly']is True and go['allowBoundedOwnedJcmdDiagnostic']is True
+  plan=json.loads((P/'PLAN.json').read_text())
+  for k in ['Alpha','AlphaTree','SDK','SDKTree','expectedRegistrations']:assert go[k]==plan[k]
+  for k in ['allowExactVendorJDKDownload','allowNormalClientFeatureProducer','allowThreeWholeFiles','allowSDKSourceMaterialization']:assert go[k]is True
+--- normal/PLAN.json
++++ diagnostic/PLAN.json
+@@ -1,10 +1,10 @@
+ {
+-  "state": "EXECUTABLE_SOURCE_CANDIDATE_UNPUBLISHED_UNRUN",
++  "state": "SOURCE_ONLY_DIAGNOSTIC_OPERATOR_NOT_QUALIFICATION",
+   "Alpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+   "AlphaTree": "13eae4876ef42558ff504b0b37aabb6b30cbc157",
+   "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+   "SDKTree": "086d0c65fb3df530cb1d4f89758dc9d034e09adc",
+-  "recipe": "alpha-updater-three-normal-wholefiles",
++  "recipe": "alpha-updater-flow-jvm-diagnostic",
+   "expectedRegistrations": 33,
+   "commands": {
+     "producer": [
+@@ -49,5 +49,20 @@
+   "currentProduct": "bcdef/ff04 unchanged; no runtime/provider/money/device/signing/hosting actions.",
+   "noUnchanged12_253_113Replay": true,
+   "toolchainNotMaterialized": true,
+-  "futureDownloadScope": "One exact207858352BvendorJDKarchive tofreshRunnerTemp afterRootone-useclaim; network permittedonly trustedimagepull/archive/exactsourcehistory setup. Tests/producers networknone."
++  "futureDownloadScope": "One exact207858352BvendorJDKarchive tofreshRunnerTemp afterRootone-useclaim; network permittedonly trustedimagepull/archive/exactsourcehistory setup. Tests/producers networknone.",
++  "diagnosticOnly": true,
++  "diagnosticBudget": {
++    "readonlyObservationIntervalSeconds": 2,
++    "readonlyMetadataBytes": 524288,
++    "exactTargetMainClass": "ai.elizaresearch.alphaphone.UpdateFlowTest",
++    "firstAttachAgeSeconds": 60,
++    "maxTargetAgeSeconds": 110,
++    "maximumAttempts": 2,
++    "minimumGapAfterPreviousEndSeconds": 5,
++    "aggregateActiveCommandAndTeardownBudgetSeconds": 10,
++    "aggregateThreadPrintOutputBytes": 2097152,
++    "commands": "sameverifiedJDKjcmd <exactnamespacePID> Thread.print -l only",
++    "noDirectApplicationSignalOrFallback": true,
++    "qualificationIssued": false
++  }
+ }
+--- normal/ROOT-GO-CONTRACT.json
++++ diagnostic/ROOT-GO-CONTRACT.json
+@@ -1,7 +1,7 @@
+ {
+-  "action": "ONE_EXACT_QUALIFICATION_RUN",
+-  "recipe": "alpha-updater-three-normal-wholefiles",
+-  "mode": "qualify",
++  "action": "ONE_EXACT_DIAGNOSTIC_RUN",
++  "recipe": "alpha-updater-flow-jvm-diagnostic",
++  "mode": "diagnose",
+   "Alpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+   "AlphaTree": "13eae4876ef42558ff504b0b37aabb6b30cbc157",
+   "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+@@ -33,8 +33,10 @@
+     },
+     "20261018.96.1": "Exact authenticated41750127407 setup/claim/earlymetadata plus explicitRoot source disposition; fresh officialtag404, independent officialtag/commit/readme provenance gap OPEN, not capability or execution admission."
+   },
+-  "planSHA256": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
++  "planSHA256": "11b7f6a94ae94ec43eb521f39755c26f017fcc195fa2ba163960da47dad801b4",
+   "toolchainSHA256": "a0da5b489f9796e7094e593cd6fcdc134495a91fc1595bc8035927cc5b3d2701",
+   "sourceCasesSHA256": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+-  "hostCohortsSHA256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
++  "hostCohortsSHA256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8",
++  "diagnosticOnly": true,
++  "allowBoundedOwnedJcmdDiagnostic": true
+ }
+--- normal/tool-provenance.mjs
++++ diagnostic/tool-provenance.mjs
+@@ -31,7 +31,7 @@
+  if(stat.isDirectory())for(const name of fs.readdirSync(file).sort())walk(file+'/'+name,relative==='.'?name:relative+'/'+name);
+ }
+ walk(process.env.JAVA_HOME,'.');if(actual.length!==rows.size)throw Error('Missing JDK archive entries');
+-for(const name of ['bin/java','bin/javac','release']){const want=rows.get(name),file=process.env.JAVA_HOME+'/'+name;if(want?.type!=='file'||fs.realpathSync(file)!==file)throw Error('Wrong executable/release origin');files[name]={file,sha256:want.sha256,bytes:want.bytes};}
++for(const name of ['bin/java','bin/javac','bin/jcmd','release']){const want=rows.get(name),file=process.env.JAVA_HOME+'/'+name;if(want?.type!=='file'||fs.realpathSync(file)!==file)throw Error('Wrong executable/release origin');files[name]={file,sha256:want.sha256,bytes:want.bytes};}
+ const sort=rows=>JSON.stringify([...rows].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0));
+ const inventorySHA256=crypto.createHash('sha256').update(sort(actual)).digest('hex');
+ if(sort(actual)!==sort(custody.records))throw Error('Complete JDK archive/image inventory differs');
+--- normal/run.py
++++ diagnostic/run.py
+@@ -1,8 +1,9 @@
+-"""Finite hosted Alpha updater33 whole-file qualification. Not admitted or run."""
++"""Finite hosted Flow JVM diagnostic only; never a33 qualification grant."""
+ import collections,hashlib,json,os,pathlib,re,selectors,signal,shutil,subprocess,sys,time,urllib.request,xml.etree.ElementTree as ET
+ sys_path_operator=__import__('sys').path
+ sys_path_operator.insert(0,str(__import__('pathlib').Path(__file__).resolve().parent))
+ from validate import validate,P,sha
++from flow_jvm_diagnostic import OwnedFlowDiagnostic
+ assert len(sys.argv)==3
+ source=pathlib.Path(sys.argv[1]).resolve();out=pathlib.Path(sys.argv[2]).resolve()
+ go_path=pathlib.Path(os.environ['ROOT_GO_JSON']).resolve();go=json.loads(go_path.read_text());plan=validate(go);bounds=plan['resourceBounds']
+@@ -18,12 +19,12 @@
+ out.mkdir();start=time.monotonic();free_start=shutil.disk_usage(out).free;assert free_start>=bounds['entryFreeBytes']
+ # Inherited finite phase code uses the same sealed resourceBounds names.
+ plan['resourceBounds'].update(stopFreeBytes=bounds['stopFreeBytes'],maxDiskGrowthBytes=bounds['maxDiskGrowthBytes'])
+-records=[];owned=[];cleanup_errors=[];process_observations={};last_process_scan=0.0;status='FAILED';run_error=None;image=None;result_detail={}
++records=[];owned=[];cleanup_errors=[];process_observations={};last_process_scan=0.0;status='FAILED';run_error=None;image=None;result_detail={};flow_diagnostic=None
+ runid=os.environ['GITHUB_RUN_ID'];assert runid.isdigit();prefix='alpha-updater-'+runid+'-1'
+ for key in ['DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH','DOCKER_API_VERSION','DOCKER_CONTEXT']:assert not os.environ.get(key)
+ assert os.environ.get('DOCKER_HOST','unix:///var/run/docker.sock')=='unix:///var/run/docker.sock'
+ os.environ['DOCKER_HOST']='unix:///var/run/docker.sock';docker_config=out.parent/('alpha-updater-docker-'+runid);docker_config.mkdir();os.environ['DOCKER_CONFIG']=str(docker_config)
+-resource_inspect_format='{"ContainerUser":{{json .Config.User}},"Mounts":{{json .Mounts}},"JavaHome":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.10s" .) "JAVA_HOME="}}{{$j = .}}{{end}}{{end}}{{json $j}},"JavaOptions":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.18s" .) "JAVA_TOOL_OPTIONS="}}{{$j = .}}{{end}}{{end}}{{json $j}},"NetworkMode":{{json .HostConfig.NetworkMode}},"ReadOnlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"CgroupParent":{{json .HostConfig.CgroupParent}},"Ulimits":{{json .HostConfig.Ulimits}},"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}},"Resources":{"memoryBytes":{{json .HostConfig.Memory}},"memorySwapBytes":{{json .HostConfig.MemorySwap}},"nanoCpus":{{json .HostConfig.NanoCpus}},"pidsLimit":{{json .HostConfig.PidsLimit}},"nodeOptions":{{$nodeOptions := ""}}{{range .Config.Env}}{{if eq (printf "%.13s" .) "NODE_OPTIONS="}}{{$nodeOptions = .}}{{end}}{{end}}{{json $nodeOptions}}}}'
++resource_inspect_format='{"HostInitPID":{{json .State.Pid}},"ContainerUser":{{json .Config.User}},"Mounts":{{json .Mounts}},"JavaHome":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.10s" .) "JAVA_HOME="}}{{$j = .}}{{end}}{{end}}{{json $j}},"JavaOptions":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.18s" .) "JAVA_TOOL_OPTIONS="}}{{$j = .}}{{end}}{{end}}{{json $j}},"NetworkMode":{{json .HostConfig.NetworkMode}},"ReadOnlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"CgroupParent":{{json .HostConfig.CgroupParent}},"Ulimits":{{json .HostConfig.Ulimits}},"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}},"Resources":{"memoryBytes":{{json .HostConfig.Memory}},"memorySwapBytes":{{json .HostConfig.MemorySwap}},"nanoCpus":{{json .HostConfig.NanoCpus}},"pidsLimit":{{json .HostConfig.PidsLimit}},"nodeOptions":{{$nodeOptions := ""}}{{range .Config.Env}}{{if eq (printf "%.13s" .) "NODE_OPTIONS="}}{{$nodeOptions = .}}{{end}}{{end}}{{json $nodeOptions}}}}'
+ 
+ inspect_format='{"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}}}'
+ 
+@@ -103,6 +104,7 @@
+    while True:
+     drain(.05)
+     if name in ['normal-three-files','tool-provenance','normal-pretest-producer']:observe_namespace_processes()
++    if name=='normal-three-files'and flow_diagnostic is not None:flow_diagnostic.tick()
+     if time.monotonic()-begin>timeout:raise RuntimeError('phase wall bound')
+     if not cleanup:
+      assert time.time()<go['expiresEpoch'], 'Root GO expired'
+@@ -198,6 +200,7 @@
+  if policy_failure:raise policy_failure
+ 
+ def container(name,command,seconds,rw=False):
++ global flow_diagnostic
+  assert rw==(name=='normal-pretest-producer')
+  cname=prefix+'-'+name;assert inspect_container(cname,name+'-absence')is None
+  resources={'memoryBytes':2147483648,'memorySwapBytes':2147483648,'nanoCpus':2000000000,'pidsLimit':256,'nodeOptions':'NODE_OPTIONS=--max-old-space-size=1536'}
+@@ -205,6 +208,11 @@
+  item={'cid':None,'name':cname,'createCompleted':False,'resources':resources,'metadataFileSizeLimitBytes':8388608,'expectedContainerUser':str(os.getuid())+':'+str(os.getgid()),'sourceWritable':rw};owned.append(item)
+  text,_=phase(name+'-create',args,20);cid=text.strip();assert re.fullmatch('[a-f0-9]{64}',cid);item['cid']=cid;item['createCompleted']=True
+  value=inspect_container(cid,name+'-identity',resources=True);check_container(value,item);check_resources(value,item,name+'-identity')
++ if name=='normal-three-files':
++  def diagnostic_owner_proof(label):
++   actual=inspect_container(cid,label,resources=True);assert actual is not None
++   check_container(actual,item);check_resources(actual,item,label);return actual
++  flow_diagnostic=OwnedFlowDiagnostic(out,item,diagnostic_owner_proof,identity,group_members)
+  failure=None
+  try:phase(name,['docker','start','--attach',cid],seconds)
+  except PhaseExitError as error:
+@@ -253,7 +261,7 @@
+  from report_proof import reconcile_reports
+  result_detail=reconcile_reports(out,json.loads((P/'SOURCE-CASE-IDENTITIES.json').read_text()))
+  assert testfailure is None
+- status='SELECTED33_NORMAL_NODE_HOST_JVM_SCOPE_PASS'
++ status='DIAGNOSTIC_NORMAL_FILES_FINISHED_NO_QUALIFICATION'
+ except BaseException as error:run_error=type(error).__name__+': '+str(error)
+ finally:
+  for index,item in enumerate(owned):
+@@ -262,7 +270,11 @@
+  try:observed_processes=verify_observed_process_closure()
+  except BaseException as error:
+   cleanup_errors.append({'processClosureError':str(error)});observed_processes=[]
++  diagnostic_detail=None
++ if flow_diagnostic is not None:
++  try:diagnostic_detail=flow_diagnostic.finish()
++  except BaseException as error:cleanup_errors.append({'diagnosticReceiptError':str(error)})
+  resource_errors=[{'cid':item['cid'],**error}for item in owned for error in item.get('resourcePolicyFailures',[])]
+- result={'state':status if not cleanup_errors and not resource_errors else'CLEANUP_OR_RESOURCE_FAILURE','error':run_error,'phases':records,'containers':owned,'cleanupErrors':cleanup_errors,'resourceErrors':resource_errors,'source':{k:plan[k]for k in ['Alpha','AlphaTree','SDK','SDKTree']},'detail':result_detail,'observedNamespaceProcessCount':len(observed_processes),'observedJavaProcesses':sum(x['comm']in['java','javac']for x in observed_processes),'qualificationIssued':status=='SELECTED33_NORMAL_NODE_HOST_JVM_SCOPE_PASS'and not run_error and not cleanup_errors and not resource_errors,'seconds':time.monotonic()-start,'AndroidBinderDeviceProviderHumanAcceptance':False,'noUnchanged12_253_113Replay':True}
++ result={'state':status if not cleanup_errors and not resource_errors else'CLEANUP_OR_RESOURCE_FAILURE','error':run_error,'phases':records,'containers':owned,'cleanupErrors':cleanup_errors,'resourceErrors':resource_errors,'source':{k:plan[k]for k in ['Alpha','AlphaTree','SDK','SDKTree']},'detail':result_detail,'observedNamespaceProcessCount':len(observed_processes),'observedJavaProcesses':sum(x['comm']in['java','javac']for x in observed_processes),'qualificationIssued':False,'diagnosticOnly':True,'diagnostic':diagnostic_detail,'seconds':time.monotonic()-start,'AndroidBinderDeviceProviderHumanAcceptance':False,'noUnchanged12_253_113Replay':True}
+  (out/'RESULT.json').write_text(json.dumps(result,indent=2)+'\n')
+-raise SystemExit(0 if result['qualificationIssued']else 1)
++raise SystemExit(0 if status=='DIAGNOSTIC_NORMAL_FILES_FINISHED_NO_QUALIFICATION'and not run_error and not cleanup_errors and not resource_errors else 1)
+--- normal/workflow.yml
++++ diagnostic/workflow.yml
+@@ -1,9 +1,9 @@
+-name: Alpha updater three complete normal files (hosted)
++name: Alpha updater Flow JVM diagnostic (hosted, never qualification)
+ on:
+   workflow_dispatch:
+     inputs:
+       root_go_json:
+-        description: Exact new Root one-use source-bound GO, never a standing grant
++        description: Exact new Root diagnostic-only one-use GO with bounded owned jcmd grant
+         required: true
+         type: string
+       expected_workflow_sha:
+--- normal/report_proof.py
++++ diagnostic/report_proof.py
+@@ -73,4 +73,5 @@
+  nonlocal_file_attribute=[0];total=visit(root);file_attributes=nonlocal_file_attribute[0]
+  assert total==33 and junit_cases==counter,'JUnit case/file multiset mismatch'
+  result={'registered':33,'passed':33,'failed':0,'skipped':0,'todo':0,'enqueueAndPassIdentitiesMatch':True,'sourceCoordinatesAndNestingMatch':True,'perFileAndGlobalSummaries':summaries,'normalPlans':plans,'runnerFileEnvelopes':envelopes,'runnerFileEnvelopeCountedAsCases':False,'JUnitCaseIdentityAndEmittedFileFieldsChecked':True,'JUnitEmittedFileFieldCount':file_attributes,'JUnitAggregateStatusAndCountFieldsWhereEmittedChecked':True,'JUnitSHA256':sha(junit_file),'rawEventsSHA256':sha(events),'TAPSHA256':sha(tap),'TAPProofScope':'RETAINED_BOUNDED_HASH_ONLY_NOT_INDEPENDENTLY_VALIDATED','scope':'33completeordinaryNodecases; JVMscenario/internalassertcounts separate; no Android/Binder/device/provider proof'}
+- (out/'ORDINARY-REPORT-PROOF.json').write_text(json.dumps(result,indent=2)+'\n');return result
++ result['diagnosticOnly']=True;result['qualificationIssued']=False;result['scope']='DIAGNOSTIC_RAW_CASE_FACTS_UNDER_OBSERVER_NOT33QUALIFICATION'
++ (out/'DIAGNOSTIC-ORDINARY-REPORT-FACTS.json').write_text(json.dumps(result,indent=2)+'\n');return result

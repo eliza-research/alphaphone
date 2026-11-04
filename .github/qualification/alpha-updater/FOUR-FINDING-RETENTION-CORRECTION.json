@@ -1,0 +1,19 @@
+{
+  "state": "IMMUTABLE_SOURCE_EXCEPTION_RETENTION_AND_BUDGET_CORRECTION_NO_EXECUTION",
+  "baselinePacketSHA256": "f46e99c2a941d505681e70ea6bf6a9008f014e39e38836f3de138c061af4b4d0",
+  "RootFinding": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-flow-diagnostic-v1-20261104/ROOT-INPUT-BINDING-AND-RESULT-RETENTION-FINDING.json",
+  "RootFindingSHA256": "f748d6da25c3786bbbd20dcce40772f4d38889418230b9f0a07142b9d54a57c1",
+  "finalHelperReview": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-flow-diagnostic-v1-20261104/LUNA-INDEPENDENT-DIAGNOSTIC-SOURCE-REVIEW.json",
+  "finalHelperReviewSHA256": "6b819afc9bd9dfc972ae0015d6e6ab0d3a48f646e0613831ab04b20f59d62c1a",
+  "readAllFinalFindings": true,
+  "fixes": [
+    "Unconditional diagnostic_detail default before any main/finalizer path; failed finish preserves bounded launched-intent fallback in RESULT and original run_error/cleanup errors.",
+    "Every observer launch intent registered before Popen; returnedPID stored immediately, originalbirth/PGID onlyfrominitialactualidentity. Unresolvedbirth neverinvented forsignals. Independent observercleanup/hostTERM/KILL/closure/reap/selector/pipe/accounting/counter/hash/emission stages retain errors; all launchintents reconciledinfinish, unresolvedclosure false not omitted.",
+    "Sampling completeness is literalFalse; onlyaccurate sampledObserverJcmdBirthCount/identities emitted.",
+    "Shared absolute remaining10s command+teardown deadline, 2.5scleanupreserve (>known.8+.6+.3waits), minimum.25sactive; activecap6.5s. Rejectlaunchifreserveunavailable. All plannedwaits truncatedtosameabsolute deadline; mandatoryprovedsafe cleanup stillattemptedandunavoidablekernel/IOoverruns recorded, neverhidden orbudgetraised."
+  ],
+  "noChangedSourceOrBehavior": "Same8c30/ff04/3wholefiles33callbacks/normalpretest/targetidentity/counterbaselines/2MiBoutput/2attempts/5sgap/noqualification/test600s/CPU2/RAM2GiB/PIDs256/whole1200/job22/guards/resources/reporter/retainedwrite/oneuseprotocol. NoapplicationJVMsignals orPIDguessing.",
+  "candidateOrHelpersOrToolsExecuted": false,
+  "next": "Samehelperexactnarrowdeltareview andRootadjudication. No sourceacquisition,Java/jcmd/tests/Docker/newjob/publication/GO/dispatch.",
+  "criticalTransportProof": "Selector/pipe-close and reap obligations explicitly retained per launch intent; final closure false if unresolved or cleanup errors remain, even if a process group later disappears. No inferred birth or signal permission."
+}

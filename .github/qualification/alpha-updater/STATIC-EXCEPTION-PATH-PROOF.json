@@ -1,0 +1,34 @@
+{
+  "state": "SOURCE_AST_AND_CONTROL_STRUCTURE_INSPECTION_ONLY_NOT_EXECUTION_TEST",
+  "diagnostic_detailUnconditionallyInitializedAtLine": 22,
+  "beforeMainTryAtLine": 231,
+  "launchIntentRegisteredAtLine": 156,
+  "beforePopenAtLine": 167,
+  "perStageIndependentExceptionRetention": "Observerstop;eachhostsignalstage;groupclosure;reap;selectorclose;pipeclose;postcounter/hash/emission each guarded. In-memoryattemptaccounting nestedfinally.",
+  "everyLaunchIntentFinalReconciled": "finish iteratesobserver_groups includingPopenoutcome/identityfailures; unresolvedgroup/transport/reap false; ROOT RESULT preservesfallbacklaunchrowsiffinishfails.",
+  "completeShortLivedTraceClaim": "Allactiveoutputdictfields literalFalse; sampledcountonly.",
+  "shared10SecondSchedule": {
+    "activeCapSeconds": 6.5,
+    "prelaunchCleanupReserveSeconds": 2.5,
+    "maximumKnownWaitWindowsSeconds": 1.7,
+    "remainingBudgetAdmission": "reject <2.75 seconds; oneabsoluteDeadline coversactiveandplannedteardown waits",
+    "noIntentionalWaitBeyondAbsoluteDeadline": true,
+    "mandatoryProvedSafeCleanupNotOmittedOnKernelOrIOOverrun": true
+  },
+  "noApplicationSignalsOrIdentityGuessesIntroduced": true,
+  "unchangedSourceAndControls": {
+    "PLAN.json": "11b7f6a94ae94ec43eb521f39755c26f017fcc195fa2ba163960da47dad801b4",
+    "ROOT-GO-CONTRACT.json": "b2f57397f939e0db31956b24aa9025f960717c1c4667d42584e55e260503064c",
+    "validate.py": "3746d266b5820e791d867e6d995ca7b3afb62f45bf4716678f43ba78a3bcd100",
+    "claim.py": "b48152418f2bfcfd39f870852aea6851f10e0d4d8cd1c28a2bcad9e8a5faccad",
+    "workflow.yml": "5ce53453c670ee06e9c6e6b624875f25b289787b93a6442a8949e9b17309eda2",
+    "TOOLCHAIN.json": "a0da5b489f9796e7094e593cd6fcdc134495a91fc1595bc8035927cc5b3d2701",
+    "Dockerfile": "48794bee49c035513dcc2a662ce867f986ef7e4a1b1c33ea60942af0202446f6",
+    "tool-provenance.mjs": "c5d0177062d398f4c35f17723d6182e10d2eb9d77b09604cb8ccd523df395148",
+    "SOURCE-CASE-IDENTITIES.json": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+    "source-frame.py": "c1978beb6e4f12dfd8423af30e69ccd96abeef8aaa406bf5223b36dd11c2e917",
+    "projection-custody.mjs": "89b1c1a530136850f2dbff16d360f84ff44e8bb294d87f9458daf64bb79f7a59",
+    "report_proof.py": "6dbc6c100998d5d54ea27e3f089289122d4e3037f4a13cb944b417dc4a2d6dde"
+  },
+  "candidateImportedOrExecuted": false
+}

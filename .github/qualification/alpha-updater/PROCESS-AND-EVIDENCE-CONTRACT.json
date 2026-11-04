@@ -1,0 +1,34 @@
+{
+  "state": "SOURCE_REVIEW_REQUIRED_NOT_ACTUAL_PROCESS_OR_TOOL_EVIDENCE",
+  "newWorkload": {
+    "completeFiles": 3,
+    "NodeCaseCount": 33,
+    "counts": [
+      4,
+      15,
+      14
+    ]
+  },
+  "JDKVendorArchivePin": {
+    "vendor": "Eclipse Adoptium",
+    "release": "jdk-21.0.13+9",
+    "version": "21.0.13",
+    "runtimeVersion": "21.0.13+9-LTS",
+    "architecture": "x64",
+    "os": "linux",
+    "archiveURL": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz",
+    "archiveBytes": 207858352,
+    "archiveSHA256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+    "archiveRoot": "jdk-21.0.13+9",
+    "containerJAVA_HOME": "/opt/qualification-jdk",
+    "vendorVersionOutput": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)\n",
+    "authority": "ADOPTIUM-VENDOR-METADATA.json + JDK21-VENDOR-CHECKSUM.txt + JDK21-VENDOR-ARCHIVE-METADATA.json",
+    "futureActualBinaryProvenance": "Verify whole vendor archive before extraction; inventory every extracted file/link; requireimagejava/javac/releaseexacthashesmatchthosearchive-derivedbytes; captureactualversionsandhashesbeforetests. None observednow."
+  },
+  "processOwnership": "Reviewedhostphaseleaderbirth/PGID/WNOWAIT/signalowned/closure logic copied; newcontainers bindactualCID/names/runlabels/prepostresourcechecks. Duringnormalproducer/tool/test phases sampleownUID/knownCIDprocstatPPID/PGID/birth/comm every50ms. AfterexactCIDclosed, everyobservedoriginalbirth must be gone/zombie. WholecontainerPIDnamespace teardown complements sampling; not everyshort-livedJava/thread event guaranteed observed.",
+  "closureLimitation": "This is not an exhaustive per-JVMspawn/exit hook. Individual normalJVMsuccess followsactualwholefileassertions, processsamplingprovidesactualobservedPIDevidence, exactnamespace/CIDterminationprovidescontainedforestclosure. Independentreview mayrequireadditionaldirectper-JVMwitness; absence mustnotbecalledcomplete trace.",
+  "isolation": "Exact2GiB/noextraSwap/2CPU/PID256/read-onlyrootfs/capdrop/no-new-privileges/nonroot/none-network. Sourceonlynormalpretest RW, testsRO; sourceframeverifiesalltrackedAlpha+SDKbytes/preimages before/after; produceroutputinventory finals. Freshhome/tmp; JVM512MiB/runtimeCPU2. No external JSmodules/key/socket/providerdata mounted.",
+  "reporting": "Keep allnormalTAP/JUnitandcustomNodeoriginaleventobjects/errorfields. Qualifier checksactualnames/multiplicity/statuses33andJUnitidentity. JVMnestedassertcounts not addedto33. No selectedcallbackcopiedintooperator.",
+  "scope": "NodehostJVM/stub/sourceassertions only; noAndroid/Binder/PackageInstalleractualsession/device/signingproviderhumanacceptance.",
+  "authoringOnly": "No candidate/helper/fixture/tool execution has occurred. Only PythonAST/Node --check source parsers are allowed for static verification."
+}

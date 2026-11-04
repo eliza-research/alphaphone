@@ -1,0 +1,59 @@
+{
+  "state": "SOURCE_ONLY_NARROW_FULL_IMAGE_SUPPLIER_CORRECTION_NOT_EXECUTED",
+  "baselinePacketSHA256": "3b2568ba1c77e91527149142037f4bf012bb5b9f3234fc091d61f7ee1bc537fa",
+  "actualFailure": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater33-b217-normal-once-20261104T111039Z/COMPACT-OWNER-FAILURE-RECEIPT.json",
+  "actualFailureSHA256": "0941f5fdd8b62d0b6b0f04c5ec7c881f84f3cfe18b1086e51921a39753698092",
+  "oldRunIntentStillFailedSpent": "0460e9766804494ab362060dd7a41feb",
+  "newImmutableNodeSupplier": {
+    "repository": "library/node",
+    "tag": "24.15.0-bookworm",
+    "amd64Digest": "sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
+    "configDigest": "sha256:07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
+    "baseEntireBuildpack": "sha256:711f2c9561ccac685567327344958beb189a577d122030724b2fa6136ffdd7d4",
+    "declaredLayersBytesOnly": 408062655,
+    "metadataOnlyNoLayerDownload": true,
+    "runtimeClosure": "Entireofficialbasefilesystemwithapt-resolvedgit+GNU patchandlibsretained; no ad-hocinstall/partialbinarycopy. Registrymanifest/configandpinnedDockerfilesproveconstruction,notyetactualnewimagebinaryexecution."
+  },
+  "unchangedPins": {
+    "NodeVersion": "24.15.0",
+    "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+    "NodeTestSchema": "24.15.0",
+    "JDK": {
+      "vendor": "Eclipse Adoptium",
+      "release": "jdk-21.0.13+9",
+      "version": "21.0.13",
+      "runtimeVersion": "21.0.13+9-LTS",
+      "architecture": "x64",
+      "os": "linux",
+      "archiveURL": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz",
+      "archiveBytes": 207858352,
+      "archiveSHA256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+      "archiveRoot": "jdk-21.0.13+9",
+      "containerJAVA_HOME": "/opt/qualification-jdk",
+      "vendorVersionOutput": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)\n",
+      "authority": "ADOPTIUM-VENDOR-METADATA.json + JDK21-VENDOR-CHECKSUM.txt + JDK21-VENDOR-ARCHIVE-METADATA.json",
+      "futureActualBinaryProvenance": "Verify whole vendor archive before extraction; inventory every extracted file/link; requireimagejava/javac/releaseexacthashesmatchthosearchive-derivedbytes; captureactualversionsandhashesbeforetests. None observednow."
+    }
+  },
+  "GitOwnership": {
+    "proof": "HostsourceframeandcontainerpreflightrequiresactualnonrootUIDequalcheckoutroot+.gitownerforAlphaandSDK; Docker --user numericUID/GIDreadback. WithsameownerdefaultGitdoesnotneedsafe.directory.",
+    "safeDirectoryChanges": "None. Require no effectiveprotectedexception andfailmismatch; no wildcard/no globalhost writes/no arbitrary-sourceexception.",
+    "readOnly": "SDK extra bind readonly inallcontainers; /workspace readonlyintests,normalproducerRWrootonlyforclientprojection. GIT_OPTIONAL_LOCKS=0percontainerforread-onlyGitoptionalindexmaintenance, no helper/code/path rewrite.",
+    "primaryRule": "https://git-scm.com/docs/git-config/2.39.0#Documentation/git-config.txt-safedirectory"
+  },
+  "positiveProvenance": "Persist bounded131072BTOOL-PROVENANCE-PARTIAL checkpoints afterNode/supplier/fullJDKinventory/eachJavaVersion/release/Git/Patchloader+package facts before later-tool failure. No finaltool-pass inferredfromcodeorder.",
+  "profileAndBehaviorUnchanged": [
+    "Actualnormalpretestand33wholeNodecases/no12/253/113replay",
+    "case/source/reportdecode/JDKcompleteinventory/guard/intent/namespaceclosure",
+    "memory/CPU/PID/time/log/disk/networknone/currentlaunchbcdef/ff04",
+    "tool-provenance-onlymetadata additions; app/SDKsourcesunchanged"
+  ],
+  "newControlStrengthening": [
+    "explicitnumericcontaineruserreadback",
+    "nestedSDKreadonlymountverifiedpre/post/cleanup",
+    "actualsameUIDownershippreconditionsandnormalread-onlyGitcommands",
+    "completeGit/Patchdynamicruntime/packageprovenance"
+  ],
+  "stillUnproved": "No newimagefileavailability/Nodehash/JDKversions/loaderfactsorGitownershipruntimefit observednow; normalproducerand33testsremainunrun. Existingfailedcase positivesnottransferred.",
+  "noActualLayersBinaryJDKToolDockerProducerTestProviderDevicePublicationDispatch": true
+}

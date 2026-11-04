@@ -1,0 +1,458 @@
+--- v1/source-frame.py
++++ v2/source-frame.py
+@@ -1,7 +1,12 @@
+ import hashlib,json,os,pathlib,stat,subprocess,sys
+-root=pathlib.Path(sys.argv[1]);output=pathlib.Path(sys.argv[2]);plan=json.loads(pathlib.Path(sys.argv[3]).read_text());records=[];total=0
++root=pathlib.Path(sys.argv[1]);output=pathlib.Path(sys.argv[2]);plan=json.loads(pathlib.Path(sys.argv[3]).read_text());records=[];total=0;metadata_directories=set()
+ for prefix,head,tree in [('',plan['Alpha'],plan['AlphaTree']),('vendor/eliza',plan['SDK'],plan['SDKTree'])]:
+  directory=root/prefix
++ metadata=directory/'.git'
++ assert metadata.is_dir()and not metadata.is_symlink(),'Only exact checkout metadata directories admitted'
++ gitdir=subprocess.check_output(['git','-C',str(directory),'rev-parse','--absolute-git-dir'],timeout=10).decode().strip()
++ assert pathlib.Path(gitdir)==metadata and metadata.resolve()==metadata,'External/linked checkout metadata'
++ metadata_directories.add(str(metadata.relative_to(root)))
+  def git(*args):return subprocess.check_output(['git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false','-C',str(directory),*args],timeout=45,env=dict(os.environ,GIT_NO_LAZY_FETCH='1',GIT_NO_REPLACE_OBJECTS='1',GIT_OPTIONAL_LOCKS='0'))
+  assert git('rev-parse','HEAD').decode().strip()==head and git('rev-parse','HEAD^{tree}').decode().strip()==tree
+  assert not git('diff','--no-ext-diff','--name-only','HEAD')and not git('ls-files','--others','--exclude-standard')
+@@ -27,17 +32,39 @@
+ for name in ['.env.test','.env.test.local','.env.development','.env.production','.dev.vars.production','.env.local','node_modules','vendor/eliza/node_modules','.env','.env.local','.dev.vars']:assert not(root/name).exists()and not(root/name).is_symlink()
+ # Reject extra retained ignored files as well as ordinary Git overlays. Only
+ # the canonical producer directory is excluded, then independently inventoried.
+-tracked={x['path']for x in records};extra=[]
++tracked={x['path']:x for x in records};expected_directories={'.'}
++for name in tracked:
++ parent=pathlib.PurePosixPath(name).parent
++ while str(parent)!='.':expected_directories.add(str(parent));parent=parent.parent
++for row in records:
++ if row.get('kind')=='gitlink':expected_directories.add(row['path'])
++eliza=root/'.eliza'
++if eliza.exists()or eliza.is_symlink():
++ assert eliza.is_dir()and not eliza.is_symlink()and set(p.name for p in eliza.iterdir())=={'client-features'},'Unexpected generated directory'
++ assert(eliza/'client-features').is_dir()and not(eliza/'client-features').is_symlink(),'Linked canonical producer root'
++seen_metadata=set();directory_entries=0;tracked_directory_links=[]
+ for current,directories,files in os.walk(root,followlinks=False):
+- relative=pathlib.Path(current).relative_to(root)
+- directories[:]=[n for n in directories if n!='.git'and str(relative/n)!='.eliza']
++ relative=pathlib.Path(current).relative_to(root);kept=[]
++ for name in directories:
++  path=str(relative/name);entry=pathlib.Path(current)/name;mode=entry.lstat().st_mode
++  directory_entries+=int(path!='.eliza');assert directory_entries<=100000,'Source directory entry bound'
++  assert name!='node_modules','Installed/borrowed dependency directory in no-install cone: '+path
++  if name.casefold()=='.git':
++   assert path in metadata_directories and stat.S_ISDIR(mode)and not stat.S_ISLNK(mode),'Unexpected nested/linked Git metadata: '+path
++   seen_metadata.add(path);continue
++  if path=='.eliza':assert stat.S_ISDIR(mode)and not stat.S_ISLNK(mode);continue
++  if stat.S_ISLNK(mode):
++   assert path in tracked and tracked[path]['mode']=='120000','Untracked ignored symlink directory: '+path
++   assert hashlib.sha256(os.readlink(entry).encode()).hexdigest()==tracked[path]['sha256'];tracked_directory_links.append(path);continue
++  assert stat.S_ISDIR(mode)and path in expected_directories,'Unexpected retained source directory: '+path
++  kept.append(name)
++ directories[:]=kept
+  for name in files:
+-  path=str(relative/name)
+-  if name=='.git':continue
+-  assert path in tracked,'Unexpected retained source file: '+path
+-eliza=root/'.eliza'
+-if eliza.exists():assert not eliza.is_symlink()and set(p.name for p in eliza.iterdir())=={'client-features'},'Unexpected generated directory'
+-text=json.dumps(records,separators=(',',':'));digest=hashlib.sha256(text.encode()).hexdigest();data={'Alpha':plan['Alpha'],'SDK':plan['SDK'],'trackedFiles':len(records),'bytes':total,'recordsDigest':digest,'allWorkingGitBlobsMatched':True,'externalJSDependenciesInstalled':False}
++  path=str(relative/name);entry=pathlib.Path(current)/name;mode=entry.lstat().st_mode
++  assert name!='node_modules'and name.casefold()!='.git','Noncanonical dependency/Git metadata file: '+path
++  assert path in tracked and(stat.S_ISREG(mode)or stat.S_ISLNK(mode)),'Unexpected retained source file: '+path
++assert seen_metadata==metadata_directories,'Authenticated checkout metadata missing'
++text=json.dumps(records,separators=(',',':'));digest=hashlib.sha256(text.encode()).hexdigest();data={'Alpha':plan['Alpha'],'SDK':plan['SDK'],'trackedFiles':len(records),'bytes':total,'recordsDigest':digest,'allWorkingGitBlobsMatched':True,'externalJSDependenciesInstalled':False,'directoryEntriesClassified':directory_entries,'exactGitMetadataExclusions':sorted(seen_metadata),'authenticatedTrackedDirectoryLinks':sorted(tracked_directory_links)}
+ if output.exists():assert json.loads(output.read_text())==data
+ else:output.write_text(json.dumps(data,indent=2)+'\n')
+ print(json.dumps(data))
+--- v1/prepare-jdk.py
++++ v2/prepare-jdk.py
+@@ -21,14 +21,14 @@
+    target=pathlib.Path(os.path.normpath(str(destination/p.parent/m.linkname)));assert not pathlib.Path(m.linkname).is_absolute()and target.is_relative_to(destination/T['archiveRoot'])
+  tar.extractall(destination,members=members,filter='data')
+ root=destination/T['archiveRoot'];records=[]
+-for f in sorted(root.rglob('*')):
++for f in [root,*sorted(root.rglob('*'))]:
+  s=f.lstat();relative=str(f.relative_to(root));assert len(records)<30000
+- if stat.S_ISDIR(s.st_mode):continue
+- if stat.S_ISLNK(s.st_mode):records.append({'path':relative,'link':os.readlink(f)});continue
++ if stat.S_ISDIR(s.st_mode):records.append({'path':relative,'type':'directory','mode':s.st_mode&0o7777});continue
++ if stat.S_ISLNK(s.st_mode):records.append({'path':relative,'type':'symlink','mode':s.st_mode&0o7777,'link':os.readlink(f)});continue
+  assert stat.S_ISREG(s.st_mode);digest=hashlib.sha256()
+  with f.open('rb')as stream:
+   while chunk:=stream.read(1048576):digest.update(chunk)
+- records.append({'path':relative,'bytes':s.st_size,'mode':s.st_mode&0o777,'sha256':digest.hexdigest()})
++ records.append({'path':relative,'type':'file','bytes':s.st_size,'mode':s.st_mode&0o7777,'sha256':digest.hexdigest()})
+ assert all((root/n).is_file()for n in ['bin/java','bin/javac','release'])
+-receipt={'archiveBytes':count,'archiveSHA256':h.hexdigest(),'sourceURL':T['archiveURL'],'JAVA_HOME':str(root),'records':records,'toolExecuted':False}
++receipt={'inventoryVersion':2,'archiveBytes':count,'archiveSHA256':h.hexdigest(),'sourceURL':T['archiveURL'],'JAVA_HOME':str(root),'records':records,'toolExecuted':False}
+ (destination/'JDK-ARCHIVE-CUSTODY.json').write_text(json.dumps(receipt,indent=2)+'\n')
+--- v1/tool-provenance.mjs
++++ v2/tool-provenance.mjs
+@@ -1,11 +1,38 @@
+ import fs from 'node:fs';import crypto from 'node:crypto';import {execFileSync,spawnSync}from'node:child_process';
+ const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+ if(process.env.JAVA_TOOL_OPTIONS!=='-Xmx512m -XX:ActiveProcessorCount=2')throw Error('Wrong Java heap/CPU budget');
+-const expected=JSON.parse(fs.readFileSync('/results/TOOLCHAIN.json'));const custody=JSON.parse(fs.readFileSync('/results/JDK-ARCHIVE-CUSTODY.json'));const rows=new Map(custody.records.map(x=>[x.path,x]));const files={};
++const expected=JSON.parse(fs.readFileSync('/results/TOOLCHAIN.json'));
++const custodyFile='/results/JDK-ARCHIVE-CUSTODY.json';if(fs.lstatSync(custodyFile).isSymbolicLink()||fs.statSync(custodyFile).size>8388608)throw Error('Archive custody metadata bound');
++const custody=JSON.parse(fs.readFileSync(custodyFile));
++if(custody.inventoryVersion!==2||custody.archiveBytes!==expected.JDK.archiveBytes||custody.archiveSHA256!==expected.JDK.archiveSHA256||custody.sourceURL!==expected.JDK.archiveURL)throw Error('Archive receipt differs from sealed vendor supplier');
+ if(process.version!=='v'+expected.NodeVersion||hash('/usr/local/bin/node')!==expected.NodeBinarySHA256||process.env.JAVA_HOME!==expected.JDK.containerJAVA_HOME)throw Error('Wrong Node/JAVA_HOME supplier');
+-for(const name of ['bin/java','bin/javac','release']){const file=process.env.JAVA_HOME+'/'+name,want=rows.get(name);if(fs.realpathSync(file)!==file||hash(file)!==want.sha256)throw Error('JDK archive/image binary mismatch');files[name]={file,sha256:hash(file),bytes:fs.statSync(file).size};}
++if(!Array.isArray(custody.records)||custody.records.length>30000)throw Error('JDK inventory count bound');
++const rows=new Map();for(const row of custody.records){if(typeof row.path!=='string'||row.path.startsWith('/')||row.path.split('/').some(p=>p==='..')||rows.has(row.path))throw Error('Invalid/duplicate archive inventory path');rows.set(row.path,row);}
++const actual=[],files={},buffer=Buffer.alloc(1048576);let totalBytes=0;
++function digestFile(file,size){const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW),digest=crypto.createHash('sha256');try{const before=fs.fstatSync(fd);if(!before.isFile()||before.size!==size)throw Error('JDK file type/size changed');let n;while((n=fs.readSync(fd,buffer,0,buffer.length,null)))digest.update(buffer.subarray(0,n));const after=fs.fstatSync(fd);if(before.dev!==after.dev||before.ino!==after.ino||before.size!==after.size||before.mtimeMs!==after.mtimeMs)throw Error('JDK read race');}finally{fs.closeSync(fd);}return digest.digest('hex');}
++function walk(file,relative){
++ const stat=fs.lstatSync(file),want=rows.get(relative);if(!want||actual.length>=30000)throw Error('Extra JDK entry or inventory bound');
++ const mode=stat.mode&0o7777;if(mode!==want.mode)throw Error('JDK mode differs from archive');
++ let row;if(stat.isSymbolicLink()){
++  const link=fs.readlinkSync(file),resolved=fs.realpathSync(file);if(want.type!=='symlink'||link!==want.link||!resolved.startsWith(process.env.JAVA_HOME+'/'))throw Error('JDK link differs or escapes archive root');row={path:relative,type:'symlink',mode,link};
++ }else if(stat.isDirectory()){
++  if(want.type!=='directory')throw Error('JDK directory type mismatch');row={path:relative,type:'directory',mode};
++ }else{
++  if(!stat.isFile()||want.type!=='file'||stat.size!==want.bytes||typeof want.sha256!=='string'||!/^[a-f0-9]{64}$/.test(want.sha256))throw Error('JDK regular file mismatch');
++  totalBytes+=stat.size;if(totalBytes>2147483648)throw Error('JDK byte bound');const digest=digestFile(file,stat.size);if(digest!==want.sha256)throw Error('JDK runtime byte mismatch');row={path:relative,type:'file',bytes:stat.size,mode,sha256:digest};
++ }
++ actual.push(row);
++ if(stat.isDirectory())for(const name of fs.readdirSync(file).sort())walk(file+'/'+name,relative==='.'?name:relative+'/'+name);
++}
++walk(process.env.JAVA_HOME,'.');if(actual.length!==rows.size)throw Error('Missing JDK archive entries');
++for(const name of ['bin/java','bin/javac','release']){const want=rows.get(name),file=process.env.JAVA_HOME+'/'+name;if(want?.type!=='file'||fs.realpathSync(file)!==file)throw Error('Wrong executable/release origin');files[name]={file,sha256:want.sha256,bytes:want.bytes};}
++const sort=rows=>JSON.stringify([...rows].sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0));
++const inventorySHA256=crypto.createHash('sha256').update(sort(actual)).digest('hex');
++if(sort(actual)!==sort(custody.records))throw Error('Complete JDK archive/image inventory differs');
++// No Java or javac subprocess occurs until every runtime/library/config entry
++// has matched archive bytes, mode and link target with no missing/extra paths.
+ const versions={};for(const name of ['java','javac']){const r=spawnSync(process.env.JAVA_HOME+'/bin/'+name,['-version'],{encoding:'utf8',timeout:10000,maxBuffer:65536});if(r.error||r.signal||r.status!==0)throw Error('Tool version metadata failed');versions[name]={stdout:r.stdout,stderr:r.stderr};}
+ // java -version writes stderr. Release metadata independently binds the exact version.
+ const release=fs.readFileSync(process.env.JAVA_HOME+'/release','utf8');if(!release.includes('JAVA_VERSION="21.0.13"')||!release.includes('JAVA_RUNTIME_VERSION="21.0.13+9-LTS"')||!(versions.javac.stdout+versions.javac.stderr).includes('javac 21.0.13')||!(versions.java.stdout+versions.java.stderr).includes('Temurin-21.0.13+9'))throw Error('Wrong JDK release metadata');
+ const system={};for(const name of ['git','patch']){const command=execFileSync('/usr/bin/which',[name],{encoding:'utf8',timeout:10000}).trim();if(!command.startsWith('/usr/'))throw Error('Borrowed system tool');const file=fs.realpathSync(command);system[name]={command,file,sha256:hash(file),version:execFileSync(command,['--version'],{encoding:'utf8',timeout:10000}).slice(0,4096)};}
+-fs.writeFileSync('/results/TOOL-PROVENANCE.json',JSON.stringify({node:process.version,nodeSHA256:hash('/usr/local/bin/node'),npmSHA256:hash(fs.realpathSync('/usr/local/bin/npm')),JDKArchiveSHA256:custody.archiveSHA256,JAVA_HOME:process.env.JAVA_HOME,files,release,versions,system,scope:'Actual supplied tool metadata only, not fixture or Android pass'},null,2)+'\n');
++fs.writeFileSync('/results/TOOL-PROVENANCE.json',JSON.stringify({node:process.version,nodeSHA256:hash('/usr/local/bin/node'),npmSHA256:hash(fs.realpathSync('/usr/local/bin/npm')),JDKArchiveSHA256:custody.archiveSHA256,JAVA_HOME:process.env.JAVA_HOME,completeJDKInventory:{entries:actual.length,bytes:totalBytes,inventorySHA256,allBytesModesTypesLinksMatched:true,noMissingOrExtraEntries:true,archiveReceiptSHA256:hash(custodyFile)},files,release,versions,system,scope:'Actual supplied tool metadata only, not fixture or Android pass'},null,2)+'\n');
+--- v1/run.py
++++ v2/run.py
+@@ -244,20 +244,9 @@
+  try:container('normal-three-files',plan['commands']['tests'],600)
+  except PhaseExitError as error:testfailure=error
+  source_frame('source-frame-after-tests');container('projection-final',['/usr/local/bin/node','/results/projection-custody.mjs','final'],30)
+- cases=json.loads((P/'SOURCE-CASE-IDENTITIES.json').read_text());expected=collections.Counter((x['path'],t['name'])for x in cases['files']for t in x['tests']);actual=collections.Counter();observations=[]
+- events=out/'normal.events.jsonl';assert events.is_file()and not events.is_symlink()and events.stat().st_size<=8388608
+- for line in events.read_text().splitlines():
+-  event=json.loads(line);assert isinstance(event,dict)
+-  if event['type']in['test:pass','test:fail']:
+-   d=event['data'];file=d.get('file','');file=file.removeprefix('/workspace/');row={'eventType':event['type'],'file':file,'name':d['name'],'nesting':d.get('nesting'),'skip':d.get('skip'),'todo':d.get('todo'),'details':d.get('details')};observations.append(row)
+-   assert not d.get('skip')and not d.get('todo')and event['type']=='test:pass'
+-   actual[(file,d['name'])]+=1
+- assert actual==expected and sum(actual.values())==33,'Normal raw event identities/statuses mismatch'
+- for filename in ['normal.tap','normal.junit.xml']:assert(out/filename).is_file()and not(out/filename).is_symlink()and(out/filename).stat().st_size<=8388608
+- junit=ET.parse(out/'normal.junit.xml');assert not any(junit.iter('failure'))and not any(junit.iter('error'))and not any(junit.iter('skipped'))
+- junit_names=collections.Counter(x.attrib['name']for x in junit.iter('testcase'));assert junit_names==collections.Counter(t['name']for x in cases['files']for t in x['tests'])
++ from report_proof import reconcile_reports
++ result_detail=reconcile_reports(out,json.loads((P/'SOURCE-CASE-IDENTITIES.json').read_text()))
+  assert testfailure is None
+- result_detail={'registered':33,'passed':33,'failed':0,'skipped':0,'todo':0,'rawEventsSHA256':sha(events),'JUnitSHA256':sha(out/'normal.junit.xml'),'TAPSHA256':sha(out/'normal.tap'),'observations':observations,'scope':'33ordinaryNodecases only; internalJVMscenarios andstubAndroid notAndroid/Binder/provider/deviceacceptance'}
+  status='SELECTED33_NORMAL_NODE_HOST_JVM_SCOPE_PASS'
+ except BaseException as error:run_error=type(error).__name__+': '+str(error)
+ finally:
+--- v1/SOURCE-CASE-IDENTITIES.json
++++ v2/SOURCE-CASE-IDENTITIES.json
+@@ -11,22 +11,30 @@
+         {
+           "name": "the download is admitted only at its declared size and SHA-256",
+           "line": 16,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "the update flow runs one attempt per process, fences a session Android still holds, keeps its confirmation for the bridge that asked, opens it once, and settles every failure quietly",
+           "line": 28,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Android installs only the offered newer build of this package, and only when no session of Alpha's fences the tap",
+           "line": 52,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Alpha stays nonprivileged and reads one configured HTTPS manifest from its own rolling release",
+           "line": 85,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         }
+       ]
+     },
+@@ -38,87 +46,117 @@
+         {
+           "name": "the shared guard refuses work for a stopped, shut-down or full worker without throwing",
+           "line": 12,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaActionJournalPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaActionJournalPlugin"
++          "row": "AlphaActionJournalPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaConnectionPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaConnectionPlugin"
++          "row": "AlphaConnectionPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaDevicePlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaDevicePlugin"
++          "row": "AlphaDevicePlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaFilesPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaFilesPlugin"
++          "row": "AlphaFilesPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaHostedResultsPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaHostedResultsPlugin"
++          "row": "AlphaHostedResultsPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaLocalAgentPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaLocalAgentPlugin"
++          "row": "AlphaLocalAgentPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaMailAttachmentsPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaMailAttachmentsPlugin"
++          "row": "AlphaMailAttachmentsPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaMapsTransportPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaMapsTransportPlugin"
++          "row": "AlphaMapsTransportPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaNoteAudioPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaNoteAudioPlugin"
++          "row": "AlphaNoteAudioPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "AlphaNoteDocumentsPlugin: every worker dispatch goes through PluginWorkers.submit",
+           "line": 34,
+           "source": "unchanged Object.entries(plugins) loop",
+-          "row": "AlphaNoteDocumentsPlugin"
++          "row": "AlphaNoteDocumentsPlugin",
++          "column": 2,
++          "nesting": 0
+         },
+         {
+           "name": "the Maps deadline scheduler is the one dispatch that cannot use Executor and keeps its own catch",
+           "line": 47,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "every worker a plugin declares is listed and checked above",
+           "line": 55,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "the shared Photos bridge Alpha registers answers a call for a stopped worker instead of throwing",
+           "line": 63,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "the shared speech bridge AlphaVoiceCloudPlugin subclasses answers a stopped or full worker the same way",
+           "line": 78,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         }
+       ]
+     },
+@@ -130,77 +168,106 @@
+         {
+           "name": "the version row shows only what the build and Android report",
+           "line": 9,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "About shows only the install time Android recorded and never claims the app is current",
+           "line": 15,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Software update offers only a complete, newer manifest for this flavor and signer, with an HTTPS APK, a SHA-256 and a bounded size",
+           "line": 32,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "the automatic update check is due a day after the last answered check",
+           "line": 66,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "dead-end and negative Settings rows are gone from the adapter",
+           "line": 75,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "the Google accounts sheet has no Gmail notification settings button: Android lists Gmail with Alpha's other channels",
+           "line": 80,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Scheduled digests has one Settings entry, the top-level row",
+           "line": 84,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "prototype-only sheets (memory wipe, Wi-Fi password, forget network) never reach the renderer",
+           "line": 88,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "native system facts are read without new permissions and are omitted when unreadable",
+           "line": 93,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Cloud privacy facts describe AI and speech without model-navigation claims",
+           "line": 107,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "Cloud privacy hero includes speech while retaining native and offline/startup truth",
+           "line": 113,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "production Settings refuses Developer routes and preserves real About diagnostics",
+           "line": 129,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "one Developer gate: a development server build opened with ?tools=1, never the product",
+           "line": 138,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         },
+         {
+           "name": "explicit developer surfaces retain Developer navigation and route",
+           "line": 146,
+-          "source": "literal normalNode registration"
++          "source": "literal normalNode registration",
++          "column": 1,
++          "nesting": 0
+         }
+       ]
+     }
+   ],
+   "expectedTotal": 33,
+   "expectedFailedSkippedTodo": 0,
+-  "derivation": "Python lexical scanning literaltesttitles plus explicit10rowplugins registry; callback bodies not evaluated; internal Java assertions are not additionalNodecases."
++  "derivation": "Python lexical scanning literaltesttitles plus explicit10rowplugins registry; callback bodies not evaluated; internal Java assertions are not additionalNodecases.",
++  "coordinateDerivation": "Literal existing test() call line/column and ordinary top-level nesting0, including unchanged10row loop; no callbacks executed. Actual event coordinates must match where emitted and be present for pinned normal case events."
+ }
+--- v1/ROOT-GO-CONTRACT.json
++++ v2/ROOT-GO-CONTRACT.json
+@@ -35,6 +35,6 @@
+   },
+   "planSHA256": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
+   "toolchainSHA256": "380af1dc1849e53b3dd5938f9e2f64d3270e7e3e6a7b1d29504ff45d074736f9",
+-  "sourceCasesSHA256": "b4b65503f2d0fc67eb6f98679695944938443173cf483aab13e99feda55207dd",
++  "sourceCasesSHA256": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+   "hostCohortsSHA256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
+ }
