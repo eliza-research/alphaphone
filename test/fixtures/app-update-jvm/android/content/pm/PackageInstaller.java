@@ -14,7 +14,8 @@ public class PackageInstaller {
  /**
   * A read that misses the commit intent, as AOSP allows on 12 and 12L alone: android-12.0.0_r1 and android-12.1.0_r1
   * PackageInstallerSession write it under mProgressLock (1253, 1269) and generateInfoInternal reads it under mLock alone (1122, 1129).
-  * Modelled from that source, not seen on a device.
+  * Modelled from that source, not seen on a device. Code nobody read, a level above 37 or a build that is not a release, is given
+  * the same read, since nothing rules it out.
   */
  public boolean stale;
  /** Commits wait for validate, as a large APK's does. */
@@ -101,7 +102,8 @@ public class PackageInstaller {
   float progress=session.progress;
   waiting.run();
   int sdk=android.os.Build.VERSION.SDK_INT;
-  return new SessionInfo(id,session,stale&&(sdk==31||sdk==32)&&session.intended&&!session.sealed?0f:sdk>=33?progress:session.progress);
+  boolean unordered=sdk==31||sdk==32||sdk>=38||!"REL".equals(android.os.Build.VERSION.CODENAME);
+  return new SessionInfo(id,session,stale&&unordered&&session.intended&&!session.sealed?0f:sdk>=33?progress:session.progress);
  }
  public SessionInfo getSessionInfo(int id){if(infoDown)throw new RuntimeException("DeadSystemException");return sessions.contains(id)?read(id,()->{}):null;}
  /** PackageInstallerService writing its session file. */

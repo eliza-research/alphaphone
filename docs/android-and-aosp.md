@@ -341,9 +341,9 @@ only a tap on the same surface, behind an attempt that failed before its commit,
 `sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it open a session for this
-package. A session a killed process left unsealed, short of its commit intent (below), holds nothing on Android 10, 11
-and 13 to 17 and stays until Android expires it; on 12, 12L or a level not read here it holds until the next
-`system_server` start. Closing the
+package. A session a killed process left unsealed, short of its commit intent (below), holds nothing on release builds
+of Android 10, 11 and 13 to 17 and stays until Android expires it; on 12, 12L, a level not read here or a build that is
+not a release it holds until the next `system_server` start. Closing the
 surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
@@ -378,11 +378,17 @@ Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
   stores the value and recomputes progress before replying, checking only that the caller owns the session, so a
   commit sent after that reply is always behind it.
 - Whether a later read sees that store depends on the level, since `mProgress` is a plain field at every tag. On 10
-  and 11 the writer and `generateInfoInternal` hold the same `mLock`; on 13 to 17 `generateInfoInternal` snapshots
+  and 11 the writer and the reader (`generateInfo` at `android-10.0.0_r1` `PackageInstallerSession.java` 464 to 472,
+  `generateInfoInternal` from `android-10.0.0_r46` and at every 10 security tag) hold the same `mLock`; on 13 to 17 `generateInfoInternal` snapshots
   progress under the writer's `mProgressLock`. On 12 and 12L it is written under `mProgressLock` and read under `mLock`
   alone (`android-12.0.0_r1` and `android-12.1.0_r1` `PackageInstallerSession.java` 1122 and 1129 against 1253 and
   1269), so the Java memory model lets a read return the 0 from before the intent; every 12 and 12L tag read, up to the
-  newest security tags, does the same. Above 17 nothing was read.
+  newest security tags, does the same. Above 17 nothing was read. This holds at every public AOSP tag of 10 to 17 (539,
+  up to `android-10.0.0_r47`, `11.0.0_r48`, `12.0.0_r34`, `12.1.0_r27`, `13.0.0_r84`, `14.0.0_r75`, `15.0.0_r36`,
+  `16.0.0_r4` and `17.0.0_r1`, and their newest security tags). A framework whose source is not published, an OEM's or
+  a Google release ahead of AOSP, is taken at its level on the premise that it keeps that lock. A build that is not a
+  release (`Build.VERSION.CODENAME` other than `REL`, as a preview or a development branch) reports the level it
+  branched from while running code nobody read, so it counts as not read.
 - Nothing else moves an unsealed session of Alpha's off 0. A stream from `openWrite` reports no progress; only
   `Session.write` from a descriptor does, which Alpha does not call. The one other writer runs after the seal, at
   validation, so it never touches an unsealed session, and it sets the same 1, so progress reads 0.8 after any commit.
@@ -390,9 +396,10 @@ Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
   exactly as long as a queued commit can.
 - Android reads it for nothing but reports: a progress callback the seal fires too, dumps and session history.
 
-So on 10, 11 and 13 to 17, 0 on an unsealed session bound with `/intent` in this boot proves no commit was sent, and
-none sent in an earlier boot can still arrive. On 12, 12L and levels not read, such a session fences whatever it reads
-until the next `system_server` start; Alpha never polls or retries the read. A session at a proven 0 stays
+So on release builds of 10, 11 and 13 to 17, 0 on an unsealed session bound with `/intent` in this boot proves no
+commit was sent, and none sent in an earlier boot can still arrive. On 12, 12L, levels not read and builds that are not
+releases, such a session fences whatever it reads until the next `system_server` start; Alpha never polls or retries
+the read. A session at a proven 0 stays
 for Android to expire and the next tap stages beside it, which duplicates nothing, because nothing commits a
 session it did not just stage. Anything but an exact 0 fences, NaN included, and a list Android cannot give stops the
 tap. Alpha never clears the intent: it ends with the session, gives way to the seal, or goes at the next `system_server`
@@ -475,7 +482,8 @@ and the current version keeps showing.
   later do not validate a marked one again, and its commit fails, read from AOSP: system_server dies on 11, nothing
   shows and no status comes on 12 and 13, and on 14 to 17 the confirmation shows and its accept fails, or on 14 can
   kill system_server. Android 10 validates it at boot, and that install reads 0.1 and idle.
-- No binding, or a corrupt one, sealed or not: Android's expiry alone. No installed version or boot ends it.
+- No binding, or a corrupt one, sealed or not, whichever part of Alpha's app staged it: Android's expiry alone. No
+  installed version or boot ends it.
 - A commit that threw, sealed: Android's status if it comes, otherwise the same. On Android 10 a validation I/O error
   seals a session with no mark and no status, so it stays until the expiry.
 - An unsealed session holding a commit intent: a commit that threw, a process killed with its commit queued short of
@@ -483,11 +491,11 @@ and the current version keeps showing.
   cleanup failing too, which all read the same. Until Android lists it
   no more, its bound target is installed, or the next `system_server` start, whichever is first, with no time limit
   short of those. A process restart does not free it. A queued commit that then seals joins the entries above, and its
-  status reconnects as usual. A kill during a download never lands here; one during a write lands here only on 12, 12L
-  or a level not read.
-- On 12, 12L or above 17, an unsealed session of this boot bound with `/intent`, at any progress, as a process killed
-  while writing it leaves; and on any level one an earlier build bound without the mark: until Android lists it no
-  more, its target is installed, or the next `system_server` start.
+  status reconnects as usual. A kill during a download never lands here; one during a write lands here only on 12, 12L,
+  a level not read or a build that is not a release.
+- On 12, 12L, above 17 or a build that is not a release, an unsealed session of this boot bound with `/intent`, at any
+  progress, as a process killed while writing it leaves; and on any level one an earlier build bound without the mark:
+  until Android lists it no more, its target is installed, or the next `system_server` start.
 - A confirmation opened on a surface that stays in the background, such as the assistant behind Home, holds a reopen
   from the other surface until the first resumes or closes, or the process ends.
 - A developer-verification request (Android 17, with `verification_service` on and a verifier present) comes
@@ -521,7 +529,7 @@ has, read from AOSP 10 to 17:
 | Session gone from `getMySessions`, `getSessionInfo` null | 29 to 37 | Terminal. Built: this is the fence. |
 | Referrer, read back | 29 to 37 | What the session holds, for a session Alpha bound. Built. A build before the binding wrote none. |
 | Sealed, committed, progress, active | 29 to 37 | Nothing terminal, and not whether an owner's accept is queued. Committed at 0 reads after a reboot, and on 33 to 37 during validation with no commit intent. |
-| Progress on an unsealed session | 29, 30, 33 to 37 | Exactly 0 on a session bound with `/intent` in this boot: no commit was sent. Built: the commit intent. Anything else proves nothing and fences. On 31 and 32 (read under another lock) and above 37 (not read) it proves nothing. |
+| Progress on an unsealed session | 29, 30, 33 to 37, release builds | Exactly 0 on a session bound with `/intent` in this boot: no commit was sent. Built: the commit intent. Anything else proves nothing and fences. On 31 and 32 (read under another lock), above 37 (not read) and on a build whose `CODENAME` is not `REL` (a preview reports the level it branched from) it proves nothing. |
 | `<boot>` against `BOOT_COUNT` | 29 to 37 | Another boot: no commit queued for that session survives. Built. |
 | `getUpdatedMillis`, from 30 `getCreatedMillis` | 29 to 37 | Age against a boot computed from the wall clock, so only as true as that clock. |
 | `SessionCallback.onFinished` | 29 to 37 | An end while the callback is registered. No more than the list, and nothing across a restart. |

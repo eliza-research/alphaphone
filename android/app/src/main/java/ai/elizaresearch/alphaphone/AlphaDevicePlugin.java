@@ -347,7 +347,7 @@ public final class AlphaDevicePlugin extends Plugin {
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
   * per process: a tap while one runs on another bridge, or that a commit overtook while it waited, changes nothing;
   * queued behind one that failed before its commit, it retries. A session is committed once, by the attempt that staged it. One Android
-  * lists as sealed, or unsealed with nothing proving that no commit of it is queued (an intent; a level whose AOSP does not order a read
+  * lists as sealed, or unsealed with nothing proving that no commit of it is queued (an intent; a level or build whose AOSP does not order a read
   * of 0 after it; an earlier build's binding; no binding), is never abandoned, replaced or committed again: a tap only opens the confirmation
   * kept from Android's own status, and the session stops fencing only when Android lists it no more, its bound target and
   * signer are what is installed, or, still unsealed and bound, a boot has ended any commit queued for it. Only a failure of this attempt's own before its commit gives up what it staged.
@@ -374,8 +374,9 @@ public final class AlphaDevicePlugin extends Plugin {
      // its terminal status, whether or not that status reached Alpha. A commit can wait in Binder, unsealed, past its process's
      // death, and it ends when system_server does, so a bound unsealed session of another boot is clear. In this boot only an
      // exact 0 on a session bound with /intent clears, and only where AOSP orders that read after the intent below: API 29 and 30
-     // read it under the writer's lock, 33 to 37 snapshot it under that lock. 31 and 32 (12, 12L) read it under another lock and
-     // a later level is unread, so there it fences until the next boot, as does a session an earlier build bound without the mark.
+     // read it under the writer's lock, 33 to 37 snapshot it under that lock, at every public tag. 31 and 32 (12, 12L) read it under
+     // another lock, and a later level is unread, as is a build that is not a release: it reports the level it branched from
+     // (CODENAME is REL only on a release). There it fences until the next boot, as does a session an earlier build bound without the mark.
      // An unsealed session with no binding, a part of one, or another target fences like a sealed one, until Android ends it.
      // A bound target already installed, on the signer it names, has nothing left to do, so it fences no more and stays for
      // Android to expire. Any later target, or anything else, is unknown: progress and marks do not say whether an owner's
@@ -383,7 +384,7 @@ public final class AlphaDevicePlugin extends Plugin {
      PackageInstaller.SessionInfo pending=null;
      for(PackageInstaller.SessionInfo listed:installer.getMySessions()){
       java.util.regex.Matcher binding=updateBinding(listed);
-      if(binding!=null&&!listed.isSealed()&&(!binding.group(4).equals(String.valueOf(updateBoot()))||binding.group(5)!=null&&(Build.VERSION.SDK_INT<=30||Build.VERSION.SDK_INT>=33&&Build.VERSION.SDK_INT<=37)&&listed.getProgress()==0f))continue;
+      if(binding!=null&&!listed.isSealed()&&(!binding.group(4).equals(String.valueOf(updateBoot()))||binding.group(5)!=null&&"REL".equals(Build.VERSION.CODENAME)&&(Build.VERSION.SDK_INT<=30||Build.VERSION.SDK_INT>=33&&Build.VERSION.SDK_INT<=37)&&listed.getProgress()==0f))continue;
       if(binding==null||Long.parseLong(binding.group(2))>getContext().getPackageManager().getPackageInfo(getContext().getPackageName(),0).getLongVersionCode()){pending=listed;break;}
      }
      if(pending!=null){
@@ -419,7 +420,7 @@ public final class AlphaDevicePlugin extends Plugin {
        android.content.IntentSender status=android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender();
        // The commit intent. Android holds this before the call returns, so on a level that orders a later read after it (above), a
        // session reading 0 was sent no commit, and it lasts in Android's memory for exactly as long as a queued commit can: no corrupt
-       // store to read as clear, and nothing for Alpha to clear. On 12 and 12L the boot in the binding does that work alone.
+       // store to read as clear, and nothing for Alpha to clear. On 12, 12L and code not read the boot in the binding does that work alone.
        session.setStagingProgress(1f);
        // Owned before commit, because Android's status can arrive as soon as commit reaches it. From here nothing proves refusal:
        // a commit can succeed ahead of a lost reply and the close after it can throw, and no exception class means the same on

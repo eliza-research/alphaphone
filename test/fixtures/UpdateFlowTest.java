@@ -178,7 +178,7 @@ public final class UpdateFlowTest {
  private static void aged(long millis)throws Exception{plugin("updateAsked",System.nanoTime()-TimeUnit.MILLISECONDS.toNanos(millis));}
  private static void resume(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.RESUMED;plugin.handleOnResume();}
  private static void stop(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.CREATED;}
- private static Context installing(File cache)throws Exception{forgetProcess();Build.VERSION.SDK_INT=37;Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
+ private static Context installing(File cache)throws Exception{forgetProcess();Build.VERSION.SDK_INT=37;Build.VERSION.CODENAME="REL";Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
  /** The confirmation goes with no status, as Home or Alpha's own singleTask relaunch can do it. Alpha returns, and time passes. */
  private static void dismissed(AlphaDevicePlugin plugin)throws Exception{stop(plugin);resume(plugin);settled();}
 
@@ -898,13 +898,13 @@ public final class UpdateFlowTest {
    check(tap(next).resolved.get()==1&&connections.size()==1&&installer.committed.size()==1&&committed(context)!=earlier&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(earlier,committed(context))),"a boot ends any commit it queued, and one tap then stages and commits once beside it:"+run);
   }
  }
- /** #743: the commit call is on its way, ahead of Android's seal, when its process dies. Death cancels nothing, so the next process waits, and the one commit's outcome reaches it. On 12 and 12L the read may miss the intent and return 0. */
+ /** #743: the commit call is on its way, ahead of Android's seal, when its process dies. Death cancels nothing, so the next process waits, and the one commit's outcome reaches it. On 12 and 12L the read may miss the intent and return 0, and nothing says a build that is not a release, whose code nobody read, does not. */
  private static void aCommitQueuedAcrossARestartDrawsNoSecondCommit(File cache)throws Exception{
-  for(int sdk=29;sdk<=37;sdk++){
-   String run=" sdk "+sdk;
+  for(String codename:List.of("REL","Next"))for(int sdk=29;sdk<=37;sdk++){
+   String run=" sdk "+sdk+(codename.equals("REL")?"":", "+codename);
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   Build.VERSION.SDK_INT=sdk;
+   Build.VERSION.SDK_INT=sdk;Build.VERSION.CODENAME=codename;
    installer.stale=true;
    CountDownLatch release=new CountDownLatch(1),atCommit=holdCommit(installer,release);
    installer.failAt="kill";
@@ -914,7 +914,7 @@ public final class UpdateFlowTest {
    int queued=installer.sessions.get(0);
    AlphaDevicePlugin next=restarted(context);
    PackageInstaller.SessionInfo read=installer.getSessionInfo(queued);
-   check(!read.isSealed()&&read.getProgress()==(sdk==31||sdk==32?0f:0.8f),"it reads unsealed to the next process, at 0 where the read can miss the intent:"+run);
+   check(!read.isSealed()&&read.getProgress()==(sdk==31||sdk==32||!codename.equals("REL")?0f:0.8f),"it reads unsealed to the next process, at 0 where the read can miss the intent:"+run);
    for(int taps=0;taps<2;taps++){
     settled();
     check(tap(next).resolved.get()==1&&connections.size()==1,"a tap settles and downloads nothing:"+run);
@@ -930,13 +930,13 @@ public final class UpdateFlowTest {
    check(tap(next).resolved.get()==1&&connections.size()==2&&installer.committed.size()==2&&committed(context)!=queued&&installer.abandoned.isEmpty(),"and only its end frees the next tap:"+run);
   }
  }
- /** Killed in the instant between the intent and the commit, nothing reaches Android, and that reads the same as a commit still queued. On 12 and 12L it fences whatever the read returns. */
+ /** Killed in the instant between the intent and the commit, nothing reaches Android, and that reads the same as a commit still queued. On 12, 12L and a build that is not a release it fences whatever the read returns. */
  private static void anIntentWithNoCommitBehindItHoldsNoLongerThanACommitCould(File cache)throws Exception{
-  for(String end:List.of("boot","android","installed"))for(int sdk=29;sdk<=37;sdk++){
-   String run=" "+end+", sdk "+sdk;
+  for(String end:List.of("boot","android","installed"))for(String codename:List.of("REL","Next"))for(int sdk=29;sdk<=37;sdk++){
+   String run=" "+end+", sdk "+sdk+(codename.equals("REL")?"":", "+codename);
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   Build.VERSION.SDK_INT=sdk;
+   Build.VERSION.SDK_INT=sdk;Build.VERSION.CODENAME=codename;
    installer.stale=true;
    CountDownLatch reached=new CountDownLatch(1);
    installer.committing=killedAt(reached);
@@ -946,7 +946,7 @@ public final class UpdateFlowTest {
    int left=installer.sessions.get(0);
    AlphaDevicePlugin next=restarted(context);
    connections.clear();
-   check(installer.getSessionInfo(left).getProgress()==(sdk==31||sdk==32?0f:0.8f),"it reads the intent, or 0 where the read can miss it:"+run);
+   check(installer.getSessionInfo(left).getProgress()==(sdk==31||sdk==32||!codename.equals("REL")?0f:0.8f),"it reads the intent, or 0 where the read can miss it:"+run);
    check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left)),"it fences, for all a process can tell:"+run);
    if(end.equals("boot")){installer.reboot();next=restarted(context);check(!installer.getSessionInfo(left).isSealed()&&installer.getSessionInfo(left).getProgress()==0f,"a boot takes the intent, and any queued commit with it:"+run);}
    else if(end.equals("android"))installer.destroy(left);
@@ -969,7 +969,7 @@ public final class UpdateFlowTest {
    check(tap(next).rejected.get()==1&&connections.isEmpty()&&installer.committed.isEmpty(),"and a list Android cannot give stops quietly: "+corrupt);
   }
  }
- /** A kill ahead of the intent leaves no commit to wait for. Where AOSP orders a read of 0 after the intent the next tap goes on beside it; on 12, 12L and a level not read (38 here, which the stub answers like 37) it waits for the next boot, never for Android's expiry. */
+ /** A kill ahead of the intent leaves no commit to wait for. Where AOSP orders a read of 0 after the intent the next tap goes on beside it; on 12, 12L, a level not read (38 here, which the stub answers like 37) and a build that is not a release (a codename, or "unknown" with the property missing) it waits for the next boot, never for Android's expiry. */
  private static void aProcessKilledAheadOfItsIntentFreesTheNextTap(File cache)throws Exception{
   for(int sdk=29;sdk<=38;sdk++){
    Context downloading=installing(cache);
@@ -980,11 +980,11 @@ public final class UpdateFlowTest {
    check(downloading.packages.installer.sessions.isEmpty()&&tap(restarted(downloading)).resolved.get()==1&&downloading.packages.installer.committed.size()==1,"a kill during the download left no session, and the next tap installs: sdk "+sdk);
    lost.disconnect();stopped.awaitAnswer();
   }
-  for(int sdk=29;sdk<=38;sdk++)for(int sending=0;sending<=1;sending++){
-   String run=" sdk "+sdk+(sending==1?", at its status sender":", writing");
+  for(String codename:List.of("REL","Next","unknown"))for(int sdk=29;sdk<=38;sdk++)for(int sending=0;sending<=1;sending++){
+   String run=" sdk "+sdk+(codename.equals("REL")?"":", "+codename)+(sending==1?", at its status sender":", writing");
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   Build.VERSION.SDK_INT=sdk;
+   Build.VERSION.SDK_INT=sdk;Build.VERSION.CODENAME=codename;
    CountDownLatch reached=new CountDownLatch(1);
    if(sending==1)installer.sending=killedAt(reached);else installer.staging=killedAt(reached);
    bridge(context,Lifecycle.State.RESUMED).installUpdate(offered());
@@ -994,7 +994,7 @@ public final class UpdateFlowTest {
    AlphaDevicePlugin next=restarted(context);
    check(String.valueOf(installer.getSessionInfo(left).getReferrerUri()).equals(binding(context,8,AlphaDevicePlugin.appSigner(context)))&&!installer.getSessionInfo(left).isSealed()&&installer.getSessionInfo(left).getProgress()==0f,"it reads bound with the mark, unsealed, at 0:"+run);
    connections.clear();
-   if(sdk==31||sdk==32||sdk==38){
+   if(sdk==31||sdk==32||sdk==38||!codename.equals("REL")){
     check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left)),"where a read of 0 proves nothing, a tap waits:"+run);
     installer.reboot();
     next=restarted(context);
