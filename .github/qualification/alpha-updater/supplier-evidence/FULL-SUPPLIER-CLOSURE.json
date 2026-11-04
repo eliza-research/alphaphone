@@ -1,0 +1,34 @@
+{
+  "state": "NODE_FULL_PINNED_DOCKERFILE_AND_ENTIRE_BUILDPACK_ROOTFS_DEPENDENCY_CLOSURE_BOUND_METADATA_ONLY",
+  "atUTC": "2026-11-04T11:21:18.208112+00:00",
+  "NodeDockerfileRevision": "58635ae7aaeab55a5c036b59e8ca93d864119cbe",
+  "NodeDockerfileURL": "https://raw.githubusercontent.com/nodejs/docker-node/58635ae7aaeab55a5c036b59e8ca93d864119cbe/24/bookworm/Dockerfile",
+  "NodeDockerfileSHA256": "c75c6d637fc20a83e5ffbb7b18c9017fddddae0437b8fe69ca81ca3a31e9fb86",
+  "NodeSourceUsesVerifiedOfficialNodeReleaseArchive": true,
+  "declaredBuildpackBaseDigest": "sha256:711f2c9561ccac685567327344958beb189a577d122030724b2fa6136ffdd7d4",
+  "selectedBuildpackManifestDigest": "sha256:711f2c9561ccac685567327344958beb189a577d122030724b2fa6136ffdd7d4",
+  "baseConfigDigest": "sha256:02cdbc36d9e33532b83a26c6cff1455dede2e2f7c0c54621721b9a836aa95ece",
+  "exactNodeLayerPrefixEqualsEntireBuildpackBase": true,
+  "runtimeDependencyClaim": "Whole immutable official buildpack root filesystem and all apt-resolved Git/patch runtimedeps are retained as Nodeimagebase, no partialhostbinary/librarycopy or newaptinstall. Source/configimagehistorydeclaresgitandpatch; actualbinarypresence/version/loaderclosure muststillbeverifiedonfuturehostedrun.",
+  "baseLayerCount": 4,
+  "baseSourceAnnotations": {
+    "com.docker.official-images.bashbrew.arch": "amd64",
+    "org.opencontainers.image.base.digest": "sha256:8e8660bae78fdc4330c93f51a52fefdc94a1d8efeb475e7a9cc740ba55934433",
+    "org.opencontainers.image.base.name": "buildpack-deps:bookworm-scm",
+    "org.opencontainers.image.created": "2026-05-20T01:14:06Z",
+    "org.opencontainers.image.revision": "d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae",
+    "org.opencontainers.image.source": "https://github.com/docker-library/buildpack-deps.git#d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae:debian/bookworm",
+    "org.opencontainers.image.url": "https://hub.docker.com/_/buildpack-deps",
+    "org.opencontainers.image.version": "bookworm"
+  },
+  "imageLayerOrBinaryGETs": 0,
+  "metadataEvidenceFiles": {
+    "NODE-FULL-INDEX.json": "f22d6a1f082c02f292e86929b5b0442ac2e5eaf438a5dea9b1566601c3e05940",
+    "BUILDPACK-BASE-CONFIG-METADATA.json": "02cdbc36d9e33532b83a26c6cff1455dede2e2f7c0c54621721b9a836aa95ece",
+    "NODE-FULL-IMAGE-CONFIG-METADATA.json": "07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
+    "REGISTRY-METADATA-CUSTODY.json": "9809e1f435b5f3b9e065be52fcfba0d9fcdbf3cd9fb9a61ae93923567224e944",
+    "NODE-FULL-AMD64-MANIFEST.json": "da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
+    "OFFICIAL-NODE-PINNED-Dockerfile.txt": "c75c6d637fc20a83e5ffbb7b18c9017fddddae0437b8fe69ca81ca3a31e9fb86",
+    "BUILDPACK-BASE-DECLARED-MANIFEST.json": "711f2c9561ccac685567327344958beb189a577d122030724b2fa6136ffdd7d4"
+  }
+}

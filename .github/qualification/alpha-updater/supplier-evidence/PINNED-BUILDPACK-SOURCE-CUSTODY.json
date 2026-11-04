@@ -1,0 +1,16 @@
+{
+  "state": "PINNED_OFFICIAL_SOURCE_READ_AS_DATA_ONLY",
+  "revision": "d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae",
+  "files": [
+    {
+      "url": "https://raw.githubusercontent.com/docker-library/buildpack-deps/d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae/debian/bookworm/Dockerfile",
+      "file": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v3-full-node-supplier-20261104/supplier-evidence/BUILDPACK-FULL-PINNED-Dockerfile.txt",
+      "sha256": "82ec915240b086adaa86c09130dda21fbe73a7b6a910398dfa27dd310b7e5330"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/docker-library/buildpack-deps/d0ecd4b7313e9bc6b00d9a4fe62ad5787bc197ae/debian/bookworm/scm/Dockerfile",
+      "file": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v3-full-node-supplier-20261104/supplier-evidence/BUILDPACK-SCM-PINNED-Dockerfile.txt",
+      "sha256": "2299402832a20d4464fe5d63264b225dd6114666eedf470cb84d6edf3540d738"
+    }
+  ]
+}

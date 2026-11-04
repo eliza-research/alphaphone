@@ -1,0 +1,44 @@
+{
+  "state": "SOURCE_ONLY_EXACT_ONE_EXECUTABLE_LITERAL_CORRECTION_NO_CANDIDATE_EXECUTION",
+  "all53BaseInputHashesVerified": true,
+  "actualFixturePublicationAndReviewHashesVerified": true,
+  "actualSourceCommit": "9ad71b953bf9488ac772676a3b027b3f5fe66447",
+  "actualSourceTree": "eec0ea08d80a609cf6f6478da047be92b6dd7539",
+  "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+  "unchangedExecutableHashes": {
+    "run.py": "f95886f96498ad56e8d19d51f3438249341eda81c2a2e2a9e10f48f7ea6ff508",
+    "validate.py": "8db801b97ed446b6f1ddef9a8e1743ee15e8e2bc4dc5e9173bd98210c5145d6d",
+    "claim.py": "b48152418f2bfcfd39f870852aea6851f10e0d4d8cd1c28a2bcad9e8a5faccad",
+    "source-frame.py": "c1978beb6e4f12dfd8423af30e69ccd96abeef8aaa406bf5223b36dd11c2e917",
+    "projection-custody.mjs": "89b1c1a530136850f2dbff16d360f84ff44e8bb294d87f9458daf64bb79f7a59",
+    "report_proof.py": "0068901ee2ad5026822470a0cdb92ef51f450569b48c92e394d43b395e47a73e",
+    "prepare-jdk.py": "c55c0580400799a3f762e61495a31c2ca947e00582973201cbed164838abe8aa",
+    "raw-events.mjs": "28b959048d01cb2a5d09a86095f83e26cac07bb17c3f5c1f7c0c0dc2120d9d89",
+    "Dockerfile": "48794bee49c035513dcc2a662ce867f986ef7e4a1b1c33ea60942af0202446f6",
+    "check_source.py": "f686d836cfdeab9e7c4c7e4c262eb9111cb2c1ce2ad12d58dbf6b1abf46b53e5"
+  },
+  "all33NodeRegistrationIdentitiesAndCoordinatesUnchanged": true,
+  "normalProducerAndThreeWholeFileCommandsIdentical": true,
+  "allResourceBoundsIdentical": true,
+  "noDiagnosticObserverAdded": true,
+  "rawReportProofByteIdenticalNoUnescapeOrNormalization": true,
+  "readerOnlySourcePinAndDocDeltaFromPreparedNormalSuccessor": true,
+  "readerAST": "PASS",
+  "unboundFunctionGlobals": [],
+  "trustedGenericCompactorByteIdentical": true,
+  "noCandidateImportRunToolAcquisitionNetworkPublication": true,
+  "toolProvenanceExactOneExecutableLiteralChange": {
+    "expectedAlphaHEAD": {
+      "before": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+      "after": "9ad71b953bf9488ac772676a3b027b3f5fe66447"
+    },
+    "sourcePreimage": {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v3-full-node-supplier-20261104/tool-provenance.mjs",
+      "sha256": "ba9c5312e6747d6f7ce75705a79b2a5f71aad137af3886504b62cf25f51951e0"
+    },
+    "postimageSHA256": "170d005e150302c1c0638a2e6c22d7aa698f45bbb182f79ae82103de1f1e6373",
+    "allOtherBytesExact": true,
+    "SDKAndMismatchOwnershipChecksPreserved": true,
+    "syntaxVerifierExecuted": false
+  }
+}

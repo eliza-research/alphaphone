@@ -1,0 +1,70 @@
+{
+  "state": "AUTHORITATIVE_OFFICIAL_NODE_FULL_REGISTRY_METADATA_ONLY_NO_IMAGE_LAYER_DOWNLOAD",
+  "atUTC": "2026-11-04T11:19:41.575902+00:00",
+  "registry": "registry-1.docker.io",
+  "repository": "library/node",
+  "tag": "24.15.0-bookworm",
+  "indexDigest": "sha256:f22d6a1f082c02f292e86929b5b0442ac2e5eaf438a5dea9b1566601c3e05940",
+  "selectedPlatform": {
+    "architecture": "amd64",
+    "os": "linux"
+  },
+  "selectedDigest": "sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
+  "configurationDigest": "sha256:07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
+  "imageEnv": [
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "NODE_VERSION=24.15.0",
+    "YARN_VERSION=1.22.22"
+  ],
+  "layerDescriptors": [
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:4887723d153cfd7fd9e356c8730311c36a64e4f9329f9d3ae1929e05715f2e73",
+      "size": 48495432
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:2e51c50554dce9c9549d76c40bfea45780a8342aea81ba8b270ba1bf46a2aec5",
+      "size": 24043374
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:a234579dfb0d2a4c7e869bc6c39c06f306aa019f90ec3e79f682671badaeb4f3",
+      "size": 64404451
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:0ce041001b8968f31ff00bb8f9dbd68f72d4bdc378a1309e38eb3dfe97cc1498",
+      "size": 211586305
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:29fd6050affe94a35c5e8b2a840ac2d0c84476f8714a4c5fdd5fa3c2b2d2e5fa",
+      "size": 3326
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:f6c63d283d3fa5c18d18986e8db37806e384336c9f92d01baf63d54a1a71e1aa",
+      "size": 58278645
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:4adf95fdf6b46adb4962d72bdf545e569fc01079bb3213c7147313c49fcac798",
+      "size": 1250675
+    },
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:d76470c50f001db1616e417a3a236b0bcf470be77447e81107222601b83f751f",
+      "size": 447
+    }
+  ],
+  "layerBytesDeclaredOnly": 408062655,
+  "layerGETs": 0,
+  "imageBinaryDownloadedOrMaterialized": false,
+  "metadataFiles": {
+    "NODE-FULL-INDEX.json": "f22d6a1f082c02f292e86929b5b0442ac2e5eaf438a5dea9b1566601c3e05940",
+    "NODE-FULL-IMAGE-CONFIG-METADATA.json": "07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
+    "NODE-FULL-AMD64-MANIFEST.json": "da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe"
+  },
+  "credentialPrintedOrPersisted": false
+}

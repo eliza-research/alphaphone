@@ -1,0 +1,212 @@
+--- v2/Dockerfile
++++ v3/Dockerfile
+@@ -1,4 +1,4 @@
+-FROM docker.io/library/node@sha256:152aceace5c03e2597988763165ee33e3fd3633636db0fc983cd2e126b02cfde
++FROM docker.io/library/node@sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe
+ COPY jdk-21.0.13+9/ /opt/qualification-jdk/
+ ENV JAVA_HOME=/opt/qualification-jdk
+ ENV PATH=/opt/qualification-jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+--- v2/TOOLCHAIN.json
++++ v3/TOOLCHAIN.json
+@@ -1,7 +1,7 @@
+ {
+   "NodeVersion": "24.15.0",
+   "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+-  "nodeImageDigest": "sha256:152aceace5c03e2597988763165ee33e3fd3633636db0fc983cd2e126b02cfde",
++  "nodeImageDigest": "sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
+   "JDK": {
+     "vendor": "Eclipse Adoptium",
+     "release": "jdk-21.0.13+9",
+@@ -18,6 +18,7 @@
+     "authority": "ADOPTIUM-VENDOR-METADATA.json + JDK21-VENDOR-CHECKSUM.txt + JDK21-VENDOR-ARCHIVE-METADATA.json",
+     "futureActualBinaryProvenance": "Verify whole vendor archive before extraction; inventory every extracted file/link; requireimagejava/javac/releaseexacthashesmatchthosearchive-derivedbytes; captureactualversionsandhashesbeforetests. None observednow."
+   },
+-  "GitAndPatch": "Supplied by exact Node image root filesystem; future realpath/ELF/hash/package metadata recorded, no borrowed hostbinary. image missing either rejects, neverinstallonead-hoc.",
+-  "JSONJar": "Not needed: all three selected normalrunJvm calls havejson=false. SharedhelperjsonJarSkip unused. No Gradle/JARdownload orfakeemptyclasspath."
++  "GitAndPatch": "EntireofficialfullNode24.15.0-bookwormamd64rootfs, includingexactwholebuildpack-basefilesystemwithapt-resolvedGitandGNU patchruntimepackages/libs, pinnedbymanifestdigest. No ad-hocinstall/partialhostbinarycopy. FuturepreflightverifiesPATHselection/packageownership/version/ELFloaderdependencies plusactualGitownership; source-backed suppliernotyetactualfileprobe.",
++  "JSONJar": "Not needed: all three selected normalrunJvm calls havejson=false. SharedhelperjsonJarSkip unused. No Gradle/JARdownload orfakeemptyclasspath.",
++  "NodeSupplierEvidence": "supplier-evidence/FULL-SUPPLIER-CLOSURE.json"
+ }
+--- v2/NODE-IMAGE.json
++++ v3/NODE-IMAGE.json
+@@ -0,0 +1,16 @@
++{
++  "state": "PINNED_OFFICIAL_FULL_NODE_IMAGE_METADATA_ONLY",
++  "repository": "library/node",
++  "tag": "24.15.0-bookworm",
++  "indexDigest": "sha256:f22d6a1f082c02f292e86929b5b0442ac2e5eaf438a5dea9b1566601c3e05940",
++  "selectedDigest": "sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
++  "selectedPlatform": {
++    "architecture": "amd64",
++    "os": "linux"
++  },
++  "configurationDigest": "sha256:07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
++  "NodeVersion": "24.15.0",
++  "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
++  "declaration": "Node24.15.0/bookworm Dockerfile revision58635ae7, basewholebuildpackdigest711f2c95 includesGit+patchaptdeps. No layer orbinaryGET.",
++  "metadataCustody": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v3-full-node-supplier-20261104/supplier-evidence/REGISTRY-METADATA-CUSTODY.json"
++}
+--- v2/REUSED-INPUTS.json
++++ v3/REUSED-INPUTS.json
+@@ -1,8 +1,4 @@
+ {
+-  "NODE-IMAGE.json": {
+-    "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/speech-retirement-proof-implementation-20261102/claude-review-repairs-20261102/qualification-ack-normal-capacity-v8/NODE-IMAGE.json",
+-    "sha256": "78e08f48898518226842188bd2b26b5d4d185346a0991893987764c58aed71de"
+-  },
+   "HOST-COHORTS.json": {
+     "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/current-host-cohort-four-20261104/HOST-COHORTS.json",
+     "sha256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
+--- v2/source-frame.py
++++ v3/source-frame.py
+@@ -1,5 +1,6 @@
+ import hashlib,json,os,pathlib,stat,subprocess,sys
+-root=pathlib.Path(sys.argv[1]);output=pathlib.Path(sys.argv[2]);plan=json.loads(pathlib.Path(sys.argv[3]).read_text());records=[];total=0;metadata_directories=set()
++root=pathlib.Path(sys.argv[1]);output=pathlib.Path(sys.argv[2]);plan=json.loads(pathlib.Path(sys.argv[3]).read_text());records=[];total=0;metadata_directories=set();ownership=[]
++assert os.getuid()>0 and os.geteuid()==os.getuid(),'Expected unprivileged runner UID'
+ for prefix,head,tree in [('',plan['Alpha'],plan['AlphaTree']),('vendor/eliza',plan['SDK'],plan['SDKTree'])]:
+  directory=root/prefix
+  metadata=directory/'.git'
+@@ -7,6 +8,8 @@
+  gitdir=subprocess.check_output(['git','-C',str(directory),'rev-parse','--absolute-git-dir'],timeout=10).decode().strip()
+  assert pathlib.Path(gitdir)==metadata and metadata.resolve()==metadata,'External/linked checkout metadata'
+  metadata_directories.add(str(metadata.relative_to(root)))
++ for owned in [directory,metadata]:
++  actual=owned.lstat();assert actual.st_uid==os.getuid(),'Checkout owner differs from explicit container UID';ownership.append({'path':str(owned.relative_to(root)),'uid':actual.st_uid,'gid':actual.st_gid})
+  def git(*args):return subprocess.check_output(['git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false','-C',str(directory),*args],timeout=45,env=dict(os.environ,GIT_NO_LAZY_FETCH='1',GIT_NO_REPLACE_OBJECTS='1',GIT_OPTIONAL_LOCKS='0'))
+  assert git('rev-parse','HEAD').decode().strip()==head and git('rev-parse','HEAD^{tree}').decode().strip()==tree
+  assert not git('diff','--no-ext-diff','--name-only','HEAD')and not git('ls-files','--others','--exclude-standard')
+@@ -64,7 +67,7 @@
+   assert name!='node_modules'and name.casefold()!='.git','Noncanonical dependency/Git metadata file: '+path
+   assert path in tracked and(stat.S_ISREG(mode)or stat.S_ISLNK(mode)),'Unexpected retained source file: '+path
+ assert seen_metadata==metadata_directories,'Authenticated checkout metadata missing'
+-text=json.dumps(records,separators=(',',':'));digest=hashlib.sha256(text.encode()).hexdigest();data={'Alpha':plan['Alpha'],'SDK':plan['SDK'],'trackedFiles':len(records),'bytes':total,'recordsDigest':digest,'allWorkingGitBlobsMatched':True,'externalJSDependenciesInstalled':False,'directoryEntriesClassified':directory_entries,'exactGitMetadataExclusions':sorted(seen_metadata),'authenticatedTrackedDirectoryLinks':sorted(tracked_directory_links)}
++text=json.dumps(records,separators=(',',':'));digest=hashlib.sha256(text.encode()).hexdigest();data={'Alpha':plan['Alpha'],'SDK':plan['SDK'],'trackedFiles':len(records),'bytes':total,'recordsDigest':digest,'allWorkingGitBlobsMatched':True,'externalJSDependenciesInstalled':False,'unprivilegedRunnerUID':os.getuid(),'authenticatedCheckoutOwnership':ownership,'directoryEntriesClassified':directory_entries,'exactGitMetadataExclusions':sorted(seen_metadata),'authenticatedTrackedDirectoryLinks':sorted(tracked_directory_links)}
+ if output.exists():assert json.loads(output.read_text())==data
+ else:output.write_text(json.dumps(data,indent=2)+'\n')
+ print(json.dumps(data))
+--- v2/run.py
++++ v3/run.py
+@@ -23,7 +23,7 @@
+ for key in ['DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH','DOCKER_API_VERSION','DOCKER_CONTEXT']:assert not os.environ.get(key)
+ assert os.environ.get('DOCKER_HOST','unix:///var/run/docker.sock')=='unix:///var/run/docker.sock'
+ os.environ['DOCKER_HOST']='unix:///var/run/docker.sock';docker_config=out.parent/('alpha-updater-docker-'+runid);docker_config.mkdir();os.environ['DOCKER_CONFIG']=str(docker_config)
+-resource_inspect_format='{"JavaHome":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.10s" .) "JAVA_HOME="}}{{$j = .}}{{end}}{{end}}{{json $j}},"JavaOptions":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.18s" .) "JAVA_TOOL_OPTIONS="}}{{$j = .}}{{end}}{{end}}{{json $j}},"NetworkMode":{{json .HostConfig.NetworkMode}},"ReadOnlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"CgroupParent":{{json .HostConfig.CgroupParent}},"Ulimits":{{json .HostConfig.Ulimits}},"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}},"Resources":{"memoryBytes":{{json .HostConfig.Memory}},"memorySwapBytes":{{json .HostConfig.MemorySwap}},"nanoCpus":{{json .HostConfig.NanoCpus}},"pidsLimit":{{json .HostConfig.PidsLimit}},"nodeOptions":{{$nodeOptions := ""}}{{range .Config.Env}}{{if eq (printf "%.13s" .) "NODE_OPTIONS="}}{{$nodeOptions = .}}{{end}}{{end}}{{json $nodeOptions}}}}'
++resource_inspect_format='{"ContainerUser":{{json .Config.User}},"Mounts":{{json .Mounts}},"JavaHome":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.10s" .) "JAVA_HOME="}}{{$j = .}}{{end}}{{end}}{{json $j}},"JavaOptions":{{$j := ""}}{{range .Config.Env}}{{if eq (printf "%.18s" .) "JAVA_TOOL_OPTIONS="}}{{$j = .}}{{end}}{{end}}{{json $j}},"NetworkMode":{{json .HostConfig.NetworkMode}},"ReadOnlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"CgroupParent":{{json .HostConfig.CgroupParent}},"Ulimits":{{json .HostConfig.Ulimits}},"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}},"Resources":{"memoryBytes":{{json .HostConfig.Memory}},"memorySwapBytes":{{json .HostConfig.MemorySwap}},"nanoCpus":{{json .HostConfig.NanoCpus}},"pidsLimit":{{json .HostConfig.PidsLimit}},"nodeOptions":{{$nodeOptions := ""}}{{range .Config.Env}}{{if eq (printf "%.13s" .) "NODE_OPTIONS="}}{{$nodeOptions = .}}{{end}}{{end}}{{json $nodeOptions}}}}'
+ 
+ inspect_format='{"Id":{{json .Id}},"Name":{{json .Name}},"Labels":{{json .Config.Labels}},"State":{"Status":{{json .State.Status}},"Running":{{json .State.Running}},"ExitCode":{{json .State.ExitCode}},"OOMKilled":{{json .State.OOMKilled}},"Error":{{json .State.Error}}}}'
+ 
+@@ -157,6 +157,12 @@
+  pass
+ 
+ def check_resources(value,item,label):
++ if value.get('ContainerUser')!=item['expectedContainerUser']:
++  item.setdefault('resourcePolicyFailures',[]).append({'where':label,'error':'Actual numeric container UID differs'});raise ResourcePolicyError('Container user mismatch')
++ mounts={row['Destination']:row for row in value.get('Mounts',[])if row['Type']=='bind'}
++ expected={'/workspace':(str(source),item['sourceWritable']),'/workspace/vendor/eliza':(str(source/'vendor/eliza'),False),'/results':(str(out),True)}
++ if set(mounts)!=set(expected)or any(mounts[key]['Source']!=path or mounts[key]['RW']!=rw for key,(path,rw)in expected.items()):
++  item.setdefault('resourcePolicyFailures',[]).append({'where':label,'error':'Exact source/SDK/results mount ownership/read-only policy differs'});raise ResourcePolicyError('Container mount mismatch')
+  if value.get('JavaHome')!='JAVA_HOME=/opt/qualification-jdk'or value.get('JavaOptions')!='JAVA_TOOL_OPTIONS=-Xmx512m -XX:ActiveProcessorCount=2'or value.get('NetworkMode')!='none'or value.get('ReadOnlyRootfs')is not True:
+   item.setdefault('resourcePolicyFailures',[]).append({'where':label,'error':'Actual JDK budget/home/network/rootfs differs'});raise ResourcePolicyError('Actual native tool environment/isolation policy mismatch')
+  if item.get('cgroupParent')is not None and value.get('CgroupParent')!=item['cgroupParent']:
+@@ -195,8 +201,8 @@
+  assert rw==(name=='normal-pretest-producer')
+  cname=prefix+'-'+name;assert inspect_container(cname,name+'-absence')is None
+  resources={'memoryBytes':2147483648,'memorySwapBytes':2147483648,'nanoCpus':2000000000,'pidsLimit':256,'nodeOptions':'NODE_OPTIONS=--max-old-space-size=1536'}
+- args=['docker','create','--pull=never','--name',cname,'--label','org.eliza.qualification-run='+runid,'--label','org.eliza.qualification-kind=speech-retirement','--network','none','--cpus','2','--memory','2g','--memory-swap','2g','--pids-limit','256','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user',str(os.getuid())+':'+str(os.getgid()),'--tmpfs','/tmp:rw,nosuid,size=536870912','--mount','type=bind,src='+str(source)+',dst=/workspace'+(''if rw else',readonly'),'--mount','type=bind,src='+str(out)+',dst=/results','--workdir','/workspace','--env','HOME=/tmp/home','--env','TMPDIR=/tmp','--env','CI=true','--env','NODE_ENV=test','--env',resources['nodeOptions'],'--env','JAVA_HOME=/opt/qualification-jdk','--env','JAVA_TOOL_OPTIONS=-Xmx512m -XX:ActiveProcessorCount=2','--ulimit','fsize=8388608:8388608','--entrypoint',command[0],image,*command[1:]]
+- item={'cid':None,'name':cname,'createCompleted':False,'resources':resources,'metadataFileSizeLimitBytes':8388608};owned.append(item)
++ args=['docker','create','--pull=never','--name',cname,'--label','org.eliza.qualification-run='+runid,'--label','org.eliza.qualification-kind=speech-retirement','--network','none','--cpus','2','--memory','2g','--memory-swap','2g','--pids-limit','256','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user',str(os.getuid())+':'+str(os.getgid()),'--tmpfs','/tmp:rw,nosuid,size=536870912','--mount','type=bind,src='+str(source)+',dst=/workspace'+(''if rw else',readonly'),'--mount','type=bind,src='+str(source/'vendor/eliza')+',dst=/workspace/vendor/eliza,readonly','--mount','type=bind,src='+str(out)+',dst=/results','--workdir','/workspace','--env','HOME=/tmp/home','--env','TMPDIR=/tmp','--env','CI=true','--env','GIT_OPTIONAL_LOCKS=0','--env','NODE_ENV=test','--env',resources['nodeOptions'],'--env','JAVA_HOME=/opt/qualification-jdk','--env','JAVA_TOOL_OPTIONS=-Xmx512m -XX:ActiveProcessorCount=2','--ulimit','fsize=8388608:8388608','--entrypoint',command[0],image,*command[1:]]
++ item={'cid':None,'name':cname,'createCompleted':False,'resources':resources,'metadataFileSizeLimitBytes':8388608,'expectedContainerUser':str(os.getuid())+':'+str(os.getgid()),'sourceWritable':rw};owned.append(item)
+  text,_=phase(name+'-create',args,20);cid=text.strip();assert re.fullmatch('[a-f0-9]{64}',cid);item['cid']=cid;item['createCompleted']=True
+  value=inspect_container(cid,name+'-identity',resources=True);check_container(value,item);check_resources(value,item,name+'-identity')
+  failure=None
+--- v2/tool-provenance.mjs
++++ v3/tool-provenance.mjs
+@@ -1,11 +1,17 @@
+ import fs from 'node:fs';import crypto from 'node:crypto';import {execFileSync,spawnSync}from'node:child_process';
+ const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
++let stage='start';const facts={};
++function checkpoint(next,values={}){stage=next;Object.assign(facts,values);const text=JSON.stringify({state:'ACTUAL_POSITIVE_TOOL_METADATA_PARTIAL_NOT_QUALIFICATION',stage,facts},null,2)+'\n';if(Buffer.byteLength(text)>131072)throw Error('Tool checkpoint bound');fs.writeFileSync('/results/TOOL-PROVENANCE-PARTIAL.json',text);}
++function metadata(command,args){const row=spawnSync(command,args,{encoding:'utf8',timeout:10000,maxBuffer:65536});if(row.error||row.signal||row.status!==0)throw Error('Tool metadata command failed: '+command+' '+args.join(' '));return{stdout:row.stdout,stderr:row.stderr};}
++try{
+ if(process.env.JAVA_TOOL_OPTIONS!=='-Xmx512m -XX:ActiveProcessorCount=2')throw Error('Wrong Java heap/CPU budget');
++checkpoint('node-and-supplier-check');
+ const expected=JSON.parse(fs.readFileSync('/results/TOOLCHAIN.json'));
+ const custodyFile='/results/JDK-ARCHIVE-CUSTODY.json';if(fs.lstatSync(custodyFile).isSymbolicLink()||fs.statSync(custodyFile).size>8388608)throw Error('Archive custody metadata bound');
+ const custody=JSON.parse(fs.readFileSync(custodyFile));
+ if(custody.inventoryVersion!==2||custody.archiveBytes!==expected.JDK.archiveBytes||custody.archiveSHA256!==expected.JDK.archiveSHA256||custody.sourceURL!==expected.JDK.archiveURL)throw Error('Archive receipt differs from sealed vendor supplier');
+ if(process.version!=='v'+expected.NodeVersion||hash('/usr/local/bin/node')!==expected.NodeBinarySHA256||process.env.JAVA_HOME!==expected.JDK.containerJAVA_HOME)throw Error('Wrong Node/JAVA_HOME supplier');
++checkpoint('vendor-jdk-archive-bound',{node:process.version,nodeSHA256:hash('/usr/local/bin/node'),archiveSHA256:custody.archiveSHA256,archiveBytes:custody.archiveBytes,JAVA_HOME:process.env.JAVA_HOME});
+ if(!Array.isArray(custody.records)||custody.records.length>30000)throw Error('JDK inventory count bound');
+ const rows=new Map();for(const row of custody.records){if(typeof row.path!=='string'||row.path.startsWith('/')||row.path.split('/').some(p=>p==='..')||rows.has(row.path))throw Error('Invalid/duplicate archive inventory path');rows.set(row.path,row);}
+ const actual=[],files={},buffer=Buffer.alloc(1048576);let totalBytes=0;
+@@ -31,8 +37,53 @@
+ if(sort(actual)!==sort(custody.records))throw Error('Complete JDK archive/image inventory differs');
+ // No Java or javac subprocess occurs until every runtime/library/config entry
+ // has matched archive bytes, mode and link target with no missing/extra paths.
+-const versions={};for(const name of ['java','javac']){const r=spawnSync(process.env.JAVA_HOME+'/bin/'+name,['-version'],{encoding:'utf8',timeout:10000,maxBuffer:65536});if(r.error||r.signal||r.status!==0)throw Error('Tool version metadata failed');versions[name]={stdout:r.stdout,stderr:r.stderr};}
+-// java -version writes stderr. Release metadata independently binds the exact version.
+-const release=fs.readFileSync(process.env.JAVA_HOME+'/release','utf8');if(!release.includes('JAVA_VERSION="21.0.13"')||!release.includes('JAVA_RUNTIME_VERSION="21.0.13+9-LTS"')||!(versions.javac.stdout+versions.javac.stderr).includes('javac 21.0.13')||!(versions.java.stdout+versions.java.stderr).includes('Temurin-21.0.13+9'))throw Error('Wrong JDK release metadata');
+-const system={};for(const name of ['git','patch']){const command=execFileSync('/usr/bin/which',[name],{encoding:'utf8',timeout:10000}).trim();if(!command.startsWith('/usr/'))throw Error('Borrowed system tool');const file=fs.realpathSync(command);system[name]={command,file,sha256:hash(file),version:execFileSync(command,['--version'],{encoding:'utf8',timeout:10000}).slice(0,4096)};}
+-fs.writeFileSync('/results/TOOL-PROVENANCE.json',JSON.stringify({node:process.version,nodeSHA256:hash('/usr/local/bin/node'),npmSHA256:hash(fs.realpathSync('/usr/local/bin/npm')),JDKArchiveSHA256:custody.archiveSHA256,JAVA_HOME:process.env.JAVA_HOME,completeJDKInventory:{entries:actual.length,bytes:totalBytes,inventorySHA256,allBytesModesTypesLinksMatched:true,noMissingOrExtraEntries:true,archiveReceiptSHA256:hash(custodyFile)},files,release,versions,system,scope:'Actual supplied tool metadata only, not fixture or Android pass'},null,2)+'\n');
++checkpoint('complete-jdk-inventory-verified',{completeJDKInventory:{entries:actual.length,bytes:totalBytes,inventorySHA256,allBytesModesTypesLinksMatched:true,noMissingOrExtraEntries:true,archiveReceiptSHA256:hash(custodyFile)},files});
++const versions={};for(const name of ['java','javac']){
++ checkpoint(name+'-version-start');versions[name]=metadata(process.env.JAVA_HOME+'/bin/'+name,['-version']);
++ if(!(versions[name].stdout+versions[name].stderr).includes(name==='java'?'Temurin-21.0.13+9':'javac 21.0.13'))throw Error('Wrong exact JDK tool version');
++ checkpoint(name+'-version-verified',{[name+'Version']:versions[name]});
++}
++const release=fs.readFileSync(process.env.JAVA_HOME+'/release','utf8');if(!release.includes('JAVA_VERSION="21.0.13"')||!release.includes('JAVA_RUNTIME_VERSION="21.0.13+9-LTS"'))throw Error('Wrong JDK release metadata');
++checkpoint('jdk-release-verified',{release});
++const system={};
++function selectedFromPATH(name){
++ for(const dir of process.env.PATH.split(':')){
++  if(!dir.startsWith('/'))throw Error('Relative PATH is not admitted');
++  const file=dir+'/'+name;try{fs.accessSync(file,fs.constants.X_OK);if(fs.statSync(file).isFile())return file;}catch(error){if(!['ENOENT','ENOTDIR','EACCES'].includes(error.code))throw error;}
++ }
++ throw Error('Required image tool not found on exact container PATH: '+name);
++}
++for(const name of ['git','patch']){
++ checkpoint(name+'-availability-start');
++ const command=selectedFromPATH(name),file=fs.realpathSync(command);
++ if(file!=='/usr/bin/'+name)throw Error('Tool is not the canonical full-image package executable');
++ const version=metadata(command,['--version']);if(name==='git'&&!version.stdout.startsWith('git version '))throw Error('Wrong Git implementation');if(name==='patch'&&!version.stdout.includes('GNU patch '))throw Error('Wrong patch implementation');
++ const packageOwner=metadata('/usr/bin/dpkg-query',['-S',file]);if(!packageOwner.stdout.split('\n').some(row=>row===name+': '+file))throw Error('Wrong package owner');
++ const packageMetadata=metadata('/usr/bin/dpkg-query',['-W','-f','${Package}\t${Version}\t${Architecture}\t${Depends}\n',name]);
++ const loader=metadata('/usr/bin/ldd',[file]);if(loader.stdout.includes('not found')||loader.stderr.includes('not found'))throw Error('Missing dynamic dependency');
++ const runtimeFiles=[];for(const line of loader.stdout.split('\n')){
++  if(!line.trim())continue;
++  if(/^\s*linux-vdso\.so[.0-9]* \(0x[a-f0-9]+\)\s*$/.test(line))continue;
++  const match=line.match(/(?:=>\s*)?(\/[^\s]+)\s+\(0x[a-f0-9]+\)\s*$/);if(!match)throw Error('Unknown dynamic-loader mapping');
++  const runtimeFile=fs.realpathSync(match[1]);if(!runtimeFile.startsWith('/usr/lib/')&&!runtimeFile.startsWith('/lib/'))throw Error('Dependency outside supplied image');runtimeFiles.push({declared:match[1],file:runtimeFile,sha256:hash(runtimeFile)});
++ }
++ if(!runtimeFiles.length)throw Error('No dynamic dependency mappings observed');
++ system[name]={command,file,sha256:hash(file),version,packageOwner,packageMetadata,loader,runtimeFiles,fullImageSupplier:expected.nodeImageDigest};checkpoint(name+'-runtime-verified',{[name+'Tool']:system[name]});
++}
++checkpoint('git-owner-and-readonly-source-start');
++const uid=process.getuid();if(uid===0)throw Error('Expected numeric nonroot UID');
++for(const key of ['GIT_CONFIG_COUNT','GIT_CONFIG_GLOBAL','GIT_CONFIG_SYSTEM','GIT_CONFIG_NOSYSTEM','GIT_CONFIG_PARAMETERS','GIT_DIR','GIT_WORK_TREE','SUDO_UID','LD_PRELOAD','LD_LIBRARY_PATH'])if(process.env[key])throw Error('Inherited tool ownership/loader override');
++if(process.env.GIT_OPTIONAL_LOCKS!=='0')throw Error('Read-only Git metadata policy missing');
++const safe=spawnSync(system.git.command,['config','--show-origin','--get-all','safe.directory'],{encoding:'utf8',timeout:10000,maxBuffer:65536});
++if(safe.error||safe.signal||safe.status!==1||safe.stdout||safe.stderr)throw Error('Unexpected protected safe.directory exception; ownership proof required');
++const ownership=[];for(const [root,head]of[['/workspace','8c30b83c5156fdb963daa03fd8452a892e5fa188'],['/workspace/vendor/eliza','ff04a558747ed426d9d871a319f7b3946f7660e6']]){
++ for(const path of[root,root+'/.git']){const stat=fs.lstatSync(path);if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==uid)throw Error('Git root/metadata not owned by actual container UID');ownership.push({path,uid:stat.uid,gid:stat.gid});}
++ const revision=metadata(system.git.command,['-C',root,'rev-parse','HEAD']);if(revision.stdout.trim()!==head)throw Error('Wrong source revision under real nonroot Git');
++ const status=metadata(system.git.command,['-C',root,'status','--porcelain','--untracked-files=normal']);if(status.stdout.trim())throw Error('Dirty source checkout');
++}
++checkpoint('git-ownership-default-safety-verified',{GitOwnership:{containerUID:uid,paths:ownership,safeDirectoryExceptions:[],safeDirectoryConfigurationWritten:false,normalHelperUnmodified:true,optionalLocks:'0'}});
++const result={node:process.version,nodeSHA256:hash('/usr/local/bin/node'),npmSHA256:hash(fs.realpathSync('/usr/local/bin/npm')),JDKArchiveSHA256:custody.archiveSHA256,JAVA_HOME:process.env.JAVA_HOME,completeJDKInventory:facts.completeJDKInventory,files,release,versions,system,GitOwnership:facts.GitOwnership,scope:'Actual complete pinned tool/runtime inventory and same-UID Git metadata only; not a fixture or Android pass'};
++fs.writeFileSync('/results/TOOL-PROVENANCE.json',JSON.stringify(result,null,2)+'\n');checkpoint('all-required-tool-provenance-complete');
++}catch(error){
++ checkpoint(stage,{failure:{name:error.name,message:String(error.message).slice(0,4096),code:error.code??null}});throw error;
++}
+--- v2/ROOT-GO-CONTRACT.json
++++ v3/ROOT-GO-CONTRACT.json
+@@ -34,7 +34,7 @@
+     "20261018.96.1": "Exact authenticated41750127407 setup/claim/earlymetadata plus explicitRoot source disposition; fresh officialtag404, independent officialtag/commit/readme provenance gap OPEN, not capability or execution admission."
+   },
+   "planSHA256": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
+-  "toolchainSHA256": "380af1dc1849e53b3dd5938f9e2f64d3270e7e3e6a7b1d29504ff45d074736f9",
++  "toolchainSHA256": "a0da5b489f9796e7094e593cd6fcdc134495a91fc1595bc8035927cc5b3d2701",
+   "sourceCasesSHA256": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+   "hostCohortsSHA256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
+ }
