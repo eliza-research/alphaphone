@@ -8,6 +8,7 @@ import android.content.pm.PackageInstaller;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.provider.Settings;
 import androidx.lifecycle.Lifecycle;
 import com.getcapacitor.JSObject;
@@ -105,7 +106,7 @@ public final class UpdateFlowTest {
  private static PluginCall offered(long versionCode)throws Exception{return new PluginCall(new JSObject().put("apkUrl","https://updates.test/alpha-"+versionCode+".apk").put("sha256",sha256(APK)).put("sizeBytes",(long)APK.length).put("versionCode",versionCode));}
  private static PluginCall offered()throws Exception{return offered(8);}
  /** A binding as Alpha writes one, for this boot unless a test moves the count. */
- private static String binding(Context context,long versionCode,String signer)throws Exception{return "alpha-update://"+context.getPackageName()+"/"+versionCode+"/"+sha256(APK)+"/"+signer+"/"+Settings.Global.bootCount;}
+ private static String binding(Context context,long versionCode,String signer)throws Exception{return "alpha-update://"+context.getPackageName()+"/"+versionCode+"/"+sha256(APK)+"/"+signer+"/"+Settings.Global.bootCount+"/intent";}
  /** A sealed session Android lists with this referrer, which no attempt of this process staged. */
  private static int leftBehind(Context context,String referrer){
   PackageInstaller installer=context.packages.installer;
@@ -113,6 +114,15 @@ public final class UpdateFlowTest {
   if(referrer!=null)params.setReferrerUri(Uri.parse(referrer));
   int id=installer.createSession(params);
   installer.internals.get(id).sealed=true;installer.validate(id);
+  return id;
+ }
+ /** What a writer killed while staging leaves: unsealed, at 0, and active, since its close never lands. */
+ private static int staged(Context context,String referrer){
+  PackageInstaller installer=context.packages.installer;
+  PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+  if(referrer!=null)params.setReferrerUri(Uri.parse(referrer));
+  int id=installer.createSession(params);
+  installer.openSession(id);
   return id;
  }
  private static File download(Context context){return new File(context.getCacheDir(),"alpha-update.apk");}
@@ -168,7 +178,7 @@ public final class UpdateFlowTest {
  private static void aged(long millis)throws Exception{plugin("updateAsked",System.nanoTime()-TimeUnit.MILLISECONDS.toNanos(millis));}
  private static void resume(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.RESUMED;plugin.handleOnResume();}
  private static void stop(AlphaDevicePlugin plugin){plugin.activity.state=Lifecycle.State.CREATED;}
- private static Context installing(File cache)throws Exception{forgetProcess();Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
+ private static Context installing(File cache)throws Exception{forgetProcess();Build.VERSION.SDK_INT=37;Context context=new Context(cache);context.packages.archive=archive(context.getPackageName(),8);return context;}
  /** The confirmation goes with no status, as Home or Alpha's own singleTask relaunch can do it. Alpha returns, and time passes. */
  private static void dismissed(AlphaDevicePlugin plugin)throws Exception{stop(plugin);resume(plugin);settled();}
 
@@ -350,7 +360,7 @@ public final class UpdateFlowTest {
    String run=" "+phase+", sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    // Registered second, so a status that lost its owner and reconnected would open on the other bridge.
    AlphaDevicePlugin other=bridge(context,Lifecycle.State.RESUMED),owner=bridge(context,Lifecycle.State.RESUMED);
    installer.failAt=phase;
@@ -372,7 +382,7 @@ public final class UpdateFlowTest {
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
    AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
-   int unsealed=installer.createSession(null),finished=leftBehind(context,binding(context,7,AlphaDevicePlugin.appSigner(context)));
+   int unsealed=staged(context,binding(context,8,AlphaDevicePlugin.appSigner(context))),finished=leftBehind(context,binding(context,7,AlphaDevicePlugin.appSigner(context)));
    installer.failAt=phase;
    check(tap(owner).rejected.get()==1,"a failure settles quietly: "+phase);
    check(installer.abandoned.size()==1&&!List.of(unsealed,finished).contains(installer.abandoned.get(0))&&installer.committed.isEmpty()&&installer.sessions.equals(List.of(unsealed,finished)),"and gives up its own session, no other: "+phase+" abandoned="+installer.abandoned);
@@ -448,7 +458,7 @@ public final class UpdateFlowTest {
   Context context=installing(cache);
   PackageInstaller installer=context.packages.installer;
   AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
-  int left=installer.createSession(null);
+  int left=staged(context,binding(context,8,AlphaDevicePlugin.appSigner(context)));
   context.packages.archiveRead=owner::handleOnDestroy;
   check(tap(owner).rejected.get()==1,"destroyed while the archive is read");
   check(installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left)),"a session left unsealed stays and no new one opens");
@@ -581,7 +591,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
    installer.validating=true;
    tap(owner);
@@ -622,7 +632,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
    installer.validating=true;
    tap(owner);
@@ -635,7 +645,7 @@ public final class UpdateFlowTest {
    check(owner.activity.started.equals(List.of(confirm)),"and its one status opens one confirmation:"+run);
    Context restarting=installing(cache);
    PackageInstaller android=restarting.packages.installer;
-   android.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    android.validating=true;
    tap(bridge(restarting,Lifecycle.State.RESUMED));
    int left=committed(restarting);
@@ -707,7 +717,7 @@ public final class UpdateFlowTest {
  private static void aStatusReconnectsOnlyASessionItCanMatch(File cache)throws Exception{
   Context context=installing(cache);
   String signer=AlphaDevicePlugin.appSigner(context);
-  String earlier=binding(context,8,signer).replaceFirst("/[0-9]+$","/"+(Settings.Global.bootCount-1));
+  String earlier=binding(context,8,signer).replaceFirst("/[0-9]+/intent$","/"+(Settings.Global.bootCount-1)+"/intent");
   for(String referrer:List.of(earlier,binding(context,8,sha256(APK)),binding(context,8,signer).replace(context.getPackageName(),"com.example.other"))){
    Context other=installing(cache);
    PackageInstaller installer=other.packages.installer;
@@ -735,7 +745,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    tap(bridge(context,Lifecycle.State.RESUMED));
    int pending=committed(context);
    installer.reboot();
@@ -753,7 +763,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    tap(bridge(context,Lifecycle.State.RESUMED));
    int stale=committed(context);
    confirmation(context,stale);
@@ -848,20 +858,54 @@ public final class UpdateFlowTest {
   check(tap(other).resolved.get()==1&&installer.committed.equals(List.of(pending))&&installer.abandoned.isEmpty(),"the confirmation outlives its owner, so the tap commits nothing");
   check(other.activity.started.equals(List.of(confirm))&&owner.activity.started.isEmpty(),"and opens it, once, there");
  }
- private static void anUnsealedSessionWithNoIntentDoesNotFence(File cache)throws Exception{
-  Context context=installing(cache);
-  PackageInstaller installer=context.packages.installer;
-  int left=installer.createSession(null);
-  check(tap(bridge(context,Lifecycle.State.RESUMED)).resolved.get()==1&&installer.committed.size()==1&&committed(context)!=left,"a killed process's unfinished session does not stop a tap");
-  check(installer.abandoned.isEmpty()&&installer.sessions.contains(left),"and stays until Android expires it");
+ /** What the published 2bdb15408b leaves when its process dies with its commit queued: no binding and no intent, unsealed at 0. Nothing tells its boot, so only Android's end of it frees the next tap, after a boot too. */
+ private static void anUnboundUnsealedSessionFencesLikeASealedOne(File cache)throws Exception{
+  for(int sdk=29;sdk<=37;sdk++)for(int restored=0;restored<=1;restored++){
+   String run=" sdk "+sdk+", restored "+restored;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   Build.VERSION.SDK_INT=sdk;
+   int old=staged(context,null);
+   if(restored==1)installer.reboot();
+   AlphaDevicePlugin next=restarted(context);
+   connections.clear();
+   for(int taps=0;taps<2;taps++){
+    settled();
+    check(tap(next).resolved.get()==1&&connections.isEmpty(),"a tap settles and downloads nothing:"+run);
+    check(installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(old))&&next.activity.started.isEmpty(),"and commits, abandons, stages and opens nothing:"+run);
+   }
+   if(restored==0){
+    installer.openSession(old).commit(null);
+    check(installer.committed.equals(List.of(old))&&tap(next).resolved.get()==1&&connections.isEmpty()&&installer.sessions.equals(List.of(old)),"its queued commit lands, and sealed it fences the same:"+run);
+   }
+   installer.destroy(old);
+   check(tap(next).resolved.get()==1&&connections.size()==1&&installer.committed.size()==2-restored&&committed(context)!=old&&installer.abandoned.isEmpty(),"until Android lists it no more:"+run);
+  }
  }
- /** #743: the commit call is on its way, ahead of Android's seal, when its process dies. Death cancels nothing, so the next process waits, and the one commit's outcome reaches it. */
+ /** What a bound build before the intent (93f630662 to fd5e9d09c7) leaves: its binding without the mark, unsealed at 0, which says nothing of a commit it may have queued. */
+ private static void aSessionBoundWithoutTheIntentMarkFencesUntilABoot(File cache)throws Exception{
+  for(int sdk=29;sdk<=37;sdk++){
+   String run=" sdk "+sdk;
+   Context context=installing(cache);
+   PackageInstaller installer=context.packages.installer;
+   Build.VERSION.SDK_INT=sdk;
+   int earlier=staged(context,binding(context,8,AlphaDevicePlugin.appSigner(context)).replace("/intent",""));
+   AlphaDevicePlugin next=restarted(context);
+   connections.clear();
+   check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(earlier)),"in its boot a tap downloads, commits and gives up nothing:"+run);
+   installer.reboot();
+   next=restarted(context);
+   check(tap(next).resolved.get()==1&&connections.size()==1&&installer.committed.size()==1&&committed(context)!=earlier&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(earlier,committed(context))),"a boot ends any commit it queued, and one tap then stages and commits once beside it:"+run);
+  }
+ }
+ /** #743: the commit call is on its way, ahead of Android's seal, when its process dies. Death cancels nothing, so the next process waits, and the one commit's outcome reaches it. On 12 and 12L the read may miss the intent and return 0. */
  private static void aCommitQueuedAcrossARestartDrawsNoSecondCommit(File cache)throws Exception{
   for(int sdk=29;sdk<=37;sdk++){
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
+   installer.stale=true;
    CountDownLatch release=new CountDownLatch(1),atCommit=holdCommit(installer,release);
    installer.failAt="kill";
    connections.clear();
@@ -869,7 +913,8 @@ public final class UpdateFlowTest {
    check(atCommit.await(20,TimeUnit.SECONDS),"the commit has left Alpha:"+run);
    int queued=installer.sessions.get(0);
    AlphaDevicePlugin next=restarted(context);
-   check(!installer.getSessionInfo(queued).isSealed(),"it reads unsealed to the next process:"+run);
+   PackageInstaller.SessionInfo read=installer.getSessionInfo(queued);
+   check(!read.isSealed()&&read.getProgress()==(sdk==31||sdk==32?0f:0.8f),"it reads unsealed to the next process, at 0 where the read can miss the intent:"+run);
    for(int taps=0;taps<2;taps++){
     settled();
     check(tap(next).resolved.get()==1&&connections.size()==1,"a tap settles and downloads nothing:"+run);
@@ -885,13 +930,14 @@ public final class UpdateFlowTest {
    check(tap(next).resolved.get()==1&&connections.size()==2&&installer.committed.size()==2&&committed(context)!=queued&&installer.abandoned.isEmpty(),"and only its end frees the next tap:"+run);
   }
  }
- /** Killed in the instant between the intent and the commit, nothing reaches Android, and that reads the same as a commit still queued. */
+ /** Killed in the instant between the intent and the commit, nothing reaches Android, and that reads the same as a commit still queued. On 12 and 12L it fences whatever the read returns. */
  private static void anIntentWithNoCommitBehindItHoldsNoLongerThanACommitCould(File cache)throws Exception{
   for(String end:List.of("boot","android","installed"))for(int sdk=29;sdk<=37;sdk++){
    String run=" "+end+", sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
+   installer.stale=true;
    CountDownLatch reached=new CountDownLatch(1);
    installer.committing=killedAt(reached);
    bridge(context,Lifecycle.State.RESUMED).installUpdate(offered());
@@ -900,6 +946,7 @@ public final class UpdateFlowTest {
    int left=installer.sessions.get(0);
    AlphaDevicePlugin next=restarted(context);
    connections.clear();
+   check(installer.getSessionInfo(left).getProgress()==(sdk==31||sdk==32?0f:0.8f),"it reads the intent, or 0 where the read can miss it:"+run);
    check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left)),"it fences, for all a process can tell:"+run);
    if(end.equals("boot")){installer.reboot();next=restarted(context);check(!installer.getSessionInfo(left).isSealed()&&installer.getSessionInfo(left).getProgress()==0f,"a boot takes the intent, and any queued commit with it:"+run);}
    else if(end.equals("android"))installer.destroy(left);
@@ -913,7 +960,7 @@ public final class UpdateFlowTest {
   for(float corrupt:new float[]{Float.NaN,Float.MIN_VALUE,-0.5f,Float.POSITIVE_INFINITY}){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   int session=installer.createSession(null);
+   int session=staged(context,binding(context,8,AlphaDevicePlugin.appSigner(context)));
    installer.internals.get(session).progress=corrupt;
    AlphaDevicePlugin next=restarted(context);
    connections.clear();
@@ -922,19 +969,22 @@ public final class UpdateFlowTest {
    check(tap(next).rejected.get()==1&&connections.isEmpty()&&installer.committed.isEmpty(),"and a list Android cannot give stops quietly: "+corrupt);
   }
  }
- /** A kill ahead of the intent leaves no commit to wait for. Fencing every bound unsealed session would hold updates for days here. */
+ /** A kill ahead of the intent leaves no commit to wait for. Where AOSP orders a read of 0 after the intent the next tap goes on beside it; on 12, 12L and a level not read (38 here, which the stub answers like 37) it waits for the next boot, never for Android's expiry. */
  private static void aProcessKilledAheadOfItsIntentFreesTheNextTap(File cache)throws Exception{
-  Context downloading=installing(cache);
-  PluginCall stopped=new Held().start(bridge(downloading,Lifecycle.State.RESUMED));
-  Served lost=connections.get(0);
-  body=IN_MEMORY;
-  check(tap(restarted(downloading)).resolved.get()==1&&downloading.packages.installer.committed.size()==1,"a kill during the download left no session, and the next tap installs");
-  lost.disconnect();stopped.awaitAnswer();
-  for(int sdk=29;sdk<=37;sdk++)for(int sending=0;sending<=1;sending++){
+  for(int sdk=29;sdk<=38;sdk++){
+   Context downloading=installing(cache);
+   Build.VERSION.SDK_INT=sdk;
+   PluginCall stopped=new Held().start(bridge(downloading,Lifecycle.State.RESUMED));
+   Served lost=connections.get(0);
+   body=IN_MEMORY;
+   check(downloading.packages.installer.sessions.isEmpty()&&tap(restarted(downloading)).resolved.get()==1&&downloading.packages.installer.committed.size()==1,"a kill during the download left no session, and the next tap installs: sdk "+sdk);
+   lost.disconnect();stopped.awaitAnswer();
+  }
+  for(int sdk=29;sdk<=38;sdk++)for(int sending=0;sending<=1;sending++){
    String run=" sdk "+sdk+(sending==1?", at its status sender":", writing");
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    CountDownLatch reached=new CountDownLatch(1);
    if(sending==1)installer.sending=killedAt(reached);else installer.staging=killedAt(reached);
    bridge(context,Lifecycle.State.RESUMED).installUpdate(offered());
@@ -942,8 +992,13 @@ public final class UpdateFlowTest {
    installer.sending=installer.staging=()->{};
    int left=installer.sessions.get(0);
    AlphaDevicePlugin next=restarted(context);
-   check(String.valueOf(installer.getSessionInfo(left).getReferrerUri()).startsWith("alpha-update://")&&!installer.getSessionInfo(left).isSealed()&&installer.getSessionInfo(left).getProgress()==0f,"it reads bound, unsealed, at 0:"+run);
+   check(String.valueOf(installer.getSessionInfo(left).getReferrerUri()).equals(binding(context,8,AlphaDevicePlugin.appSigner(context)))&&!installer.getSessionInfo(left).isSealed()&&installer.getSessionInfo(left).getProgress()==0f,"it reads bound with the mark, unsealed, at 0:"+run);
    connections.clear();
+   if(sdk==31||sdk==32||sdk==38){
+    check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left)),"where a read of 0 proves nothing, a tap waits:"+run);
+    installer.reboot();
+    next=restarted(context);
+   }
    check(tap(next).resolved.get()==1&&connections.size()==1&&installer.committed.size()==1&&committed(context)!=left,"one tap stages afresh and commits once:"+run);
    check(installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(left,committed(context))),"beside what the dead attempt left, which no commit reached, for Android to expire:"+run);
    Intent confirm=confirmation(context,committed(context));
@@ -971,7 +1026,7 @@ public final class UpdateFlowTest {
   for(int sdk=29;sdk<=37;sdk++)for(int prepared=0;prepared<=1;prepared++){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    int id=installer.createSession(null);
    try(PackageInstaller.Session session=installer.openSession(id)){session.commit(null);}
    installer.sendConfirmation(id);
@@ -994,7 +1049,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk+", reopened "+reopened;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED),other=bridge(context,Lifecycle.State.RESUMED);
    tap(owner);
    int pending=committed(context);
@@ -1024,7 +1079,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk+", accepted "+accepted;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    tap(bridge(context,Lifecycle.State.RESUMED));
    int pending=committed(context);
    confirmation(context,pending);
@@ -1047,7 +1102,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk+", restored "+restored;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    int unknown=leftBehind(context,null);
    if(restored==1){installer.write();installer.reboot();}
    AlphaDevicePlugin next=restarted(context);
@@ -1065,18 +1120,18 @@ public final class UpdateFlowTest {
  }
  private static void aCorruptBindingFencesRatherThanClears(File cache)throws Exception{
   Context probe=installing(cache);
-  String signer=AlphaDevicePlugin.appSigner(probe),whole=binding(probe,7,signer);
+  String signer=AlphaDevicePlugin.appSigner(probe),whole=binding(probe,7,signer),core=whole.substring(0,whole.length()-"/intent".length());
   // Each names, or starts to name, a version already installed, so reading any of them as a binding would clear the fence.
-  List<String> broken=List.of("","alpha-update:",whole.substring(0,whole.lastIndexOf('/')),whole.substring(0,whole.lastIndexOf('/')+1),whole.substring(0,whole.length()-40),whole+"/9",whole.replace("alpha-update://","https://"),whole.replace("/7/","/x/"),whole.replace("/7/","/07/"),whole.replace("/7/","/-7/"),whole.replace("/7/","/9999999999999999999999/"),whole.replace(signer,signer.toUpperCase(java.util.Locale.ROOT)),whole.replace(sha256(APK),"sha"),whole.replace(probe.getPackageName(),"com.example.other"));
-  for(String corrupt:broken){
+  List<String> broken=List.of("","alpha-update:",core.substring(0,core.lastIndexOf('/')),core.substring(0,core.lastIndexOf('/')+1),core.substring(0,core.length()-40),core+"/9",whole+"/9",whole+"x",core+"/intent/",core+"/Intent",whole.replace("alpha-update://","https://"),whole.replace("/7/","/x/"),whole.replace("/7/","/07/"),whole.replace("/7/","/-7/"),whole.replace("/7/","/9999999999999999999999/"),whole.replace(signer,signer.toUpperCase(java.util.Locale.ROOT)),whole.replace(sha256(APK),"sha"),whole.replace(probe.getPackageName(),"com.example.other"));
+  for(int sealed=0;sealed<=1;sealed++)for(String corrupt:broken){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   int session=leftBehind(context,corrupt);
+   int session=sealed==1?leftBehind(context,corrupt):staged(context,corrupt);
    AlphaDevicePlugin next=restarted(context);
    confirmation(context,session);
    connections.clear();
    settled();
-   check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(session))&&next.activity.started.isEmpty(),"it reads as unknown, which fences, reconnects nothing and fails no tap: "+corrupt);
+   check(tap(next).resolved.get()==1&&connections.isEmpty()&&installer.committed.isEmpty()&&installer.abandoned.isEmpty()&&installer.sessions.equals(List.of(session))&&next.activity.started.isEmpty(),"it reads as unknown, which fences, sealed or not, reconnects nothing and fails no tap: sealed "+sealed+", "+corrupt);
   }
  }
  private static void aBindingClearsOnlyOnItsInstalledTargetAndSigner(File cache)throws Exception{
@@ -1095,6 +1150,9 @@ public final class UpdateFlowTest {
   PackageInstaller installer=context.packages.installer;
   int held=leftBehind(context,binding(context,6,signer));
   check(tap(restarted(context)).resolved.get()==1&&installer.committed.isEmpty()&&installer.sessions.equals(List.of(held)),"nor does an install with no one signer");
+  Context legacy=installing(cache);
+  int landed=leftBehind(legacy,binding(legacy,7,signer).replace("/intent",""));
+  check(tap(restarted(legacy)).resolved.get()==1&&legacy.packages.installer.committed.size()==1&&legacy.packages.installer.sessions.equals(List.of(landed,committed(legacy))),"a binding an earlier build wrote without the mark clears on its installed target too");
  }
  /** Android drops a finished session in a posted step ahead of its write, so a reboot between them restores a session whose install landed. */
  private static void anInstalledTargetClearsAndALaterUpdateInstalls(File cache)throws Exception{
@@ -1102,7 +1160,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    tap(bridge(context,Lifecycle.State.RESUMED));
    int landed=committed(context);
    installer.write();installer.reboot();
@@ -1270,7 +1328,7 @@ public final class UpdateFlowTest {
   for(int sdk=29;sdk<=37;sdk++){
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    AlphaDevicePlugin owner=bridge(context,Lifecycle.State.RESUMED);
    tap(owner);
    int pending=committed(context);
@@ -1393,7 +1451,7 @@ public final class UpdateFlowTest {
    String run=" sdk "+sdk+", in front "+front;
    Context context=installing(cache);
    PackageInstaller installer=context.packages.installer;
-   installer.sdk=sdk;
+   Build.VERSION.SDK_INT=sdk;
    installer.failAt="kill";
    tap(bridge(context,Lifecycle.State.RESUMED));
    int pending=committed(context);
@@ -1549,7 +1607,8 @@ public final class UpdateFlowTest {
    aTerminalStatusAllowsANewTap(cache);
    aListAndroidCannotGiveFailsClosed(cache);
    aDestroyedOwnersSessionPassesToTheNextTap(cache);
-   anUnsealedSessionWithNoIntentDoesNotFence(cache);
+   anUnboundUnsealedSessionFencesLikeASealedOne(cache);
+   aSessionBoundWithoutTheIntentMarkFencesUntilABoot(cache);
    aCommitQueuedAcrossARestartDrawsNoSecondCommit(cache);
    anIntentWithNoCommitBehindItHoldsNoLongerThanACommitCould(cache);
    aCorruptIntentFences(cache);

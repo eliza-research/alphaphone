@@ -341,8 +341,9 @@ only a tap on the same surface, behind an attempt that failed before its commit,
 `sizeBytes` (1 GiB at most) to the app cache under a soft six-hour ceiling, checked as each read returns, so a read in flight can outlast it by up to the 60 s read timeout unless the surface closes first. It refuses any other length or SHA-256, and then reads the archive: it must be
 `ai.elizaresearch.alphaphone` at exactly the manifest's `versionCode`, above the installed one,
 because Android would otherwise accept a same-versionCode reinstall. Only then does it open a session for this
-package. A session a killed process left unsealed, short of its commit intent (below), holds nothing and stays until
-Android expires it. Closing the
+package. A session a killed process left unsealed, short of its commit intent (below), holds nothing on Android 10, 11
+and 13 to 17 and stays until Android expires it; on 12, 12L or a level not read here it holds until the next
+`system_server` start. Closing the
 surface that runs an attempt closes its connection and stages nothing. The archive check needs a file, so the cached copy stays until the
 session has its own copy (up to twice `sizeBytes` of free space for that moment); a copy a killed
 process left is deleted on the next start. Android drops a confirmation Alpha opens while it is not
@@ -367,12 +368,21 @@ session and its owner, the tap fails quietly, and what happened comes from Andro
 
 A commit can also outlive its process. The call can still be waiting in Binder, short of Android's seal, when Alpha
 dies, and a client's death cancels nothing, so a session reading unsealed may yet seal. Fencing every unsealed session
-would overshoot: every session is bound now, so a process killed while writing one would hold updates until Android
-expired it, days off. Android shows no queued call, so Alpha states the commit first. As the last step before the
-commit it calls `Session.setStagingProgress(1f)`, and an unsealed session fences unless its progress reads exactly 0. Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
+until Android expired it would overshoot, days off: a boot ends any commit still queued, and the binding names the boot
+(below), so a bound unsealed session of another boot is clear. Within a boot Android shows no queued call, so Alpha
+states the commit first. As the last step before the commit it calls `Session.setStagingProgress(1f)`, and where AOSP
+orders a later read after it, a session of this boot bound with `/intent` fences unless its progress reads exactly 0.
+Read from AOSP 10, 11, 12, 12L, 13, 14, 15, 16 and 17:
 
-- `setClientProgress` is a two-way call. Android stores the value and recomputes progress before replying, checking
-  only that the caller owns the session, so a commit sent after that reply is always behind it.
+- `setClientProgress` is a two-way call: `IPackageInstallerSession.aidl` marks nothing `oneway` at any tag. Android
+  stores the value and recomputes progress before replying, checking only that the caller owns the session, so a
+  commit sent after that reply is always behind it.
+- Whether a later read sees that store depends on the level, since `mProgress` is a plain field at every tag. On 10
+  and 11 the writer and `generateInfoInternal` hold the same `mLock`; on 13 to 17 `generateInfoInternal` snapshots
+  progress under the writer's `mProgressLock`. On 12 and 12L it is written under `mProgressLock` and read under `mLock`
+  alone (`android-12.0.0_r1` and `android-12.1.0_r1` `PackageInstallerSession.java` 1122 and 1129 against 1253 and
+  1269), so the Java memory model lets a read return the 0 from before the intent; every 12 and 12L tag read, up to the
+  newest security tags, does the same. Above 17 nothing was read.
 - Nothing else moves an unsealed session of Alpha's off 0. A stream from `openWrite` reports no progress; only
   `Session.write` from a descriptor does, which Alpha does not call. The one other writer runs after the seal, at
   validation, so it never touches an unsealed session, and it sets the same 1, so progress reads 0.8 after any commit.
@@ -380,14 +390,17 @@ commit it calls `Session.setStagingProgress(1f)`, and an unsealed session fences
   exactly as long as a queued commit can.
 - Android reads it for nothing but reports: a progress callback the seal fires too, dumps and session history.
 
-So 0 on an unsealed session proves no commit was sent this boot, and none sent earlier can still arrive. Such a session
-is left for Android to expire and the next tap stages beside it, which duplicates nothing, because nothing commits a
+So on 10, 11 and 13 to 17, 0 on an unsealed session bound with `/intent` in this boot proves no commit was sent, and
+none sent in an earlier boot can still arrive. On 12, 12L and levels not read, such a session fences whatever it reads
+until the next `system_server` start; Alpha never polls or retries the read. A session at a proven 0 stays
+for Android to expire and the next tap stages beside it, which duplicates nothing, because nothing commits a
 session it did not just stage. Anything but an exact 0 fences, NaN included, and a list Android cannot give stops the
 tap. Alpha never clears the intent: it ends with the session, gives way to the seal, or goes at the next `system_server`
 start along with any commit it stood for. A file would have to be cleared and would outlive that boot, and
-`File.exists` answers false for any error from `access`, so it reads an I/O error as absent. A build before this one set
-no intent, so a commit it left queued as a newer build replaced it goes unseen, which takes that install landing inside
-Binder's wait.
+`File.exists` answers false for any error from `access`, so it reads an I/O error as absent. A bound build before the
+intent (`93f630662` to `fd5e9d09c7`) wrote the same binding without `/intent`, so an unsealed session it left in this
+boot fences, whatever it reads, until the next `system_server` start. An unsealed session with no binding, or a
+corrupt one, as `2bdb15408b` and earlier leave, fences like a sealed one, until Android ends it.
 
 No tap commits a session it did not just stage, and nothing an app reads could make that safe. In AOSP a commit that
 reaches an accepted session ends it on Android 10 to 13 at any stage (relinquished through 12, files in use on 13),
@@ -401,7 +414,7 @@ session with no commit intent. So
 neither a recovered session nor one of unknown state is committed, whatever it reads.
 
 Each session names its target in Android's own record of it. `SessionParams.setReferrerUri`, set before
-`createSession`, carries `alpha-update://<package>/<versionCode>/<sha256>/<signer>/<boot>`, and the session's id is the
+`createSession`, carries `alpha-update://<package>/<versionCode>/<sha256>/<signer>/<boot>/intent`, and the session's id is the
 record that holds it. Read from AOSP 10 to 17: Android writes the referrer into its session file with the rest of the
 session, and it writes that file at sealing, so a session that comes back sealed comes back bound, after a process
 kill or a reboot alike. `SessionInfo.getReferrerUri` returns it unscrubbed to the session's owner, through
@@ -410,11 +423,11 @@ what this needs: `SharedPreferencesImpl` logs a read error and starts from an em
 as no journal, and a journal can outlive a session or miss one. In the session, service and verification code at
 each tag its only other use is to reach the package verifier as `EXTRA_REFERRER`, so a verifier sees these fields,
 none of them secret. The system installer does not show it, and Android 17 caps it at 2048 characters; the binding
-is about 190.
+is about 195.
 
-A binding counts only if it matches that one shape whole and names this package and the installed signer. Anything
-else, a part of one or none at all, is unknown: the session fences, no status reconnects it, and no installed version
-clears it. `<boot>` is `Settings.Global.BOOT_COUNT`, public and readable at 29 to 37, which `PowerManagerService`
+A binding counts only if it matches that one shape whole, with or without the final `/intent`, and names this package
+and the installed signer. Anything else, a part of one or none at all, is unknown: the session fences, sealed or not,
+no status reconnects it, and no installed version or boot clears it. `<boot>` is `Settings.Global.BOOT_COUNT`, public and readable at 29 to 37, which `PowerManagerService`
 moves at every system_server start, ahead of third-party apps, so a runtime restart counts where `elapsedRealtime`
 would not. Android keeps a session's status receiver in memory only, so a status belongs to the count it was committed
 under. After a restart or the owner's destroy, the first surface to hear a status for a session bound to this boot
@@ -430,7 +443,8 @@ another signer, clears nothing.
 A session staged by the published `2bdb15408b` has no binding, so it is unknown. That build abandoned only the session
 it remembered in memory, so a session behind a restart stays sealed. If that session installs the new build, it ends
 as any other. If the new build arrives another way, it fences: no tap commits, abandons or clears it, taps stay quiet,
-and only Android ends it, by the expiry below.
+and only Android ends it, by the expiry below. One it left unsealed, its process killed with a commit queued, reads 0
+and names no boot, so it fences the same, at any progress and across boots.
 
 A tap opens the confirmation Alpha kept from Android, the one thing it does while a session fences, and how the owner
 answers one left with no status, when the confirmation activity is destroyed without finishing (Home or Alpha's own
@@ -461,7 +475,7 @@ and the current version keeps showing.
   later do not validate a marked one again, and its commit fails, read from AOSP: system_server dies on 11, nothing
   shows and no status comes on 12 and 13, and on 14 to 17 the confirmation shows and its accept fails, or on 14 can
   kill system_server. Android 10 validates it at boot, and that install reads 0.1 and idle.
-- No binding, or a corrupt one: Android's expiry alone. No installed version ends it.
+- No binding, or a corrupt one, sealed or not: Android's expiry alone. No installed version or boot ends it.
 - A commit that threw, sealed: Android's status if it comes, otherwise the same. On Android 10 a validation I/O error
   seals a session with no mark and no status, so it stays until the expiry.
 - An unsealed session holding a commit intent: a commit that threw, a process killed with its commit queued short of
@@ -469,7 +483,11 @@ and the current version keeps showing.
   cleanup failing too, which all read the same. Until Android lists it
   no more, its bound target is installed, or the next `system_server` start, whichever is first, with no time limit
   short of those. A process restart does not free it. A queued commit that then seals joins the entries above, and its
-  status reconnects as usual. A kill during a download or a write never lands here.
+  status reconnects as usual. A kill during a download never lands here; one during a write lands here only on 12, 12L
+  or a level not read.
+- On 12, 12L or above 17, an unsealed session of this boot bound with `/intent`, at any progress, as a process killed
+  while writing it leaves; and on any level one an earlier build bound without the mark: until Android lists it no
+  more, its target is installed, or the next `system_server` start.
 - A confirmation opened on a surface that stays in the background, such as the assistant behind Home, holds a reopen
   from the other surface until the first resumes or closes, or the process ends.
 - A developer-verification request (Android 17, with `verification_service` on and a verifier present) comes
@@ -503,7 +521,8 @@ has, read from AOSP 10 to 17:
 | Session gone from `getMySessions`, `getSessionInfo` null | 29 to 37 | Terminal. Built: this is the fence. |
 | Referrer, read back | 29 to 37 | What the session holds, for a session Alpha bound. Built. A build before the binding wrote none. |
 | Sealed, committed, progress, active | 29 to 37 | Nothing terminal, and not whether an owner's accept is queued. Committed at 0 reads after a reboot, and on 33 to 37 during validation with no commit intent. |
-| Progress on an unsealed session | 29 to 37 | Exactly 0: no commit was sent this boot, and none sent earlier can arrive. Built: the commit intent. Anything else proves nothing and fences. |
+| Progress on an unsealed session | 29, 30, 33 to 37 | Exactly 0 on a session bound with `/intent` in this boot: no commit was sent. Built: the commit intent. Anything else proves nothing and fences. On 31 and 32 (read under another lock) and above 37 (not read) it proves nothing. |
+| `<boot>` against `BOOT_COUNT` | 29 to 37 | Another boot: no commit queued for that session survives. Built. |
 | `getUpdatedMillis`, from 30 `getCreatedMillis` | 29 to 37 | Age against a boot computed from the wall clock, so only as true as that clock. |
 | `SessionCallback.onFinished` | 29 to 37 | An end while the callback is registered. No more than the list, and nothing across a restart. |
 | Installed versionCode and signer | 29 to 37 | With a binding, that the target landed or was passed. Built. Without one, nothing: `getSize` is the nearest public fact about a session, and equal sizes prove nothing. |

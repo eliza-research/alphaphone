@@ -38,6 +38,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.provider.Settings;
 import com.getcapacitor.*;
 final class AlphaDevicePlugin extends Plugin {
@@ -55,9 +56,14 @@ test('Android installs only the offered newer build of this package, and only wh
  assert.equal(plugin.match(/abandonSession\(/g).length,1);
  // One commit, the attempt's own first: nothing commits a session a process did not just stage.
  assert.equal(plugin.match(/session\.commit\(/g).length,1);
- // One commit intent, read as an exact 0 so that nothing but Android's own zero clears it.
+ // One commit intent, read as an exact 0 so that nothing but Android's own zero clears it, and only on a session bound with the
+ // mark, in its boot, at a level whose AOSP orders that read after the intent (29, 30, 33 to 37). Another boot clears a bound
+ // unsealed session; no binding, or a corrupt one, fences sealed or not.
  assert.equal(plugin.match(/setStagingProgress\(/g).length,1);
- assert.match(install,/if\(!listed\.isSealed\(\)&&listed\.getProgress\(\)==0f\)continue;/);
+ assert.equal(plugin.match(/getProgress\(\)==0f/g).length,1);
+ assert.ok(install.includes('if(binding!=null&&!listed.isSealed()&&(!binding.group(4).equals(String.valueOf(updateBoot()))||binding.group(5)!=null&&(Build.VERSION.SDK_INT<=30||Build.VERSION.SDK_INT>=33&&Build.VERSION.SDK_INT<=37)&&listed.getProgress()==0f))continue;'),'the unsealed fence clears only what is proven');
+ assert.ok(plugin.includes('/([0-9a-f]{64})/([0-9]+)(/intent)?");'),'a binding reads with or without the mark');
+ assert.ok(install.includes('+"/"+updateBoot()+"/intent";'),'this build binds with the mark');
  assert.doesNotMatch(plugin,/refused\)\{updateOwner=null|commitUpdate|getUpdatedMillis|elapsedRealtime/);
  // Android accepts a same-versionCode reinstall, so the archive must be exactly the offered, newer build of this package.
  assert.match(install,/archive==null\|\|!getContext\(\)\.getPackageName\(\)\.equals\(archive\.packageName\)\|\|archive\.getLongVersionCode\(\)!=versionCode\|\|versionCode<=BuildConfig\.VERSION_CODE\)throw/);

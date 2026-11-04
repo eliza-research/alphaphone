@@ -226,8 +226,9 @@ public final class AlphaDevicePlugin extends Plugin {
  /**
   * A session's binding: package, versionCode, SHA-256, signer and boot. It is the session's referrer, so it sits in the record Android
   * writes with the seal and goes with the session, and a session comes back from a kill or a reboot with it or not at all (AOSP 10 to 17).
+  * A build that states its commit intent ends it with /intent; an earlier bound build wrote the same shape without it.
   */
- private static final java.util.regex.Pattern UPDATE_BINDING=java.util.regex.Pattern.compile("alpha-update://([^/]+)/([1-9][0-9]{0,17})/[0-9a-f]{64}/([0-9a-f]{64})/([0-9]+)");
+ private static final java.util.regex.Pattern UPDATE_BINDING=java.util.regex.Pattern.compile("alpha-update://([^/]+)/([1-9][0-9]{0,17})/[0-9a-f]{64}/([0-9a-f]{64})/([0-9]+)(/intent)?");
  /** The session's binding if it reads whole and names this package and signer. Null is unknown: no binding (an earlier build staged it), a part of one, or another target. Unknown fences. */
  private java.util.regex.Matcher updateBinding(PackageInstaller.SessionInfo session)throws Exception{
   java.util.regex.Matcher binding=UPDATE_BINDING.matcher(String.valueOf(session.getReferrerUri()));
@@ -346,9 +347,10 @@ public final class AlphaDevicePlugin extends Plugin {
   * like Alpha. Nothing is privileged, silent or in the background; a failure settles quietly. One attempt runs
   * per process: a tap while one runs on another bridge, or that a commit overtook while it waited, changes nothing;
   * queued behind one that failed before its commit, it retries. A session is committed once, by the attempt that staged it. One Android
-  * lists as sealed, or holding a commit intent, is never abandoned, replaced or committed again: a tap only opens the confirmation
+  * lists as sealed, or unsealed with nothing proving that no commit of it is queued (an intent; a level whose AOSP does not order a read
+  * of 0 after it; an earlier build's binding; no binding), is never abandoned, replaced or committed again: a tap only opens the confirmation
   * kept from Android's own status, and the session stops fencing only when Android lists it no more, its bound target and
-  * signer are what is installed, or, still unsealed, a boot has ended any commit queued for it. Only a failure of this attempt's own before its commit gives up what it staged.
+  * signer are what is installed, or, still unsealed and bound, a boot has ended any commit queued for it. Only a failure of this attempt's own before its commit gives up what it staged.
   */
  @PluginMethod public void installUpdate(PluginCall call){
   if(!getContext().getPackageManager().canRequestPackageInstalls()){
@@ -370,14 +372,18 @@ public final class AlphaDevicePlugin extends Plugin {
      PackageInstaller installer=getContext().getPackageManager().getPackageInstaller();
      // Android's own list is the fence, so no process can lose it: a commit seals the session, and Android drops it at
      // its terminal status, whether or not that status reached Alpha. A commit can wait in Binder, unsealed, past its process's
-     // death, so only an exact 0 clears an unsealed session: the commit intent below moves it first, and a boot, which ends any
-     // commit still queued, returns it to 0. A bound target already installed, on the signer it names, has nothing left to do,
-     // so it fences no more and stays for Android to expire. Any later target, or anything else, is unknown: progress and marks
-     // do not say whether an owner's accept is already queued, so no tap commits it, and a lost status stays lost, never a failure.
+     // death, and it ends when system_server does, so a bound unsealed session of another boot is clear. In this boot only an
+     // exact 0 on a session bound with /intent clears, and only where AOSP orders that read after the intent below: API 29 and 30
+     // read it under the writer's lock, 33 to 37 snapshot it under that lock. 31 and 32 (12, 12L) read it under another lock and
+     // a later level is unread, so there it fences until the next boot, as does a session an earlier build bound without the mark.
+     // An unsealed session with no binding, a part of one, or another target fences like a sealed one, until Android ends it.
+     // A bound target already installed, on the signer it names, has nothing left to do, so it fences no more and stays for
+     // Android to expire. Any later target, or anything else, is unknown: progress and marks do not say whether an owner's
+     // accept is already queued, so no tap commits it, and a lost status stays lost, never a failure.
      PackageInstaller.SessionInfo pending=null;
      for(PackageInstaller.SessionInfo listed:installer.getMySessions()){
-      if(!listed.isSealed()&&listed.getProgress()==0f)continue;
       java.util.regex.Matcher binding=updateBinding(listed);
+      if(binding!=null&&!listed.isSealed()&&(!binding.group(4).equals(String.valueOf(updateBoot()))||binding.group(5)!=null&&(Build.VERSION.SDK_INT<=30||Build.VERSION.SDK_INT>=33&&Build.VERSION.SDK_INT<=37)&&listed.getProgress()==0f))continue;
       if(binding==null||Long.parseLong(binding.group(2))>getContext().getPackageManager().getPackageInfo(getContext().getPackageName(),0).getLongVersionCode()){pending=listed;break;}
      }
      if(pending!=null){
@@ -401,7 +407,7 @@ public final class AlphaDevicePlugin extends Plugin {
       android.content.pm.PackageInfo archive=getContext().getPackageManager().getPackageArchiveInfo(apk.getPath(),0);
       if(archive==null||!getContext().getPackageName().equals(archive.packageName)||archive.getLongVersionCode()!=versionCode||versionCode<=BuildConfig.VERSION_CODE)throw new java.io.IOException("Update does not match its manifest");
       throwIfDestroyed();
-      String binding="alpha-update://"+getContext().getPackageName()+"/"+versionCode+"/"+sha256+"/"+appSigner(getContext())+"/"+updateBoot();
+      String binding="alpha-update://"+getContext().getPackageName()+"/"+versionCode+"/"+sha256+"/"+appSigner(getContext())+"/"+updateBoot()+"/intent";
       if(!UPDATE_BINDING.matcher(binding).matches())throw new java.io.IOException("Update not admitted");
       PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
       params.setAppPackageName(getContext().getPackageName());params.setSize(size);params.setReferrerUri(android.net.Uri.parse(binding));
@@ -411,8 +417,9 @@ public final class AlphaDevicePlugin extends Plugin {
        try(java.io.OutputStream out=session.openWrite("base.apk",0,size)){java.nio.file.Files.copy(apk.toPath(),out);session.fsync(out);}
        throwIfDestroyed();
        android.content.IntentSender status=android.app.PendingIntent.getBroadcast(getContext(),id,new Intent(UPDATE_STATUS).setPackage(getContext().getPackageName()),android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_MUTABLE).getIntentSender();
-       // The commit intent. Android holds this before the call returns, so a session reading 0 was sent no commit, and it lasts in
-       // Android's memory for exactly as long as a queued commit can: no corrupt store to read as clear, and nothing for Alpha to clear.
+       // The commit intent. Android holds this before the call returns, so on a level that orders a later read after it (above), a
+       // session reading 0 was sent no commit, and it lasts in Android's memory for exactly as long as a queued commit can: no corrupt
+       // store to read as clear, and nothing for Alpha to clear. On 12 and 12L the boot in the binding does that work alone.
        session.setStagingProgress(1f);
        // Owned before commit, because Android's status can arrive as soon as commit reaches it. From here nothing proves refusal:
        // a commit can succeed ahead of a lost reply and the close after it can throw, and no exception class means the same on
