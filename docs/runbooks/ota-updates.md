@@ -539,8 +539,11 @@ https://updates.example/alpha/stallion/
 - **Hosting (owner or Root decision, not implemented)**: a fixed-tag GitHub **prerelease** on public
   `eliza-research/alphaphone` can carry the manifest, for example
   `releases/download/os-channel/stallion-beta.json` plus `.sig`. It must be a prerelease: a full
-  release becomes `releases/latest`, which the APK lane's `alpha-update-stable.json` URL resolves,
-  and that URL would then 404 and withdraw its offer. Assets answer 302 then 206 with
+  release becomes `releases/latest`. The automatic app updater does not follow `releases/latest`:
+  it reads an asset of the fixed `app-stable` release
+  (`releases/download/app-stable/alpha-update-stable.json`, `app.config.json:8` at Alpha
+  `0ead71fc54`, same at `8c30b83c51`). Any manual or older consumer of `releases/latest` was
+  not audited, so OS assets must stay off `latest`. Assets answer 302 then 206 with
   `Accept-Ranges: bytes`. GitHub limits an asset to 2 GiB; tonight's images zip is 1.7 GB compressed
   and 3.4 GB raw, so measure `ota.zip`. Above the limit the fastest viable payload host is a GCS
   bucket in the Alpha GCP project where the builder runs (`gcloud storage cp`, Range support, objects
