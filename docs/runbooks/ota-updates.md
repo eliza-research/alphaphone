@@ -35,6 +35,16 @@ New here:
   updater code: its only input is an `updater` block in `pixel10a-alpha.json`. Until Alpha re-pins,
   both come from a copy of Eliza's `packages/os` (`$ELIZA` below).
 
+Source pins, one row per lane, since the OS update and the app update have separate source,
+artifact and acceptance gates:
+
+| Lane | Source |
+| --- | --- |
+| OS update client and `channel-manifest.mjs` | Eliza `claude/os-updater-client-20261102`, at the commit in `$ELIZA` below |
+| This runbook and `generate-ota.sh` | Alpha `claude/os-updater-alpha-20261102`, this branch; `generate-ota.sh` at the commit in `$ALPHA` below |
+| App updater (in Alpha's process, the APK lane) | Alpha `claude/app-updater-20261102` at `0ead71fc54`. Its composition onto `bcdefded45` (`8c30b83c51` on `codex/app-updater-bcdef-ff04-source-20261104`) is a future source snapshot only, not the current app candidate. This runbook neither builds nor selects it |
+| Current app candidate (2026-11-04) | Alpha `bcdefded45`, SDK (`vendor/eliza`) `ff04a55874`. It carries none of the OS update client, `channel-manifest.mjs` or this runbook. This runbook neither builds nor selects it |
+
 ## Track 1: tonight, current test keys, user data kept
 
 The cable OTA below also installs the update client (step 2a), so every later update reaches this
@@ -65,8 +75,8 @@ unit remotely (step 9).
 | Staged launcher APK | Signed by the same development key as the installed Alpha app |
 | `SERIAL` and the host the phone is attached to | That host runs steps 1 and 5 to 8 and serves the OTA (step 5) |
 | Package key | The build's `default_system_dev_certificate`, normally `build/make/target/product/security/testkey` |
-| `$ALPHA` on the builder | `scripts/ota/generate-ota.sh` of this branch, `claude/os-updater-alpha-20261102`. The branch is not pushed, so copy it from the Mac: `git -C <alpha> archive claude/os-updater-alpha-20261102 scripts/ota/generate-ota.sh \| ssh <builder> tar -x -C "$ALPHA"` |
-| `$ELIZA` on the builder | `packages/os` of Eliza `claude/os-updater-client-20261102` at commit `f423950273`. The branch is not pushed, so copy it from the Mac: `git -C <eliza> archive f423950273 packages/os \| ssh <builder> tar -x -C "$ELIZA"`. Node and `unzip` are its only needs. Record the commit in the physical-product evidence |
+| `$ALPHA` on the builder | `scripts/ota/generate-ota.sh` of this branch, `claude/os-updater-alpha-20261102`, at commit `2e3b3c779d`. Copy it from a clone that has the commit (the branch is on GitHub): `git -C <alpha> archive 2e3b3c779d scripts/ota/generate-ota.sh \| ssh <builder> tar -x -C "$ALPHA"` |
+| `$ELIZA` on the builder | `packages/os` of Eliza `claude/os-updater-client-20261102` at commit `e7781ac1e1`. Copy it from a clone that has the commit (the branch is on GitHub): `git -C <eliza> archive e7781ac1e1 packages/os \| ssh <builder> tar -x -C "$ELIZA"`. Node and `unzip` are its only needs. Record the commit in the physical-product evidence |
 | `CHANNEL_KEY` | Public half of the lab channel key, base64 Ed25519 SPKI DER. The owner or Root makes it offline (below). No key, no remote updates: stop before step 2a |
 | `CHANNEL_MANIFEST_URL` | The https URL baked into this image (section 2.4). Payload URLs live in each manifest and can change later; this one changes only through an OS update |
 
