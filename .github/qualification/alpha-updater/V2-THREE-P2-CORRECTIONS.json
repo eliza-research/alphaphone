@@ -1,0 +1,23 @@
+{
+  "state": "NARROW_SOURCE_ONLY_DELTA_FOR_SAME_INDEPENDENT_REVIEW_NO_EXECUTION",
+  "baselinePacketSHA256": "50a73e9551d5cda7f0a211f6a284d421277a33630152fb04b18bd3b1e50b031c",
+  "baselineReview": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v1-20261104/LUNA-INDEPENDENT-EXECUTABLE-SOURCE-REVIEW.json",
+  "baselineReviewSHA256": "e1dd0c99e0c6eb424342ca0c5ef04179a1cdab29ec5aa267c1906bbf39a5a798",
+  "fixes": {
+    "sourceFrame": "Every directory/file entry classified; rejectallnode_modules, nested/casefold.git except twoactualauthenticatedcheckoutmetadata directories; trackedGit-pinnedsymlinkdirectories allowedonlywithmatchingmode/linkdigestandnottraversed; onlyrootcanonical.elizaclientproducerexcludedandseparatelyinventoried. Sameframebefore/afterproducer/tests.",
+    "JDK": "Archive-derivedinventorynowincludeseverydirectory/file/symlinktype+mode; sealedarchivechecksum/bytecount/sourceURL comparedbeforeJava; completeactualJAVA_HOMEtreeequalsallarchivepaths/bytes/modes/linktargets,noextras/missing. Streamhashsharedbuffer; comparebeforefirstJava/Javacsubprocess.",
+    "reports": "PinnedNode24primarysource schema; exact33enqueue andpassfile/title/line/column/nesting identities; emitteddequeue/start/complete consistent; exactly3perfile+1globalsummaries/counts/status; ordinaryplan; FileTestenvelopesseparate; JUnitnames/file/coordinate/status/countaggregateswhereemittedreconciled; TAPexplicitretained/hashonly."
+  },
+  "unchanged": [
+    "All3wholeordinarytestfiles33names4+15+14",
+    "actualnormalpretestproducer/sourcepins8c30/ff04",
+    "toolarchiveversion/digest andNodeOCI",
+    "resources/finiteGO/claim/network/sourceguards",
+    "processsampling+PGID/CIDcleanup andexplicitcoverage limitation",
+    "no12/253/113replay/device/provider actions"
+  ],
+  "sourceEvidence": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/PRIMARY-SOURCE-CUSTODY.json",
+  "schemaEvidenceLimit": "Node24.15sourcebytesinspectedasdata,notactualreportruntimeobservations; unexpectedemittedschemafailsclosed,neverinventregistration/results.",
+  "executedCandidateOrToolsOrFixture": false,
+  "reportDecoderFile": "report_proof.py"
+}

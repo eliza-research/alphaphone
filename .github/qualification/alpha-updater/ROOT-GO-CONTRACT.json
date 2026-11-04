@@ -1,0 +1,40 @@
+{
+  "action": "ONE_EXACT_QUALIFICATION_RUN",
+  "recipe": "alpha-updater-three-normal-wholefiles",
+  "mode": "qualify",
+  "Alpha": "8c30b83c5156fdb963daa03fd8452a892e5fa188",
+  "AlphaTree": "13eae4876ef42558ff504b0b37aabb6b30cbc157",
+  "SDK": "ff04a558747ed426d9d871a319f7b3946f7660e6",
+  "SDKTree": "086d0c65fb3df530cb1d4f89758dc9d034e09adc",
+  "expectedRegistrations": 33,
+  "allowExactVendorJDKDownload": true,
+  "allowNormalClientFeatureProducer": true,
+  "allowThreeWholeFiles": true,
+  "allowSDKSourceMaterialization": true,
+  "allowExternalProviders": false,
+  "allowDeviceOrAndroid": false,
+  "allowSourceOverlay": false,
+  "allowLocalDocker": false,
+  "operatorCommit": "NOT_PUBLISHED",
+  "intentId": "NOT_ISSUED",
+  "issuedEpoch": "NOT_ISSUED",
+  "expiresEpoch": "NOT_ISSUED",
+  "output": "ROOT_BOUND_RUNNER_TEMP_PATH",
+  "operatorSealSHA256": "NOT_ADMITTED",
+  "hostProvenanceDisclosure": {
+    "20261025.353.1": "Exact authenticated41741039106 setup + explicit Root source disposition; independent official tag/readme provenance gap OPEN, not capability waiver.",
+    "20261026.354.1": {
+      "officialTagCommitReadmeBound": true,
+      "releasePrerelease": false
+    },
+    "20261101.360.1": {
+      "officialTagCommitReadmeBound": true,
+      "releasePrerelease": true
+    },
+    "20261018.96.1": "Exact authenticated41750127407 setup/claim/earlymetadata plus explicitRoot source disposition; fresh officialtag404, independent officialtag/commit/readme provenance gap OPEN, not capability or execution admission."
+  },
+  "planSHA256": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
+  "toolchainSHA256": "a0da5b489f9796e7094e593cd6fcdc134495a91fc1595bc8035927cc5b3d2701",
+  "sourceCasesSHA256": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+  "hostCohortsSHA256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
+}

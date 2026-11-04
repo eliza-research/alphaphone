@@ -1,0 +1,54 @@
+{
+  "state": "SOURCE_ONLY_PARSER_PIN_AND_GLOBAL_BINDING_CHECKS_NOT_RUNTIME_PASS",
+  "checks": [
+    {
+      "file": "report_proof.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "run.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "validate.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "claim.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "source-frame.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "prepare-jdk.py",
+      "check": "PythonAST only",
+      "PASS": true
+    },
+    {
+      "file": "projection-custody.mjs",
+      "check": "Node parser only, no candidate imports or tool execution",
+      "PASS": true
+    },
+    {
+      "file": "tool-provenance.mjs",
+      "check": "Node parser only, no candidate imports or tool execution",
+      "PASS": true
+    },
+    {
+      "file": "raw-events.mjs",
+      "check": "Node parser only, no candidate imports or tool execution",
+      "PASS": true
+    }
+  ],
+  "exactLocalOperatorImportsPresent": true,
+  "unboundFunctionGlobals": [],
+  "NodeAndJDKPinsRetained": true,
+  "noCandidateImageLayerToolOrFixtureExecuted": true
+}

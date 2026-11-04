@@ -1,0 +1,10 @@
+{
+  "HOST-COHORTS.json": {
+    "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/current-host-cohort-four-20261104/HOST-COHORTS.json",
+    "sha256": "65c033e9c2dda23ef6a74660806d163c4f7758c2e236a6c86f2cdca74df35cb8"
+  },
+  "check_source.py": {
+    "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/speech-retirement-proof-implementation-20261102/claude-review-repairs-20261102/qualification-ack-normal-capacity-v8/check_source.py",
+    "sha256": "f686d836cfdeab9e7c4c7e4c262eb9111cb2c1ce2ad12d58dbf6b1abf46b53e5"
+  }
+}

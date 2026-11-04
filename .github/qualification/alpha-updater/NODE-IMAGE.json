@@ -1,0 +1,16 @@
+{
+  "state": "PINNED_OFFICIAL_FULL_NODE_IMAGE_METADATA_ONLY",
+  "repository": "library/node",
+  "tag": "24.15.0-bookworm",
+  "indexDigest": "sha256:f22d6a1f082c02f292e86929b5b0442ac2e5eaf438a5dea9b1566601c3e05940",
+  "selectedDigest": "sha256:da81deb96d49fc84c9813bc4f16dfdb1d4d7e3671b74cd54fd944428f1444afe",
+  "selectedPlatform": {
+    "architecture": "amd64",
+    "os": "linux"
+  },
+  "configurationDigest": "sha256:07da4b3bda51fd1973b20d19d7139b289e0e065e364990bb26a80bb1e46cf757",
+  "NodeVersion": "24.15.0",
+  "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+  "declaration": "Node24.15.0/bookworm Dockerfile revision58635ae7, basewholebuildpackdigest711f2c95 includesGit+patchaptdeps. No layer orbinaryGET.",
+  "metadataCustody": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v3-full-node-supplier-20261104/supplier-evidence/REGISTRY-METADATA-CUSTODY.json"
+}

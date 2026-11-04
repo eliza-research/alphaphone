@@ -1,0 +1,24 @@
+{
+  "state": "SOURCE_BYTE_IDENTITY_ONLY",
+  "unchangedControls": {
+    "PLAN.json": "e28b85803ea7815cfb35969ad2bfceb7c9266b20378d4e61d7de8de1876ea1ca",
+    "validate.py": "8db801b97ed446b6f1ddef9a8e1743ee15e8e2bc4dc5e9173bd98210c5145d6d",
+    "claim.py": "b48152418f2bfcfd39f870852aea6851f10e0d4d8cd1c28a2bcad9e8a5faccad",
+    "workflow.yml": "357b4cab1440c34ce720625334f099f36f4f30b50b11b24fb8f6f96c6c4ab5f2",
+    "raw-events.mjs": "28b959048d01cb2a5d09a86095f83e26cac07bb17c3f5c1f7c0c0dc2120d9d89",
+    "report_proof.py": "0068901ee2ad5026822470a0cdb92ef51f450569b48c92e394d43b395e47a73e",
+    "projection-custody.mjs": "89b1c1a530136850f2dbff16d360f84ff44e8bb294d87f9458daf64bb79f7a59",
+    "prepare-jdk.py": "c55c0580400799a3f762e61495a31c2ca947e00582973201cbed164838abe8aa",
+    "SOURCE-CASE-IDENTITIES.json": "534c8d849510684884eea9706cf0f063ebb4662b7bc94d29a04785f27285aaee",
+    "SOURCE-AND-PREREQUISITE-CLOSURE.json": "c8029df022842ac5a9d21d4c66fd9efb7ed6cb4ddbdf601f7eab7e1704da5f56",
+    "HOST-DISCLOSURE.json": "175d7bc1a613cce4e96edf919f1462f4dfc1b0fa60b7be14b9d6a3feb4247668"
+  },
+  "NodeVersion": "24.15.0",
+  "NodeBinarySHA256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+  "JDKArchiveSHA256": "d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c",
+  "sourceCasesAndNamesUnchanged": 33,
+  "newSupplierOnly": "FullofficialNode24.15.0-bookwormamd64filesysteminclGit+GNU patch/runtimeclosure; no apt orhostbinariescopied.",
+  "newGuardStrengthening": "ExactsameUIDcheckoutproof; actualuser+SDKreadonlymountreadback; no safedirectoryexceptions; optionalGitlocksdisableonlyinsidecontainers; normalhelpersunchanged.",
+  "positiveCheckpointScope": "CompleteJDKverification/version/Git/patchfacts retained before latermetadatafailure. Doesnottransferoldfailedrunpasses orclaimnewimageobservations.",
+  "oldV2UnchangedControlArtifacts": "HistoricalV2documentsretainedasbaselineevidence, notclaimV3image unchanged. Thiscurrentreceiptanddelta areauthoritativefornewdifference."
+}

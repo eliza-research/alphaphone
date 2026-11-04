@@ -1,0 +1,41 @@
+{
+  "state": "PINNED_NODE24_SOURCE_BYTES_READ_AS_DATA_NOT_IMPORTED_OR_EXECUTED",
+  "files": [
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/tests_stream.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/tests_stream.js",
+      "sha256": "7e03ceae17aa3998e9b0cef34b9a0f80079e05b7a7edff364d02dbec4f560f09",
+      "bytes": 3434
+    },
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/runner.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/runner.js",
+      "sha256": "066d9d73b142649360f099a339a9e693124f52ce7c88c0fd14a926345fbccb9c",
+      "bytes": 30908
+    },
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/harness.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/harness.js",
+      "sha256": "531aa6b78a36dede97c459991a05ad6830ca513909c3c39ff1bb97a1b4932cd8",
+      "bytes": 13492
+    },
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/utils.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/utils.js",
+      "sha256": "00d8de3a0c08802768b3d3698d06e8580a9705bd359402880129b0390d9b1f9e",
+      "bytes": 20623
+    },
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/reporter__junit.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/reporter/junit.js",
+      "sha256": "cc7826a200c5437ec541bd7d1db47424ad37e2f4d87d825736593b99fda85efb",
+      "bytes": 5652
+    },
+    {
+      "path": "/Users/nubs/.local/state/eliza-five-lane-coordination/alpha-updater-8c30-hosted-executable-v2-20261104/node-source-evidence/test.js",
+      "url": "https://raw.githubusercontent.com/nodejs/node/v24.15.0/lib/internal/test_runner/test.js",
+      "sha256": "47c719c732c14170d0914e78bc59d19ccd278f93616c27fe155a638e740d4935",
+      "bytes": 46232
+    }
+  ]
+}
