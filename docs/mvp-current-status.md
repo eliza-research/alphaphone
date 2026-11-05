@@ -85,7 +85,7 @@ the operator's index of build, provisioning, release and support material is the
 
 ## Product boundaries
 
-Current Alpha integration source: SDK `951197ae39`. The SDK is published for review. Android packaging and live Cloud voice validation remain pending.
+Current Alpha integration source: SDK `9c8e7051df`. This candidate is pending SDK publication and reachability verification. Android packaging and live Cloud voice validation remain pending.
 
 Historical source projection:
 
