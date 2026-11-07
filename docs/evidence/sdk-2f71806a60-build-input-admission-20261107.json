@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-07",
+  "previousPin": "475a8d59dc1811c2cde093613519906a5a3f6457",
+  "currentPin": "2f71806a6097db3e195343d17046343849355e8a",
+  "unchangedBunLockGitBlob": "1cc61ff8862fd52607467743370879b575050d4d",
+  "dependencyManifestChanges": [],
+  "nativeInferenceInputChanges": [],
+  "changedScope": "Owner-bound content-free last-turn timing projection; diagnostic-only intermediate build. Full current-develop integration94c8 remains separate.",
+  "nativeQualificationRequired": true,
+  "productionReleaseAcceptance": false
+}

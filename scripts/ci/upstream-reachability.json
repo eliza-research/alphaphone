@@ -2,13 +2,13 @@
   "schema": 1,
   "repository": "elizaOS/eliza",
   "base": "develop",
-  "baseCommit": "43e3b05d97f602d096e7d63bd2c1ec80fc23789d",
-  "head": "475a8d59dc1811c2cde093613519906a5a3f6457",
+  "baseCommit": "175899288f829b1d19e98d2a05bc010ca5d1a8ea",
+  "head": "2f71806a6097db3e195343d17046343849355e8a",
   "recordedAt": "2026-11-07",
-  "command": "gh api repos/elizaOS/eliza/compare/develop...475a8d59dc1811c2cde093613519906a5a3f6457",
+  "command": "gh api repos/elizaOS/eliza/compare/develop...2f71806a6097db3e195343d17046343849355e8a",
   "status": "diverged",
-  "aheadBy": 12,
-  "behindBy": 88,
+  "aheadBy": 13,
+  "behindBy": 94,
   "mergeBase": "0594fc72da4450a84a986ad12e730e3faa902018",
   "pinOnlyCommits": [
     {
@@ -58,6 +58,10 @@
     {
       "sha": "475a8d59dc1811c2cde093613519906a5a3f6457",
       "subject": "Keep Maps admission errors visible during place search"
+    },
+    {
+      "sha": "2f71806a6097db3e195343d17046343849355e8a",
+      "subject": "Expose owner-bound native turn timing in existing status"
     }
   ],
   "pullRequests": []
